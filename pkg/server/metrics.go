@@ -23,7 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/contrib/pkg/dnsmasq"
+	"k8s.io/dns/pkg/dnsmasq"
 )
 
 var (

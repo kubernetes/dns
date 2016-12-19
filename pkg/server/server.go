@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/contrib/pkg/dnsmasq"
+	"k8s.io/dns/pkg/dnsmasq"
 )
 
 // Server that runs the dnsmasq-metrics daemon.

@@ -29,8 +29,8 @@ import (
 	"k8s.io/kubernetes/pkg/util/logs"
 	"k8s.io/kubernetes/pkg/version/verflag"
 
-	"k8s.io/contrib/pkg/server"
-	"k8s.io/contrib/pkg/version"
+	"k8s.io/dns/pkg/server"
+	"k8s.io/dns/pkg/version"
 )
 
 const (
