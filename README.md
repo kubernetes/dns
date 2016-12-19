@@ -1,5 +1,7 @@
 # Kubernetes DNS
 
+[![Build Status](https://travis-ci.org/kubernetes/dns.svg?branch=master)](https://travis-ci.org/kubernetes/dns)
+
 This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/).
 
 ## Subprojects
@@ -23,4 +25,3 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 
 * Setting `VERBOSE=1` will show additional build logging.
 * Setting `VERSION` will override the container version tag.
-
