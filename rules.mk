@@ -35,7 +35,7 @@ endif
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
-BUILDSTAMP_NAME = $(subst /,_,$(CONTAINER_NAME))
+BUILDSTAMP_NAME = $(subst /,_,$(CONTAINER_NAME))_$(VERSION)
 
 GO_BINARIES := $(addprefix bin/$(ARCH)/,$(BINARIES))
 CONTAINER_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME)-container)
