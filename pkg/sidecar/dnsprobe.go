@@ -153,7 +153,7 @@ func (p *dnsProbe) msg() (msg *dns.Msg) {
 	msg.Question = make([]dns.Question, 1)
 	msg.Question[0] = dns.Question{
 		Name:   p.Name,
-		Qtype:  dns.TypeANY,
+		Qtype:  p.Type,
 		Qclass: dns.ClassINET,
 	}
 	return

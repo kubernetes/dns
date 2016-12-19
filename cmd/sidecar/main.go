@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/miekg/dns"
 	"github.com/spf13/pflag"
 	"k8s.io/kubernetes/pkg/util/flag"
 	"k8s.io/kubernetes/pkg/util/logs"
@@ -61,7 +62,7 @@ func (po *probeOptions) String() string {
 
 func (po *probeOptions) Set(value string) error {
 	splits := strings.Split(value, ",")
-	if !(len(splits) == 3 || len(splits) == 4) {
+	if !(3 <= len(splits) && len(splits) <= 5) {
 		return fmt.Errorf("invalid format to --probe")
 	}
 
@@ -70,6 +71,7 @@ func (po *probeOptions) Set(value string) error {
 		Server:   splits[1],
 		Name:     splits[2],
 		Interval: defaultProbeInterval,
+		Type:     dns.TypeANY,
 	}
 
 	const labelRegexp = "^[a-zA-Z0-9_]+"
@@ -86,11 +88,27 @@ func (po *probeOptions) Set(value string) error {
 		option.Name = option.Name + "."
 	}
 
-	if len(splits) == 4 {
+	if len(splits) >= 4 {
 		if interval, err := strconv.Atoi(splits[3]); err == nil {
 			option.Interval = time.Duration(interval) * time.Second
 		} else {
 			return err
+		}
+	}
+
+	if len(splits) >= 5 {
+		switch splits[4] {
+		case "A":
+			option.Type = dns.TypeA
+			break
+		case "AAAA":
+			option.Type = dns.TypeAAAA
+			break
+		case "ANY":
+			option.Type = dns.TypeANY
+			break
+		default:
+			return fmt.Errorf("invalid type for DNS: %v", splits[5])
 		}
 	}
 
@@ -119,11 +137,12 @@ func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 		(*probeOptions)(&opt.Probes), "probe",
 		"probe the given DNS server with the DNS name and export probe"+
 			" metrics and healthcheck URI. Specified as"+
-			" <label>,<server>,<dns name>,<interval_seconds>."+
+			" <label>,<server>,<dns name>[,<interval_seconds>][,<type>]."+
 			" Healthcheck url will be exported under /healthcheck/<label>."+
 			" interval_seconds is optional."+
 			" This option may be specified multiple times to check multiple servers."+
-			" Example: 'mydns,127.0.0.1:53,example.com,10'.")
+			" <type> is one of ANY, A, AAAA."+
+			" Example: 'mydns,127.0.0.1:53,example.com,10,A'.")
 	flagSet.StringVar(
 		&opt.PrometheusAddr, "prometheus-addr", opt.PrometheusAddr,
 		"http addr to bind metrics server to")
