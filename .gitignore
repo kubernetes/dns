@@ -84,3 +84,9 @@ network_closure.sh
 
 /bazel-*
 *.pyc
+
+/.*-dockerfile
+/.*-container
+/.*-push
+/.go
+/bin
