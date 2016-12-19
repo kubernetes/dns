@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Docker side of the E2E test for dnsmasq-metrics. This runs an
-# instance of dnsmasq and dnsmasq-metrics, sends some DNS queries to
+# Docker side of the E2E test for sidecar. This runs an
+# instance of dnsmasq and sidecar, sends some DNS queries to
 # the daemon and dumps the output of the prometheus /metrics URI.
 run() {
   echo RUN "$@"
@@ -22,12 +22,12 @@ run() {
 }
 
 dnsmasq="/usr/sbin/dnsmasq"
-dnsmasq_metrics="/dnsmasq-metrics"
+sidecar="/sidecar"
 dnsmasq_port=10053
 
 dig_out="/tmp/dig.out"
 dnsmasq_out="/tmp/dnsmasq.out"
-dnsmasq_metrics_out="/tmp/dnsmasq_metrics.out"
+sidecar_out="/tmp/sidecar.out"
 metrics_out="/tmp/metrics.out"
 
 curl="/usr/bin/curl"
@@ -47,14 +47,14 @@ run ${dnsmasq} \
 dnsmasq_pid=$!
 echo "dnsmasq_pid=${dnsmasq_pid}"
 
-run ${dnsmasq_metrics} \
+run ${sidecar} \
   --dnsmasq-port ${dnsmasq_port} -v 4 \
   --probe "ok,127.0.0.1:${dnsmasq_port},ok.local,1" \
   --probe "nxdomain,127.0.0.1:${dnsmasq_port},nx.local,1" \
   --probe "notpresent,127.0.0.1:$((dnsmasq_port + 1)),notpresent.local,1" \
-  2> ${dnsmasq_metrics_out} &
-dnsmasq_metrics_pid=$!
-echo "dnsmasq_metrics_pid=${dnsmasq_metrics_pid}"
+  2> ${sidecar_out} &
+sidecar_pid=$!
+echo "sidecar_pid=${sidecar_pid}"
 
 # Do a bunch of digs to make sure the cache is hit.
 for i in `seq 100`; do
@@ -63,7 +63,7 @@ done
 
 kill -SIGUSR1 ${dnsmasq_pid}
 
-# Give dnsmasq_metrics some time to updates its metrics.
+# Give sidecar some time to updates its metrics.
 echo "Waiting ${sleep_interval} seconds"
 sleep ${sleep_interval}
 
@@ -79,9 +79,9 @@ echo "BEGIN dnsmasq ===="
 cat ${dnsmasq_out}
 echo "END dnsmasq ===="
 echo
-echo "BEGIN dnsmasq_metrics ===="
-cat ${dnsmasq_metrics_out}
-echo "END dnsmasq_metrics ===="
+echo "BEGIN sidecar ===="
+cat ${sidecar_out}
+echo "END sidecar ===="
 echo
 echo "BEGIN metrics ===="
 cat ${metrics_out}

@@ -2,8 +2,8 @@
 FROM gcr.io/google_containers/kube-dnsmasq-amd64:1.4
 MAINTAINER Bowei Du <bowei@google.com>
 
-COPY test/e2e/docker-run-e2e.sh /docker-run-e2e.sh
-COPY bin/amd64/dnsmasq-metrics /dnsmasq-metrics
+COPY test/e2e/sidecar/docker-run-e2e.sh /docker-run-e2e.sh
+COPY bin/amd64/sidecar /sidecar
 
 RUN apk update && apk add curl bind-tools
 

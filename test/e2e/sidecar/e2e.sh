@@ -27,15 +27,15 @@ if ! which awk >/dev/null; then
   exit 1
 fi
 
-if [ ! -e bin/amd64/dnsmasq-metrics ]; then
-  echo "dnsmasq-metrics not found (need to build?)"
+if [ ! -e "bin/amd64/sidecar" ]; then
+  echo "binary not found (need to build?)"
   exit 1
 fi
 
 uuid=`date +%s`
-image_tag="kubernetes-contrib-dnsmasq-metrics-e2e-${uuid}"
+image_tag="k8s-dns-sidecar-e2e-${uuid}"
 output_dir=`mktemp -d`
-e2e_dir=test/e2e
+e2e_dir=test/e2e/sidecar
 
 if [ "$CLEANUP" != 'no' ]; then
   cleanup() {

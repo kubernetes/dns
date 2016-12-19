@@ -29,7 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/logs"
 	"k8s.io/kubernetes/pkg/version/verflag"
 
-	"k8s.io/dns/pkg/server"
+	"k8s.io/dns/pkg/sidecar"
 	"k8s.io/dns/pkg/version"
 )
 
@@ -38,22 +38,22 @@ const (
 )
 
 func main() {
-	options := server.NewOptions()
+	options := sidecar.NewOptions()
 	configureFlags(options, pflag.CommandLine)
 	flag.InitFlags()
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	glog.Infof("dnsmasq-metrics v%s", version.VERSION)
+	glog.Infof("Version v%s", version.VERSION)
 
 	verflag.PrintAndExitIfRequested()
 
-	server := server.NewServer()
+	server := sidecar.NewServer()
 	server.Run(options)
 }
 
-type probeOptions []server.DNSProbeOption
+type probeOptions []sidecar.DNSProbeOption
 
 func (po *probeOptions) String() string {
 	return fmt.Sprintf("%+v", *po)
@@ -65,7 +65,7 @@ func (po *probeOptions) Set(value string) error {
 		return fmt.Errorf("invalid format to --probe")
 	}
 
-	option := server.DNSProbeOption{
+	option := sidecar.DNSProbeOption{
 		Label:    splits[0],
 		Server:   splits[1],
 		Name:     splits[2],
@@ -105,7 +105,7 @@ func (po *probeOptions) Type() string {
 
 var _ pflag.Value = (*probeOptions)(nil)
 
-func configureFlags(opt *server.Options, flagSet *pflag.FlagSet) {
+func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 	flagSet.StringVar(
 		&opt.DnsMasqAddr, "dnsmasq-addr", opt.DnsMasqAddr,
 		"address that the dnsmasq server is listening on")

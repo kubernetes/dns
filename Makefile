@@ -21,7 +21,7 @@ PKG := k8s.io/dns
 
 # List of binaries to build. You must have a matching Dockerfile.BINARY
 # for each BINARY.
-BINARIES := dnsmasq-metrics
+BINARIES := sidecar
 
 # Registry to push to.
 REGISTRY ?= gcr.io/google_containers

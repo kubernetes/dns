@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/contrib/pkg/test"
+	"k8s.io/dns/pkg/test"
 
 	"github.com/miekg/dns"
 )
