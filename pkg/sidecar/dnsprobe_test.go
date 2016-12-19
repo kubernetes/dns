@@ -47,6 +47,7 @@ func makeOptions(label string, addr string, port int) *Options {
 				Server:   fmt.Sprintf("%v:%v", addr, port),
 				Name:     "test.local.",
 				Interval: 1 * time.Millisecond,
+				Type:     dns.TypeANY,
 			},
 		},
 	}

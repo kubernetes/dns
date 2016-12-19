@@ -28,6 +28,8 @@ type DNSProbeOption struct {
 	Name string
 	// Interval to use for probing
 	Interval time.Duration
+	// Type of Record to query for.
+	Type uint16
 }
 
 // Options for the daemon
