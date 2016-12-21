@@ -1,6 +1,7 @@
 # Kubernetes DNS
 
 [![Build Status](https://travis-ci.org/kubernetes/dns.svg?branch=master)](https://travis-ci.org/kubernetes/dns)
+[![Coverage Status](https://coveralls.io/repos/github/kubernetes/dns/badge.svg?branch=master)](https://coveralls.io/github/kubernetes/dns?branch=master)
 
 This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/).
 
