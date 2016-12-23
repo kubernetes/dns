@@ -114,6 +114,16 @@ fi
 
 if [ "${errors}" = 0 ]; then
   echo "Tests passed"
+else
+  echo "Test failed"
+
+  for log in ${output_dir}/*.log; do
+    echo "=============================================================================="
+    echo "Log file: ${log}"
+    echo "=============================================================================="
+
+    cat "${log}"
+  done
 fi
 
 exit ${errors}
