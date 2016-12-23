@@ -76,7 +76,7 @@ func (po *probeOptions) Set(value string) error {
 
 	const labelRegexp = "^[a-zA-Z0-9_]+"
 	if !regexp.MustCompile(labelRegexp).MatchString(option.Label) {
-		return fmt.Errorf("label must be of format " + labelRegexp)
+		return fmt.Errorf("label must be of format %v", labelRegexp)
 	}
 
 	if !strings.Contains(option.Server, ":") {
