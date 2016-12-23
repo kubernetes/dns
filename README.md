@@ -8,6 +8,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 ## Subprojects
 
 * [sidecar](docs/sidecar/README.md)
+* [dnsmasq](images/dnsmasq)
 
 ## Building
 
@@ -26,3 +27,13 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 
 * Setting `VERBOSE=1` will show additional build logging.
 * Setting `VERSION` will override the container version tag.
+
+[![Analytics](https://kubernetes-site.appspot.com/UA-36037335-10/GitHub/dns/README.md?pixel)]()
+
+## Release process
+
+1. Build and test (`make build` and `make test`)
+1. Push the containers (`make push`)
+1. Submit a PR for the kubernetes/kubernetes repository to switch to the new
+   version of the containers.
+1. Build and push for all architectures (`make all-push`)
