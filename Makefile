@@ -21,7 +21,7 @@ PKG := k8s.io/dns
 
 # List of binaries to build. You must have a matching Dockerfile.BINARY
 # for each BINARY.
-BINARIES := sidecar
+BINARIES := sidecar sidecar-e2e
 # List of images to build (contained in images/)
 IMAGES := dnsmasq
 # Registry to push to.
