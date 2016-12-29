@@ -8,7 +8,8 @@ env:
 services:
 - docker
 before_install:
-- openssl aes-256-cbc -K $encrypted_c3ffa94646c3_key -iv $encrypted_c3ffa94646c3_iv -in credentials.json.enc -out credentials.json -d
+- openssl aes-256-cbc -K $encrypted_c3ffa94646c3_key -iv $encrypted_c3ffa94646c3_iv
+  -in credentials.json.enc -out credentials.json -d
 - if [ ! -d ${HOME}/google-cloud-sdk ]; then
     curl https://sdk.cloud.google.com | bash;
   fi
