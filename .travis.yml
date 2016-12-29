@@ -9,8 +9,8 @@ env:
 services:
 - docker
 before_install:
-- if [ -z "$encrypted_c3ffa94646c3_key" ]; then echo XXX; exit 1; done
-- if [ -z "$encrypted_c3ffa94646c3_iv" ]; then echo XXX; exit 1; done
+- if [ -z "$encrypted_c3ffa94646c3_key" ]; then echo XXX; exit 1; fi
+- if [ -z "$encrypted_c3ffa94646c3_iv" ]; then echo XXX; exit 1; fi
 - openssl aes-256-cbc -K $encrypted_c3ffa94646c3_key -iv $encrypted_c3ffa94646c3_iv
   -in credentials.json.enc -out credentials.json -d
 - if [ ! -d ${HOME}/google-cloud-sdk ]; then
