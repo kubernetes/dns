@@ -1,10 +1,18 @@
 sudo: required
-# trusty required for docker
-# https://github.com/travis-ci/travis-ci/issues/5448
+cache:
+  directories:
+  - "$HOME/google-cloud-sdk/"
 dist: trusty
+env:
+- PATH=$PATH:${HOME}/google-cloud-sdk/bin CLOUDSDK_CORE_DISABLE_PROMPTS=1
 services:
 - docker
+before_install:
+- if [ ! -d ${HOME}/google-cloud-sdk ]; then
+    curl https://sdk.cloud.google.com | bash;
+  fi
 script:
+- gcloud help
 - make build
 - make test
 - bash test/e2e/sidecar/e2e.sh
