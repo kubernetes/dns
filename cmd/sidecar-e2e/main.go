@@ -23,44 +23,78 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"os/exec"
 )
 
 const (
-	dnsmasqBinary = "/usr/sbin/dnsmasq"
-	sidecarBinary = "/sidecar"
-	digBinary     = "/usr/bin/dig"
+	dockerfile = "Dockerfile.e2e"
 
 	dnsmasqPort = 10053
 	sidecarPort = 10054
 )
 
-var opts struct {
-	mode string
+var opts = struct {
+	mode    string
+	cleanup bool
+
+	baseDir    string
+	dockerfile string
 
 	dnsmasqBinary string
 	sidecarBinary string
 	digBinary     string
+
+	outputDir string
+}{
+	"harness",
+	false,
+	".",
+	"Dockerfile.e2e",
+	"/usr/sbin/dnsmasq",
+	"/sidecar",
+	"/usr/bin/dig",
+
+	"/test",
 }
 
 func parseArgs() {
 	flag.StringVar(&opts.mode,
-		"mode", "harness",
+		"mode", opts.mode,
 		"harness or test. Harness runs the test (builds the image, etc) and test"+
 			" runs actual tests inside the container.")
-	flag.StringVar(&opts.dnsmasqBinary,
-		"dnsmasqBinary", "/usr/sbin/dnsmasq", "location of dnsmasq")
-	flag.StringVar(&opts.sidecarBinary,
-		"sidecarBinary", "/sidecar", "location of sidecar")
-	flag.StringVar(&opts.digBinary,
-		"digBinary", "/usr/bin/dig", "location of dig")
+	flag.BoolVar(&opts.cleanup,
+		"cleanup", opts.cleanup,
+		"Set to false to not cleanup tmp directory")
+
+	flag.StringVar(&opts.baseDir, "baseDir", opts.baseDir,
+		"base directory for the e2e test")
+	flag.StringVar(&opts.dockerfile, "dockerfile", opts.dockerfile,
+		"Dockerfile for e2e test")
+
+	flag.StringVar(&opts.dnsmasqBinary, "dnsmasqBinary", opts.dnsmasqBinary,
+		"location of dnsmasq")
+	flag.StringVar(&opts.sidecarBinary, "sidecarBinary", opts.sidecarBinary,
+		"location of sidecar")
+	flag.StringVar(&opts.digBinary, "digBinary", opts.digBinary,
+		"location of dig")
+
+	flag.StringVar(&opts.outputDir, "outputDir", opts.outputDir,
+		"location of output dir inside container")
 
 	flag.Parse()
+}
+
+func logWithPrefix(prefix string, str string) {
+	lines := strings.Split(str, "\n")
+	for _, line := range lines {
+		log.Printf("%v | %v", prefix, line)
+	}
 }
 
 func waitForPredicate(predicate func() (bool, error), duration time.Duration, interval time.Duration) error {
@@ -136,27 +170,153 @@ func startDumpToBuf(lock *sync.Mutex, out *string, cmd *exec.Cmd) {
 }
 
 type harness struct {
-	outputDir string
-	image     string
+	tmpDir string
+	image  string
 }
 
-func (h *harness) run() {
-	log.Printf("Running as harness")
+func (h *harness) run() int {
+	log.Printf("Running as harness (tmpdir = %v)", h.tmpDir)
 
 	h.build()
 	defer h.cleanup()
 
 	h.runTests()
-}
-
-func (h *harness) runTests() {
+	return h.validate()
 }
 
 func (h *harness) build() {
-	exec.Command("docker", "build", "-f", "Dockerfile.e2e", "-t", h.image)
+	h.docker("build",
+		"-f", fmt.Sprintf("%v/test/e2e/sidecar/%v", opts.baseDir, dockerfile),
+		"-t", h.image,
+		opts.baseDir)
 }
 
 func (h *harness) cleanup() {
+	h.docker("rmi", "-f", h.image)
+	if opts.cleanup {
+		os.RemoveAll(h.tmpDir)
+	}
+}
+
+func (h *harness) runTests() {
+	dir, err := filepath.Abs(h.tmpDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	output := h.docker(
+		"run", "--rm=true", "-v", fmt.Sprintf("%v:%v", dir, opts.outputDir), h.image)
+	logWithPrefix("test", string(output))
+}
+
+func (h *harness) validate() int {
+	var errors []error
+
+	text, err := ioutil.ReadFile(h.tmpDir + "/metrics.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	metrics := make(map[string]float64)
+	metrics["kubedns_dnsmasq_hits"] = 0
+	metrics["kubedns_dnsmasq_max_size"] = 0
+	metrics["kubedns_probe_notpresent_errors"] = 0
+	metrics["kubedns_probe_nxdomain_errors"] = 0
+	metrics["kubedns_probe_ok_errors"] = 0
+
+	for _, line := range strings.Split(string(text), "\n") {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		items := strings.Split(line, " ")
+		if len(items) < 2 {
+			continue
+		}
+
+		key := items[0]
+		if _, ok := metrics[key]; ok {
+			if val, err := strconv.ParseFloat(items[1], 64); err == nil {
+				metrics[key] = val
+			} else {
+				errors = append(errors,
+					fmt.Errorf("metric %v is not a number (%v)", key, items[1]))
+			}
+		}
+	}
+
+	expect := func(name string, op string, value float64) {
+		makeError := func() error {
+			return fmt.Errorf("expected %v %v %v but got %v",
+				name, op, value, metrics[name])
+		}
+
+		switch op {
+		case "<":
+			if !(metrics[name] < value) {
+				errors = append(errors, makeError())
+			}
+			break
+		case "<=":
+			if !(metrics[name] <= value) {
+				errors = append(errors, makeError())
+			}
+			break
+		case ">":
+			if !(metrics[name] > value) {
+				errors = append(errors, makeError())
+			}
+			break
+		case ">=":
+			if !(metrics[name] >= value) {
+				errors = append(errors, makeError())
+			}
+			break
+		case "==":
+			if metrics[name] != value {
+				errors = append(errors, makeError())
+			}
+			break
+		case "!=":
+			if metrics[name] == value {
+				errors = append(errors, makeError())
+			}
+			break
+		default:
+			panic(fmt.Errorf("invalid op"))
+		}
+	}
+
+	expect("kubedns_dnsmasq_hits", ">", 100)
+	expect("kubedns_dnsmasq_max_size", "==", 1337)
+	expect("kubedns_probe_notpresent_errors", ">=", 5)
+	expect("kubedns_probe_nxdomain_errors", ">=", 5)
+	expect("kubedns_probe_ok_errors", "==", 0)
+
+	if len(errors) == 0 {
+		log.Printf("All tests passed")
+
+		return 0
+	}
+
+	log.Printf("Tests failed")
+	for _, err := range errors {
+		log.Printf("error | %v", err)
+	}
+
+	return 1
+}
+
+func (h *harness) docker(args ...string) string {
+	log.Printf("docker %v", args)
+	cmd := exec.Command("docker", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logWithPrefix("docker", string(output))
+		log.Fatal(err)
+	}
+
+	return string(output)
 }
 
 type test struct {
@@ -213,12 +373,9 @@ func (t *test) runSidecar() {
 		"-v", "4",
 		"--prometheus-port", strconv.Itoa(sidecarPort),
 		"--dnsmasq-port", strconv.Itoa(dnsmasqPort),
-		"--probe",
-		fmt.Sprintf("ok,127.0.0.1:%v,ok.local,1", dnsmasqPort),
-		"--probe",
-		fmt.Sprintf("nxdomain,127.0.0.1:%v,nx.local,1", dnsmasqPort),
-		"--probe",
-		fmt.Sprintf("notpresent,127.0.0.1:%v,notpresent.local,1", dnsmasqPort+1),
+		"--probe", fmt.Sprintf("ok,127.0.0.1:%v,ok.local,1", dnsmasqPort),
+		"--probe", fmt.Sprintf("nxdomain,127.0.0.1:%v,nx.local,1", dnsmasqPort),
+		"--probe", fmt.Sprintf("notpresent,127.0.0.1:%v,notpresent.local,1", dnsmasqPort+1),
 	}
 	t.sidecar = exec.Command(opts.sidecarBinary, args...)
 
@@ -289,7 +446,8 @@ func (t *test) waitForMetrics() {
 }
 
 func (t *test) getMetrics() {
-	response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%v/metrics", sidecarPort))
+	response, err := http.Get(
+		fmt.Sprintf("http://127.0.0.1:%v/metrics", sidecarPort))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -306,40 +464,49 @@ func (t *test) dump() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	fmt.Println("BEGIN dnsmasq ====")
-	fmt.Println(t.dnsmasqOutput)
-	fmt.Println("END dnsmasq ====")
-	fmt.Println()
-	fmt.Println("BEGIN sidecar ====")
-	fmt.Println(t.sidecarOutput)
-	fmt.Println("END sidecar ====")
-	fmt.Println()
-	fmt.Println("BEGIN dig ====")
-	fmt.Println(t.digOutput)
-	fmt.Println("END dig ====")
-	fmt.Println()
-	fmt.Println("BEGIN metrics ====")
-	fmt.Println(t.metricsOutput)
-	fmt.Println("END metrics ====")
-	fmt.Println()
-	fmt.Println("BEGIN errors ====")
-	for _, err := range t.errors {
-		fmt.Println(err)
+	dumpOutput := func(name string, output string) {
+		err := ioutil.WriteFile(
+			fmt.Sprintf("%v/%v.log", opts.outputDir, name),
+			[]byte(output), 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	fmt.Println("END errors ====")
 
+	dumpOutput("dnsmasq", t.dnsmasqOutput)
+	dumpOutput("sidecar", t.sidecarOutput)
+	dumpOutput("dig", t.digOutput)
+	dumpOutput("metrics", t.metricsOutput)
+
+	f, err := os.Create(fmt.Sprintf("%v/errors.log", opts.outputDir))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	for _, err := range t.errors {
+		if _, err := f.Write([]byte(fmt.Sprintf("%v", err))); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 func main() {
 	parseArgs()
 
+	log.Printf("opts=%+v", opts)
+
 	switch opts.mode {
 	case "harness":
-		h := &harness{
-			outputDir: "/tmp",
-			image:     fmt.Sprintf("k8s-dns-sidecar-e2e-%v", time.Now().Second()),
+		tmpdir, err := ioutil.TempDir("", "k8s-dns-sidecar-e2e")
+		if err != nil {
+			log.Fatal(err)
 		}
-		h.run()
+		h := &harness{
+			tmpDir: tmpdir,
+			image:  fmt.Sprintf("k8s-dns-sidecar-e2e-%v", "test"),
+		}
+		os.Exit(h.run())
 		break
 
 	case "test":
