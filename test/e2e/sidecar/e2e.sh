@@ -56,7 +56,8 @@ docker run --rm=true ${image_tag} > ${output_dir}/e2e.log
 echo "Removing image"
 docker rmi ${image_tag} >> ${output_dir}/docker.log
 
-cat ${output_dir}/e2e.log | awk '
+cat ${output_dir}/e2e.log \
+  | awk '
 /END metrics ====/{ inMetrics = 0 }
 {
   if (inMetrics) {
@@ -64,7 +65,11 @@ cat ${output_dir}/e2e.log | awk '
   }
 }
 /BEGIN metrics ====/ { inMetrics = 1 }
-' > ${output_dir}/metrics.log
+' \
+  | grep dns \
+  | grep -v '^#' \
+  | sort \
+  > ${output_dir}/metrics.log
 
 # Validate results.
 errors=0
