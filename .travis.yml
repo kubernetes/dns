@@ -1,4 +1,5 @@
 sudo: required
+language: go
 cache:
   directories:
   - "$HOME/google-cloud-sdk/"
@@ -8,8 +9,8 @@ env:
 services:
 - docker
 before_install:
-- echo $encrypted_c3ffa94646c3_key | md5sum
-- echo $encrypted_c3ffa94646c3_iv | md5sum
+- if [ -z "$encrypted_c3ffa94646c3_key" ]; then echo XXX; exit 1; done
+- if [ -z "$encrypted_c3ffa94646c3_iv" ]; then echo XXX; exit 1; done
 - openssl aes-256-cbc -K $encrypted_c3ffa94646c3_key -iv $encrypted_c3ffa94646c3_iv
   -in credentials.json.enc -out credentials.json -d
 - if [ ! -d ${HOME}/google-cloud-sdk ]; then
