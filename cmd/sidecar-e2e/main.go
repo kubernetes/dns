@@ -134,9 +134,8 @@ func waitForTcpOrExit(cmd *exec.Cmd, endpoint string) error {
 			if err == nil {
 				conn.Close()
 				return true, nil
-			} else {
-				return false, err
 			}
+			return false, err
 		},
 		10*time.Second,
 		1*time.Second)
