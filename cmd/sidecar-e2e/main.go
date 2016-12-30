@@ -418,6 +418,9 @@ func (t *test) waitForMetrics() {
 
 			defer response.Body.Close()
 			buf, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			lines := strings.Split(string(buf), "\n")
 			for _, line := range lines {
