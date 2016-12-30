@@ -28,9 +28,9 @@ import (
 	"github.com/skynetservices/skydns/server"
 	"github.com/spf13/pflag"
 
-	"k8s.io/kubernetes/cmd/kube-dns/app/options"
-	"k8s.io/kubernetes/pkg/dns"
-	dnsconfig "k8s.io/kubernetes/pkg/dns/config"
+	"k8s.io/dns/cmd/kube-dns/app/options"
+	"k8s.io/dns/pkg/dns"
+	dnsconfig "k8s.io/dns/pkg/dns/config"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"

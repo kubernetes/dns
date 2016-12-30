@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	fed "k8s.io/kubernetes/pkg/dns/federation"
+	fed "k8s.io/dns/pkg/dns/federation"
 
 	"time"
 

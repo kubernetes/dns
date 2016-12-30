@@ -18,7 +18,7 @@ package config
 
 import (
 	types "k8s.io/client-go/pkg/apis/meta/v1"
-	fed "k8s.io/kubernetes/pkg/dns/federation"
+	fed "k8s.io/dns/pkg/dns/federation"
 )
 
 // Config populated either from the configuration source (command

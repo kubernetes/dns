@@ -20,8 +20,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
-	"k8s.io/kubernetes/cmd/kube-dns/app"
-	"k8s.io/kubernetes/cmd/kube-dns/app/options"
+	"k8s.io/dns/cmd/kube-dns/app"
+	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/kubernetes/pkg/util/flag"
 	"k8s.io/kubernetes/pkg/util/logs"
 	"k8s.io/kubernetes/pkg/version"

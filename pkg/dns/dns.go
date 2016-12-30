@@ -30,9 +30,9 @@ import (
 	"k8s.io/client-go/pkg/watch"
 	kcache "k8s.io/client-go/tools/cache"
 
-	"k8s.io/kubernetes/pkg/dns/config"
-	"k8s.io/kubernetes/pkg/dns/treecache"
-	"k8s.io/kubernetes/pkg/dns/util"
+	"k8s.io/dns/pkg/dns/config"
+	"k8s.io/dns/pkg/dns/treecache"
+	"k8s.io/dns/pkg/dns/util"
 	"k8s.io/kubernetes/pkg/util/validation"
 	"k8s.io/kubernetes/pkg/util/wait"
 
