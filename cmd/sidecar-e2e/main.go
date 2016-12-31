@@ -126,7 +126,7 @@ func waitForTcpOrExit(cmd *exec.Cmd, endpoint string) error {
 			// Check to see that the process has not died early.
 			select {
 			case err := <-exitChan:
-				return true, fmt.Errorf("Process died: %v", err)
+				return true, fmt.Errorf("process died: %v", err)
 			default:
 			}
 
@@ -400,7 +400,7 @@ func (t *test) runDig() {
 		if err == nil {
 			t.digOutput += string(output)
 		} else {
-			t.errors = append(t.errors, fmt.Errorf("Error running dig: %v", err))
+			t.errors = append(t.errors, fmt.Errorf("error running dig: %v", err))
 		}
 	}
 }
@@ -517,6 +517,6 @@ func main() {
 		break
 
 	default:
-		log.Fatal(fmt.Errorf("Invalid --mode: %v", opts.mode))
+		log.Fatal(fmt.Errorf("invalid --mode: %v", opts.mode))
 	}
 }
