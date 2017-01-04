@@ -8,3 +8,4 @@ script:
 - make build
 - make test
 - bash test/e2e/sidecar/e2e.sh
+- make containers
