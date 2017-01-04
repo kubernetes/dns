@@ -26,8 +26,9 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"k8s.io/kubernetes/pkg/api"
+
 	fed "k8s.io/dns/pkg/dns/federation"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/util/validation"
 )
 
