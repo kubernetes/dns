@@ -105,14 +105,14 @@ func (mc *metricsClient) getSingleMetric(name string) (int64, error) {
 	}
 
 	if len(in.Answer) != 1 {
-		return 0, fmt.Errorf("Invalid number of Answer records for %s: %d",
+		return 0, fmt.Errorf("invalid number of Answer records for %s: %d",
 			name, len(in.Answer))
 	}
 
 	if t, ok := in.Answer[0].(*dns.TXT); ok {
 		glog.V(4).Infof("Got valid TXT response %+v for %s", t, name)
 		if len(t.Txt) != 1 {
-			return 0, fmt.Errorf("Invalid number of TXT records for %s: %d",
+			return 0, fmt.Errorf("invalid number of TXT records for %s: %d",
 				name, len(t.Txt))
 		}
 
@@ -124,5 +124,5 @@ func (mc *metricsClient) getSingleMetric(name string) (int64, error) {
 		return value, nil
 	}
 
-	return 0, fmt.Errorf("missing txt record for %s", name)
+	return 0, fmt.Errorf("missing TXT record for %s", name)
 }
