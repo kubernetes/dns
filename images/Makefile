@@ -28,7 +28,7 @@
 # VERBOSE  : will be 1 if running in verbose mode
 
 # List of image directories to build.
-IMAGES ?=
+IMAGES ?= $(shell ls -d */)
 
 all: build
 

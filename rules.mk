@@ -153,8 +153,8 @@ $(foreach BINARY,$(BINARIES),$(eval $(PUSH_RULE)))
 
 
 # Rule for `test`
-.PHONY: test images-test
-test: build-dirs
+.PHONY: test
+test: build-dirs images-test
 	@docker run                                                            \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
@@ -181,7 +181,7 @@ images-containers:
 images-push:
 	@$(MAKE) -C images push
 
-.PHONY: images-clean
+.PHONY: images-test
 images-test:
 	@$(MAKE) -C images test
 
