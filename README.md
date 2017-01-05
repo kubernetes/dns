@@ -6,8 +6,9 @@
 
 This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/).
 
-## Subprojects
+## Images
 
+* [kube-dns](http://kubernetes.io/docs/admin/dns/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
 
@@ -18,6 +19,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 | target | description |
 | ---- | ---- |
 |all, build | build all binaries |
+|test       | run unit tests |
 |containers | build the containers |
 |push       | push containers to the registry |
 |help       | this help message |
@@ -34,6 +36,8 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 ## Release process
 
 1. Build and test (`make build` and `make test`)
+1. Update the release tag. We use [semantic versioning](http://semver.org) to
+   name releases.
 1. Push the containers (`make push`)
 1. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
