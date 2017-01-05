@@ -21,7 +21,6 @@ MAINTAINER Bowei Du <bowei@google.com>
 # are removed
 __CROSS_BUILD_COPY__ qemu-__ARCH__-static /usr/bin/
 
-
 COPY dnsmasq.conf /etc/dnsmasq.conf
 COPY dnsmasq /usr/sbin/dnsmasq
 RUN mkdir -p /var/run/

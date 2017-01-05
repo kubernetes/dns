@@ -26,7 +26,7 @@ OUTPUT_DIR := _output/$(ARCH)
 ifeq ($(ARCH),amd64)
 	BASEIMAGE ?= alpine:3.4
 	TRIPLE    ?= x86_64-linux-gnu
-	QEMUARCH  := 
+	QEMUARCH  :=
 else ifeq ($(ARCH),arm)
 	BASEIMAGE ?= armel/busybox:glibc
 	TRIPLE    ?= arm-linux-gnueabi
@@ -109,11 +109,14 @@ else
 	@docker run --sig-proxy=true --rm --privileged $(MULTIARCH_CONTAINER) --reset $(VERBOSE_OUTPUT)
 endif
 
-	@docker run --rm --sig-proxy=true                         \
-		-v `pwd`/$(OUTPUT_DIR):/build $(KUBE_CROSS_IMAGE) \
-		/bin/bash -c                                      \
+	@docker run --rm --sig-proxy=true            \
+		-v `pwd`/$(OUTPUT_DIR):/build        \
+		-v `pwd`:/src                        \
+		$(KUBE_CROSS_IMAGE)                  \
+		/bin/bash -c                         \
 		"curl -sSL  $(DNSMASQ_URL) | tar -xJ \
 			&& cd $(DNSMASQ_VERSION)     \
+			&& patch -l < /src/static-linking.patch \
 			&& CC=$(TRIPLE)-gcc make -j  \
 			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
 	@cp dnsmasq.conf $(OUTPUT_DIR)
@@ -127,7 +130,9 @@ $(CONTAINER_STAMP): $(BINARY)
 		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR) > $@
 
 .PHONY: test
-test: # does nothing for now
+test: containers
+	@ARCH=$(ARCH) IMAGE=$(REGISTRY)/$(IMAGE):$(VERSION) ./validate.sh
+
 
 .PHONY: push
 push: $(PUSH_STAMP)
