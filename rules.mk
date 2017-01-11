@@ -88,6 +88,7 @@ build: $(GO_BINARIES) images-build
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
 	@docker run                                                            \
+	    --rm                                                               \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
 	    -v $$(pwd)/.go:/go                                                 \
@@ -156,6 +157,7 @@ $(foreach BINARY,$(BINARIES),$(eval $(PUSH_RULE)))
 .PHONY: test
 test: build-dirs images-test
 	@docker run                                                            \
+	    --rm                                                               \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
 	    -v $$(pwd)/.go:/go                                                 \
