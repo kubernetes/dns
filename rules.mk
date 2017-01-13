@@ -31,15 +31,19 @@ ALL_ARCH := amd64 arm arm64 ppc64le
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
     BASEIMAGE?=alpine
+    NOBODY?=nobody
 endif
 ifeq ($(ARCH),arm)
     BASEIMAGE?=armel/busybox
+    NOBODY?=nogroup
 endif
 ifeq ($(ARCH),arm64)
     BASEIMAGE?=aarch64/busybox
+    NOBODY?=nogroup
 endif
 ifeq ($(ARCH),ppc64le)
     BASEIMAGE?=ppc64le/busybox
+    NOBODY?=nobody
 endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
@@ -114,6 +118,7 @@ define DOCKERFILE_RULE
 	    -e 's|ARG_BIN|$(BINARY)|g'		\
 	    -e 's|ARG_ARCH|$(ARCH)|g'		\
 	    -e 's|ARG_FROM|$(BASEIMAGE)|g'	\
+	    -e 's|ARG_NOBODY|$(NOBODY)|g'	\
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
 endef
