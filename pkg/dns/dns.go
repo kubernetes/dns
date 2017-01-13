@@ -242,13 +242,10 @@ func (kd *KubeDNS) setEndpointsStore() {
 		&v1.Endpoints{},
 		resyncPeriod,
 		kcache.ResourceEventHandlerFuncs{
-			AddFunc: kd.handleEndpointAdd,
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				// TODO: Avoid unwanted updates.
-				kd.handleEndpointAdd(newObj)
-			},
-			// No DeleteFunc for EndpointsStore because endpoint object will be deleted
-			// when corresponding service is deleted.
+			AddFunc:    kd.handleEndpointAdd,
+			UpdateFunc: kd.handleEndpointUpdate,
+			// If Service is named headless need to remove the reverse dns entries.
+			DeleteFunc: kd.handleEndpointDelete,
 		},
 	)
 }
@@ -320,6 +317,94 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 	if e, ok := obj.(*v1.Endpoints); ok {
 		kd.addDNSUsingEndpoints(e)
+	}
+}
+
+func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
+	oldEndpoints, ok := oldObj.(*v1.Endpoints)
+	if !ok {
+		glog.Errorf("oldObj type assertion failed! Expected 'v1.Endpoints', got %T", oldObj)
+		return
+	}
+
+	newEndpoints, ok := newObj.(*v1.Endpoints)
+	if !ok {
+		glog.Errorf("newObj type assertion failed! Expected 'v1.Endpoints', got %T", newObj)
+		return
+	}
+
+	// oldAddressMap is use to hold oldEndpoints addresses that are not
+	// in newEndpoints
+	oldAddressMap := make(map[string]bool)
+
+	// svc is same for both old and new endpoints
+	svc, err := kd.getServiceFromEndpoints(oldEndpoints)
+	if svc != nil && err == nil {
+		if !v1.IsServiceIPSet(svc) {
+			for idx := range oldEndpoints.Subsets {
+				for subIdx := range oldEndpoints.Subsets[idx].Addresses {
+					address := &oldEndpoints.Subsets[idx].Addresses[subIdx]
+					endpointIP := address.IP
+					if _, has := getHostname(address); has {
+						oldAddressMap[endpointIP] = true
+					}
+				}
+			}
+
+			for idx := range newEndpoints.Subsets {
+				for subIdx := range newEndpoints.Subsets[idx].Addresses {
+					address := newEndpoints.Subsets[idx].Addresses[subIdx]
+					endpointIP := address.IP
+					if _, ok := oldAddressMap[endpointIP]; ok {
+						address := &newEndpoints.Subsets[idx].Addresses[subIdx]
+						// Entries are both in old and new endpoint. Remove from the `oldAddressMap`
+						// if the address is still named to the service.
+						if _, has := getHostname(address); has {
+							// The service is still named in the Pod
+							delete(oldAddressMap, endpointIP)
+						}
+					}
+				}
+			}
+
+			// Remove all old PTR records for the endpoints that are not
+			// in new endpoints, or
+			// the addresses that are no longer named.
+			kd.cacheLock.Lock()
+			for k := range oldAddressMap {
+				delete(kd.reverseRecordMap, k)
+			}
+			kd.cacheLock.Unlock()
+		}
+	}
+
+	// TODO: Avoid unwanted updates.
+	kd.handleEndpointAdd(newObj)
+}
+
+func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
+	endpoints, ok := obj.(*v1.Endpoints)
+	if !ok {
+		glog.Errorf("obj type assertion failed! Expected 'v1.Endpoints', got %T", obj)
+		return
+	}
+
+	svc, err := kd.getServiceFromEndpoints(endpoints)
+	if svc != nil && err == nil {
+		if !v1.IsServiceIPSet(svc) {
+			kd.cacheLock.Lock()
+			defer kd.cacheLock.Unlock()
+			// When endpoints for Named headless services deleted, delete old reverse dns records.
+			for idx := range endpoints.Subsets {
+				for subIdx := range endpoints.Subsets[idx].Addresses {
+					address := &endpoints.Subsets[idx].Addresses[subIdx]
+					endpointIP := address.IP
+					if _, has := getHostname(address); has {
+						delete(kd.reverseRecordMap, endpointIP)
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -411,6 +496,12 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 					l := []string{"_" + strings.ToLower(string(endpointPort.Protocol)), "_" + endpointPort.Name}
 					subCache.SetEntry(endpointName, srvValue, kd.fqdn(svc, append(l, endpointName)...), l...)
 				}
+			}
+
+			// Generate PTR records only for Named Headless service.
+			if _, has := getHostname(address); has {
+				reverseRecord, _ := util.GetSkyMsg(kd.fqdn(svc, endpointName), 0)
+				kd.reverseRecordMap[endpointIP] = reverseRecord
 			}
 		}
 	}
