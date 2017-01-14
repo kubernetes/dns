@@ -27,10 +27,11 @@ export VERSION
 # directories which hold app source (not vendored)
 SRC_DIRS := cmd pkg
 
-ALL_ARCH := amd64 arm arm64 ppc64le
+ALL_ARCH := amd64 arm arm64 ppc64le s390x
+ML_PLATFORMS=linux/amd64,linux/arm,linux/arm64,linux/ppc64le,linux/s390x
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
-    BASEIMAGE?=alpine
+    BASEIMAGE?=busybox
 endif
 ifeq ($(ARCH),arm)
     BASEIMAGE?=armel/busybox
@@ -41,17 +42,25 @@ endif
 ifeq ($(ARCH),ppc64le)
     BASEIMAGE?=ppc64le/busybox
 endif
+ifeq ($(ARCH),s390x)
+    BASEIMAGE?=s390x/busybox
+endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
 BUILDSTAMP_NAME = $(subst /,_,$(CONTAINER_NAME))_$(VERSION)
 
+CONTAINER_NAME_UNSUFFIXED  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)
+BUILDSTAMP_NAME_UNSUFFIXED = $(subst /,_,$(CONTAINER_NAME_UNSUFFIXED))_$(VERSION)
+
+
 GO_BINARIES := $(addprefix bin/$(ARCH)/,$(BINARIES))
 CONTAINER_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME)-container)
 PUSH_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME)-push)
+PUSH_ML_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME_UNSUFFIXED)-pushml)
 
-ifeq ($(VERBOSE), 1)
+ifeq ($(VERBOSE),1)
 	DOCKER_BUILD_FLAGS :=
 	VERBOSE_OUTPUT := >&1
 else
@@ -72,17 +81,27 @@ push-%:
 
 
 .PHONY: all-build
-all-build: $(addprefix build-, $(ALL_ARCH))
+all-build: $(addprefix build-,$(ALL_ARCH)) images-build
 
 .PHONY: all-containers
-all-containers: $(addprefix containers-, $(ALL_ARCH))
+all-containers: $(addprefix containers-,$(ALL_ARCH)) images-containers
 
 .PHONY: all-push
-all-push: $(addprefix push-, $(ALL_ARCH))
+all-push: ./manifest-tool gcr-login $(addprefix push-,$(ALL_ARCH)) pushml images-push
 
 .PHONY: build
-build: $(GO_BINARIES) images-build
+build: $(GO_BINARIES)
 
+./manifest-tool:
+	curl -sSL https://github.com/luxas/manifest-tool/releases/download/v0.3.0/manifest-tool > manifest-tool
+	chmod +x manifest-tool
+
+gcr-login:
+ifeq ($(findstring gcr.io,$(PREFIX)),gcr.io)
+	@echo "If you are pushing to a gcr.io registry, you have to be logged in via 'docker login'; 'gcloud docker push' can't push manifest lists yet."
+	@echo "This script is automatically logging you in now."
+	docker login -u oauth2accesstoken -p "$(gcloud auth print-access-token)" https://gcr.io
+endif
 
 # Rule for all bin/$(ARCH)/bin/$(BINARY)
 $(GO_BINARIES): build-dirs
@@ -135,16 +154,16 @@ endef
 $(foreach BINARY,$(BINARIES),$(eval $(CONTAINER_RULE)))
 
 .PHONY: containers
-containers: $(CONTAINER_BUILDSTAMPS) images-containers
+containers: $(CONTAINER_BUILDSTAMPS)
 
 
 # Rules for pushing
 .PHONY: push
-push: $(PUSH_BUILDSTAMPS) images-push
+push: $(PUSH_BUILDSTAMPS)
 
 .%-push: .%-container
 	@echo "pushing  :" $$(head -n 1 $<)
-	@gcloud docker -- push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
+	@docker push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
 	@cat $< > $@
 
 define PUSH_RULE
@@ -153,9 +172,26 @@ endef
 $(foreach BINARY,$(BINARIES),$(eval $(PUSH_RULE)))
 
 
+# Rules for pushing manifest lists
+.PHONY: pushml
+pushml: $(PUSH_ML_BUILDSTAMPS)
+
+define PUSHML_RULE
+.$(BUILDSTAMP_NAME_UNSUFFIXED)-pushml:
+	@echo "pushing manifest list :" $(CONTAINER_NAME_UNSUFFIXED):$(VERSION)
+	@./manifest-tool push from-args \
+		--platforms $(ML_PLATFORMS) \
+		--template $(CONTAINER_NAME_UNSUFFIXED)-ARCH:$(VERSION) \
+		--target $(CONTAINER_NAME_UNSUFFIXED):$(VERSION) \
+		$(VERBOSE_OUTPUT)
+	@echo "$(CONTAINER_NAME_UNSUFFIXED):$(VERSION)" > $$@
+endef
+$(foreach BINARY,$(BINARIES),$(eval $(PUSHML_RULE)))
+
+
 # Rule for `test`
 .PHONY: test
-test: build-dirs images-test
+test: build-dirs
 	@docker run                                                            \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
@@ -173,23 +209,23 @@ test: build-dirs images-test
 # Hook in images build
 .PHONY: images-build
 images-build:
-	@$(MAKE) -C images build
+	@$(MAKE) -C images all-build
 
 .PHONY: images-containers
 images-containers:
-	@$(MAKE) -C images containers
+	@$(MAKE) -C images all-containers
 
 .PHONY: images-push
 images-push:
-	@$(MAKE) -C images push
+	@$(MAKE) -C images all-push
 
 .PHONY: images-test
 images-test:
-	@$(MAKE) -C images test
+	@$(MAKE) -C images all-test
 
 .PHONY: images-clean
 images-clean:
-	@$(MAKE) -C images clean
+	@$(MAKE) -C images all-clean
 
 # Miscellaneous rules
 .PHONY: version

@@ -13,17 +13,11 @@
 # limitations under the License.
 
 FROM __BASEIMAGE__
-MAINTAINER Bowei Du <bowei@google.com>
-
-# If we're building for another architecture than amd64, the
-# CROSS_BUILD_ placeholder is removed so e.g. CROSS_BUILD_COPY turns
-# into COPY. If we're building normally, for amd64, CROSS_BUILD lines
-# are removed
-__CROSS_BUILD_COPY__ qemu-__ARCH__-static /usr/bin/
 
 COPY dnsmasq.conf /etc/dnsmasq.conf
 COPY dnsmasq /usr/sbin/dnsmasq
-RUN mkdir -p /var/run/
+# This file is just copied into this container in order to create the dir easily
+COPY .emptydir /var/run/
 
 # Replace SIGTERM with SIGCONT as stop signal to support graceful
 # termination

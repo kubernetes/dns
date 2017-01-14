@@ -18,44 +18,37 @@ ARCH ?= amd64
 DNSMASQ_VERSION ?= dnsmasq-2.76
 CONTAINER_PREFIX ?= k8s-dns
 
-ALL_ARCH := amd64 arm arm64 ppc64le
-IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
-COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.6.2-2
+ALL_ARCH := amd64 arm arm64 ppc64le s390x
+IMAGENAME := $(CONTAINER_PREFIX)-dnsmasq
+# TODO: Use gcr.io/google_containers/kube-cross:v1.7.4-2
+COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.7.4-1
 OUTPUT_DIR := _output/$(ARCH)
+ML_PLATFORMS=linux/amd64,linux/arm,linux/arm64,linux/ppc64le,linux/s390x
 
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= alpine:3.4
-	COMPILE_IMAGE := alpine:3.4
+	BASEIMAGE ?= busybox:glibc
+	CC ?= gcc
 else ifeq ($(ARCH),arm)
+	# TODO: Switch to using armhf/ and arm-linux-gnueabihf
 	BASEIMAGE ?= armel/busybox:glibc
-	TRIPLE    ?= arm-linux-gnueabi
-	QEMUARCH  := arm
+	CC        ?= arm-linux-gnueabi-gcc
 else ifeq ($(ARCH),arm64)
 	BASEIMAGE ?= aarch64/busybox:glibc
-	TRIPLE    ?= aarch64-linux-gnu
-	QEMUARCH  := aarch64
+	CC        ?= aarch64-linux-gnu-gcc
 else ifeq ($(ARCH),ppc64le)
 	BASEIMAGE ?= ppc64le/busybox:glibc
-	TRIPLE    ?= powerpc64le-linux-gnu
-	QEMUARCH  := ppc64le
+	CC        ?= powerpc64le-linux-gnu-gcc
+else ifeq ($(ARCH),s390x)
+	BASEIMAGE ?= s390x/busybox:glibc
+	CC        ?= s390x-linux-gnu-gcc
 else
 $(error Unsupported ARCH: $(ARCH))
 endif
 
 DNSMASQ_URL := http://www.thekelleys.org.uk/dnsmasq/$(DNSMASQ_VERSION).tar.xz
-DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
-
-MULTIARCH_CONTAINER := multiarch/qemu-user-static:register
-MULTIARCH_RELEASE := https://github.com/multiarch/qemu-user-static/releases/download/v2.5.0/x86_64_qemu-$(QEMUARCH)-static.tar.xz
-
-DOCKER := docker
-ifeq ($(findstring gcr.io/,$(REGISTRY)),gcr.io/)
-	DOCKER := gcloud docker --
-endif
-
 BINARY:= $(OUTPUT_DIR)/dnsmasq
 
-BUILDSTAMP := $(subst /,_,$(REGISTRY))_$(IMAGE)_$(VERSION)
+BUILDSTAMP := $(subst /,_,$(REGISTRY))_$(IMAGENAME)-$(ARCH)_$(VERSION)
 CONTAINER_STAMP := .$(BUILDSTAMP)-container
 PUSH_STAMP := .$(BUILDSTAMP)-push
 
@@ -89,74 +82,56 @@ all-containers: $(addprefix containers-, $(ALL_ARCH))
 all-test: $(addprefix test-, $(ALL_ARCH))
 
 .PHONY: all-push
-all-push: $(addprefix push-, $(ALL_ARCH))
+all-push: ./manifest-tool $(addprefix push-, $(ALL_ARCH))
+	./manifest-tool push from-args --platforms $(ML_PLATFORMS) --template $(REGISTRY)/$(IMAGENAME)-ARCH:$(VERSION) --target $(REGISTRY)/$(IMAGENAME):$(VERSION)
 
 .PHONY: build
 build: $(BINARY)
 
-$(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) dnsmasq.conf
+$(BINARY):
 	@echo "building :" $(BINARY)
 	@mkdir -p $(@D)
-	@cp Dockerfile.cross $(OUTPUT_DIR)/Dockerfile
-	@cd $(OUTPUT_DIR) && sed -i "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile
-
-ifeq ($(ARCH),amd64)
-	@cd $(OUTPUT_DIR) && sed -i "/__CROSS_BUILD_COPY__/d" Dockerfile
-	@docker run --rm --sig-proxy=true     \
-		-v `pwd`/$(OUTPUT_DIR):/build \
-		-v `pwd`:/src                 \
-		$(COMPILE_IMAGE)              \
-		/bin/sh -c                    \
-		"apk update                                 \
-			&& apk add alpine-sdk xz libcap-dev \
-			&& tar -xJf /build/dnsmasq.tar.xz   \
-			&& cd $(DNSMASQ_VERSION)            \
-			&& make -j                          \
-			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
-else
-	@cd $(OUTPUT_DIR)                                            \
-		&& sed -i "s|__ARCH__|$(QEMUARCH)|g" Dockerfile      \
-		&& sed -i "s/__CROSS_BUILD_COPY__/COPY/g" Dockerfile
-	@cd $(OUTPUT_DIR) \
-		&& curl -sSL $(MULTIARCH_RELEASE) | tar -xJ
-	@docker run --sig-proxy=true --rm            \
-		--privileged $(MULTIARCH_CONTAINER)  \
-		--reset $(VERBOSE_OUTPUT)
-	@docker run --rm --sig-proxy=true            \
+	@docker run --rm --sig-proxy=true        \
 		-v `pwd`/$(OUTPUT_DIR):/build        \
-		-v `pwd`:/src                        \
 		$(COMPILE_IMAGE)                     \
 		/bin/bash -c                         \
-		"tar -xJf /build/dnsmasq.tar.xz      \
+		"curl -sSL $(DNSMASQ_URL) | tar -xJ  \
 			&& cd $(DNSMASQ_VERSION)     \
-			&& CC=$(TRIPLE)-gcc make -j  \
+			&& CC=$(CC) make -j  \
 			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
-endif
-	@cp dnsmasq.conf $(OUTPUT_DIR)
-
-$(DNSMASQ_ARCHIVE):
-	@mkdir -p $(@D)
-	@curl -sSL $(DNSMASQ_URL) > $@
 
 .PHONY: containers
 containers: $(CONTAINER_STAMP)
 
-$(CONTAINER_STAMP): $(BINARY)
-	@echo "container:" $(REGISTRY)/$(IMAGE):$(VERSION)
+$(CONTAINER_STAMP): Dockerfile dnsmasq.conf $(BINARY)
+	@echo "container:" $(REGISTRY)/$(IMAGENAME)-$(ARCH):$(VERSION)
+	@cp dnsmasq.conf $(OUTPUT_DIR)/
+	@sed "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile > $(OUTPUT_DIR)/Dockerfile
+	@touch $(OUTPUT_DIR)/.emptydir
 	@docker build \
-		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR) > $@
+		-q -t $(REGISTRY)/$(IMAGENAME)-$(ARCH):$(VERSION) $(OUTPUT_DIR) > $@
 
 .PHONY: test
 test: containers
-	@ARCH=$(ARCH) IMAGE=$(REGISTRY)/$(IMAGE):$(VERSION) ./validate.sh
+	@ARCH=$(ARCH) IMAGE=$(REGISTRY)/$(IMAGENAME)-$(ARCH):$(VERSION) ./validate.sh
 
+./manifest-tool:
+	curl -sSL https://github.com/luxas/manifest-tool/releases/download/v0.3.0/manifest-tool > manifest-tool
+	chmod +x manifest-tool
+
+gcr-login:
+ifeq ($(findstring gcr.io,$(PREFIX)),gcr.io)
+	@echo "If you are pushing to a gcr.io registry, you have to be logged in via 'docker login'; 'gcloud docker push' can't push manifest lists yet."
+	@echo "This script is automatically logging you in now."
+	docker login -u oauth2accesstoken -p "$(gcloud auth print-access-token)" https://gcr.io
+endif
 
 .PHONY: push
 push: $(PUSH_STAMP)
 
-$(PUSH_STAMP): $(CONTAINER_STAMP)
-	@echo "pushing  :" $(REGISTRY)/$(IMAGE):$(VERSION)
-	@$(DOCKER) push $(REGISTRY)/$(IMAGE):$(VERSION)
+$(PUSH_STAMP): $(CONTAINER_STAMP) gcr-login
+	@echo "pushing  :" $(REGISTRY)/$(IMAGENAME)-$(ARCH):$(VERSION)
+	@docker push $(REGISTRY)/$(IMAGENAME)-$(ARCH):$(VERSION)
 	@cat $< > $@
 
 .PHONY: clean
