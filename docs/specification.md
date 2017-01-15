@@ -173,7 +173,7 @@ Given a _ready_ endpoint with _hostname_ of `<hostname>` and IP address
 
 ### 2.5 - Deprecated Records
 Kube-DNS versions prior to implementation of this specification also replied
-with an `A` record of the form below for any values of `<a>`, `<b>`, `<c>`, and `<d>` between 0 and 254:
+with an `A` record of the form below for any values of `<a>`, `<b>`, `<c>`, and `<d>` between 0 and 255:
 - Record Format:
   - `<a>-<b>-<c>-<d>.<ns>.pod.<zone>. <ttl> IN A <a>.<b>.<c>.<d>`
 
