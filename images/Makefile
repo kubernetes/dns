@@ -33,37 +33,37 @@ IMAGES ?= $(shell ls -d */)
 all: build
 
 .PHONY: build
-build:
-	@$(MAKE) $(addprefix build-,$(IMAGES))
+all-build:
+	@$(MAKE) $(addprefix all-build-,$(IMAGES))
 
 .PHONY: containers
-containers:
-	@$(MAKE) $(addprefix containers-,$(IMAGES))
+all-containers:
+	@$(MAKE) $(addprefix all-containers-,$(IMAGES))
 
 .PHONY: push
-push:
-	@$(MAKE) $(addprefix push-,$(IMAGES))
+all-push:
+	@$(MAKE) $(addprefix all-push-,$(IMAGES))
 
 .PHONY: test
-test:
-	@$(MAKE) $(addprefix test-,$(IMAGES))
+all-test:
+	@$(MAKE) $(addprefix all-test-,$(IMAGES))
 
 .PHONY: clean
-clean:
-	@$(MAKE) $(addprefix clean-,$(IMAGES))
+all-clean:
+	@$(MAKE) $(addprefix all-clean-,$(IMAGES))
 
 # Suffix rules to dispatch to the appropriate subdirectory.
-build-%:
-	@$(MAKE) -C $* build
+all-build-%:
+	@$(MAKE) -C $* all-build
 
-containers-%:
-	@$(MAKE) -C $* containers
+all-containers-%:
+	@$(MAKE) -C $* all-containers
 
-push-%:
-	@$(MAKE) -C $* push
+all-push-%:
+	@$(MAKE) -C $* all-push
 
-test-%:
-	@$(MAKE) -C $* test
+all-test-%:
+	@$(MAKE) -C $* all-test
 
-clean-%:
-	@$(MAKE) -C $* clean
+all-clean-%:
+	@$(MAKE) -C $* all-clean

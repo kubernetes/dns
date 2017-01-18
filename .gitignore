@@ -88,5 +88,7 @@ network_closure.sh
 /.*-dockerfile
 /.*-container
 /.*-push
+/.*-pushml
 /.go
 /bin
+*manifest-tool

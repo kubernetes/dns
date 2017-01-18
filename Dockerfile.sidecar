@@ -14,9 +14,6 @@
 
 FROM ARG_FROM
 
-MAINTAINER Bowei Du <bowei@google.com>
-
 ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
-
-USER nobody:nobody
+USER nobody:nogroup
 ENTRYPOINT ["/ARG_BIN"]
