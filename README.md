@@ -36,6 +36,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 ## Release process
 
 1. Build and test (`make build` and `make test`)
+1. Update [go dependencies](docs/go-dependencies.md) if needed.
 1. Update the release tag. We use [semantic versioning](http://semver.org) to
    name releases.
 1. Push the containers (`make push`)
