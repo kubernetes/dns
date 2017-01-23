@@ -38,6 +38,10 @@ else ifeq ($(ARCH),ppc64le)
 	BASEIMAGE ?= ppc64le/busybox:glibc
 	TRIPLE    ?= powerpc64le-linux-gnu
 	QEMUARCH  := ppc64le
+else ifeq ($(ARCH),s390x)
+        BASEIMAGE ?=s390x/busybox:glibc
+        TRIPLE    ?=s390x-linux-gnu
+        QEMUARCH  :=s390x
 else
 $(error Unsupported ARCH: $(ARCH))
 endif
