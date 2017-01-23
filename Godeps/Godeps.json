@@ -1,7 +1,7 @@
 {
 	"ImportPath": "k8s.io/dns",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v77",
+	"GodepVersion": "v78",
 	"Packages": [
 		"github.com/onsi/ginkgo/ginkgo",
 		"./pkg/...",
