@@ -46,6 +46,9 @@ type KubeDNSConfig struct {
 
 	ConfigMapNs string
 	ConfigMap   string
+
+	ConfigDir    string
+	ConfigPeriod time.Duration
 }
 
 func NewKubeDNSConfig() *KubeDNSConfig {
@@ -60,6 +63,9 @@ func NewKubeDNSConfig() *KubeDNSConfig {
 
 		ConfigMapNs: api.NamespaceSystem,
 		ConfigMap:   "", // default to using command line flags
+
+		ConfigPeriod: 10 * time.Second,
+		ConfigDir:    "",
 	}
 }
 
@@ -155,15 +161,21 @@ func (s *KubeDNSConfig) AddFlags(fs *pflag.FlagSet) {
 		"a comma separated list of the federation names and their corresponding"+
 			" domain names to which this cluster belongs. Example:"+
 			" \"myfederation1=example.com,myfederation2=example2.com,myfederation3=example.com\"."+
-			" It is an error to set both the federations and config-map flags.")
-	fs.MarkDeprecated("federations", "use config-map instead. Will be removed in future version")
+			" It is an error to set both the federations and config-map or config-dir flags.")
+	fs.MarkDeprecated("federations", "use config-dir instead. Will be removed in future version")
 
 	fs.StringVar(&s.ConfigMapNs, "config-map-namespace", s.ConfigMapNs,
 		"namespace for the config-map")
 	fs.StringVar(&s.ConfigMap, "config-map", s.ConfigMap,
 		"config-map name. If empty, then the config-map will not used. Cannot be "+
-			" used in conjunction with federations flag. config-map contains "+
+			"used in conjunction with federations or config-dir flag. config-map contains "+
 			"dynamically adjustable configuration.")
 	fs.DurationVar(&s.InitialSyncTimeout, "initial-sync-timeout", s.InitialSyncTimeout,
 		"Timeout for initial resource sync.")
+
+	fs.StringVar(&s.ConfigDir, "config-dir", s.ConfigDir,
+		"directory to read config values from. Cannot be "+
+			"used in conjunction with federations or config-map flag.")
+	fs.DurationVar(&s.ConfigPeriod, "config-period", s.ConfigPeriod,
+		"period at which to check for updates in config-dir.")
 }
