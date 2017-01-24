@@ -53,15 +53,14 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 	}
 
 	var configSync dnsconfig.Sync
-	if config.ConfigMap == "" {
+	switch {
+	case config.ConfigMap != "":
+		glog.V(0).Infof("Using configuration read from ConfigMap: %v:%v", config.ConfigMapNs, config.ConfigMap)
+		configSync = dnsconfig.NewConfigMapSync(kubeClient, config.ConfigMapNs, config.ConfigMap)
+
+	default:
 		glog.V(0).Infof("ConfigMap not configured, using values from command line flags")
-		configSync = dnsconfig.NewNopSync(
-			&dnsconfig.Config{Federations: config.Federations})
-	} else {
-		glog.V(0).Infof("Using configuration read from ConfigMap: %v:%v",
-			config.ConfigMapNs, config.ConfigMap)
-		configSync = dnsconfig.NewSync(
-			kubeClient, config.ConfigMapNs, config.ConfigMap)
+		configSync = dnsconfig.NewNopSync(&dnsconfig.Config{Federations: config.Federations})
 	}
 
 	return &KubeDNSServer{
