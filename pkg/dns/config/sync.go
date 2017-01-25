@@ -17,18 +17,7 @@ limitations under the License.
 package config
 
 import (
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/fields"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/util/wait"
-	"k8s.io/client-go/pkg/watch"
-	"k8s.io/client-go/tools/cache"
-
 	fed "k8s.io/dns/pkg/dns/federation"
-
-	"time"
 
 	"github.com/golang/glog"
 )
@@ -47,50 +36,28 @@ type Sync interface {
 	Periodic() <-chan *Config
 }
 
-// NewSync for ConfigMap from namespace `ns` and `name`.
-func NewSync(client kubernetes.Interface, ns string, name string) Sync {
+type syncResult struct {
+	Version string
+	Data    map[string]string
+}
+
+type syncSource interface {
+	Once() (syncResult, error)
+	Periodic() <-chan syncResult
+}
+
+// NewSync uses the given source to provide config
+func newSync(source syncSource) Sync {
 	sync := &kubeSync{
-		ns:      ns,
-		name:    name,
-		client:  client,
-		channel: make(chan *Config),
+		syncSource: source,
+		channel:    make(chan *Config),
 	}
-
-	listWatch := &cache.ListWatch{
-		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = fields.Set{"metadata.name": name}.AsSelector().String()
-			return client.Core().ConfigMaps(ns).List(options)
-		},
-		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = fields.Set{"metadata.name": name}.AsSelector().String()
-			return client.Core().ConfigMaps(ns).Watch(options)
-		},
-	}
-
-	store, controller := cache.NewInformer(
-		listWatch,
-		&v1.ConfigMap{},
-		time.Duration(0),
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    sync.onAdd,
-			DeleteFunc: sync.onDelete,
-			UpdateFunc: sync.onUpdate,
-		})
-
-	sync.store = store
-	sync.controller = controller
-
 	return sync
 }
 
-// kubeSync implements Sync for the Kubernetes API.
+// kubeSync implements Sync using the provided syncSource
 type kubeSync struct {
-	ns   string
-	name string
-
-	client     kubernetes.Interface
-	store      cache.Store
-	controller *cache.Controller
+	syncSource syncSource
 
 	channel chan *Config
 
@@ -100,85 +67,58 @@ type kubeSync struct {
 var _ Sync = (*kubeSync)(nil)
 
 func (sync *kubeSync) Once() (*Config, error) {
-	cm, err := sync.client.Core().ConfigMaps(sync.ns).Get(sync.name, metav1.GetOptions{})
-
+	result, err := sync.syncSource.Once()
 	if err != nil {
-		glog.Errorf("Error getting ConfigMap %v:%v err: %v",
-			sync.ns, sync.name, err)
 		return nil, err
 	}
-
-	config, _, err := sync.processUpdate(cm)
+	config, _, err := sync.processUpdate(result)
 	return config, err
 }
 
 func (sync *kubeSync) Periodic() <-chan *Config {
-	go sync.controller.Run(wait.NeverStop)
+	go func() {
+		resultChan := sync.syncSource.Periodic()
+		for {
+			syncResult := <-resultChan
+			config, changed, err := sync.processUpdate(syncResult)
+			if err != nil {
+				continue
+			}
+			if !changed {
+				continue
+			}
+			sync.channel <- config
+		}
+	}()
 	return sync.channel
 }
 
-func (sync *kubeSync) toConfigMap(obj interface{}) *v1.ConfigMap {
-	cm, ok := obj.(*v1.ConfigMap)
-	if !ok {
-		glog.Fatalf("Expected ConfigMap, got %T", obj)
-	}
-	return cm
-}
+func (sync *kubeSync) processUpdate(result syncResult) (config *Config, changed bool, err error) {
+	glog.V(4).Infof("processUpdate %+v", result)
 
-func (sync *kubeSync) onAdd(obj interface{}) {
-	cm := sync.toConfigMap(obj)
-
-	glog.V(2).Infof("ConfigMap %s:%s was created", sync.ns, sync.name)
-
-	config, updated, err := sync.processUpdate(cm)
-	if updated && err == nil {
-		sync.channel <- config
-	}
-}
-
-func (sync *kubeSync) onDelete(_ interface{}) {
-	glog.V(2).Infof("ConfigMap %s:%s was deleted, reverting to default configuration",
-		sync.ns, sync.name)
-
-	sync.latestVersion = ""
-	sync.channel <- NewDefaultConfig()
-}
-
-func (sync *kubeSync) onUpdate(_, obj interface{}) {
-	cm := sync.toConfigMap(obj)
-
-	glog.V(2).Infof("ConfigMap %s:%s was updated", sync.ns, sync.name)
-
-	config, changed, err := sync.processUpdate(cm)
-
-	if changed && err == nil {
-		sync.channel <- config
-	}
-}
-
-func (sync *kubeSync) processUpdate(cm *v1.ConfigMap) (config *Config, changed bool, err error) {
-	glog.V(4).Infof("processUpdate ConfigMap %+v", *cm)
-
-	if cm.ObjectMeta.ResourceVersion != sync.latestVersion {
-		glog.V(3).Infof("Updating config to version %v (was %v)",
-			cm.ObjectMeta.ResourceVersion, sync.latestVersion)
+	if result.Version != sync.latestVersion {
+		glog.V(3).Infof("Updating config to version %v (was %v)", result.Version, sync.latestVersion)
 		changed = true
-		sync.latestVersion = cm.ObjectMeta.ResourceVersion
+		sync.latestVersion = result.Version
 	} else {
 		glog.V(4).Infof("Config was unchanged (version %v)", sync.latestVersion)
 		return
 	}
 
+	if result.Version == "" && len(result.Data) == 0 {
+		config = NewDefaultConfig()
+		return
+	}
+
 	config = &Config{}
 
-	if err = sync.updateFederations(cm, config); err != nil {
+	if err = sync.updateFederations(result.Data, config); err != nil {
 		glog.Errorf("Invalid configuration, ignoring update")
 		return
 	}
 
 	if err = config.Validate(); err != nil {
-		glog.Errorf("Invalid onfiguration: %v (value was %+v), ignoring update",
-			err, config)
+		glog.Errorf("Invalid onfiguration: %v (value was %+v), ignoring update", err, config)
 		config = nil
 		return
 	}
@@ -186,12 +126,12 @@ func (sync *kubeSync) processUpdate(cm *v1.ConfigMap) (config *Config, changed b
 	return
 }
 
-func (sync *kubeSync) updateFederations(cm *v1.ConfigMap, config *Config) (err error) {
-	if flagValue, ok := cm.Data["federations"]; ok {
+func (sync *kubeSync) updateFederations(data map[string]string, config *Config) (err error) {
+	if flagValue, ok := data["federations"]; ok {
 		config.Federations = make(map[string]string)
 		if err = fed.ParseFederationsFlag(flagValue, config.Federations); err != nil {
 			glog.Errorf("Invalid federations value: %v (value was %q)",
-				err, cm.Data["federations"])
+				err, data["federations"])
 			return
 		}
 		glog.V(2).Infof("Updated federations to %v", config.Federations)
