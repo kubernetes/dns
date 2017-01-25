@@ -18,19 +18,24 @@ set -e
 IMAGE="k8s-dns-godep"
 GOLANG_IMAGE="golang:1.7-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
-REQUIRED_PKGS="github.com/onsi/ginkgo/ginkgo ./pkg/... ./cmd/..."
+REQUIRED_PKGS="./pkg/... ./cmd/..."
 
 USERGROUP=$(stat -c '%u:%g' build/dep.sh)
 TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
 image() {
-  docker rm -f ${IMAGE} || true
-  docker rm -f ${IMAGE}-base || true
+  local NO_CACHE=""
+  if [ "$1" = "--no-cache" ]; then
+    NO_CACHE="--no-cache"
+  fi
+
+  docker rmi -f ${IMAGE} || true
+  docker rmi -f ${IMAGE}-base || true
 
   # All docker build materials must be contained in the tree that the
   # Dockerfile is contained in.
-  cat <<END |  docker build -t ${IMAGE}-base -
+  cat <<END |  docker build ${NO_CACHE} -t ${IMAGE}-base -
 FROM ${GOLANG_IMAGE}
 RUN apk update
 RUN apk add git mercurial
@@ -138,9 +143,11 @@ Manages godep dependencies. This mostly a wrapper around operations
 involving godep and a Docker image containing a clean copy of the
 dependencies.
 
-image
+image [--no-cache]
   Create image with godep dependencies (${IMAGE}). This must be done
   first before running the rest of the commands.
+
+  If --no-cache is given, then the Docker image is built without caching.
 
 verify
   Verify that the godep matches the dependencies in the code. Exits
