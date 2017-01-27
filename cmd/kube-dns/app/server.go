@@ -138,7 +138,10 @@ func setupSignalHandlers() {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		glog.V(0).Infof("Ignoring signal %v (can only be terminated by SIGKILL)", <-sigChan)
+		for {
+			glog.V(0).Infof("Ignoring signal %v (can only be terminated by SIGKILL)", <-sigChan)
+			glog.Flush()
+		}
 	}()
 }
 

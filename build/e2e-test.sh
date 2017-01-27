@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2016 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,21 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-sudo: required
-# trusty required for docker
-# https://github.com/travis-ci/travis-ci/issues/5448
-dist: trusty
-go:
-- 1.7
-services:
-- docker
-install:
-- mkdir -p ${GOPATH}/src/k8s.io
-- ln -s `pwd` ${GOPATH}/src/k8s.io/dns
-script:
-- make build
-- make test
-- make containers
-- bash test/e2e/sidecar/e2e.sh
-- sudo -v
-- cd ${GOPATH}/src/k8s.io/dns && bin/amd64/ginkgo test/e2e
+set -e
+
+ARCH=${ARCH:-amd64}
+
+echo -------
+echo sidecar
+echo -------
+bash test/e2e/sidecar/e2e.sh
+
+echo ------
+echo ginkgo
+echo ------
+bin/${ARCH}/ginkgo test/e2e
