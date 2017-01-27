@@ -44,3 +44,26 @@ func (sync *MockSync) Once() (*Config, error) {
 func (sync *MockSync) Periodic() <-chan *Config {
 	return sync.Chan
 }
+
+type mockSource struct {
+	result syncResult
+	err    error
+	ch     chan syncResult
+}
+
+func newMockSource(result syncResult, err error) *mockSource {
+	return &mockSource{
+		result: result,
+		err:    err,
+		ch:     make(chan syncResult),
+	}
+}
+
+var _ syncSource = (*mockSource)(nil)
+
+func (m *mockSource) Once() (syncResult, error) {
+	return m.result, m.err
+}
+func (m *mockSource) Periodic() <-chan syncResult {
+	return m.ch
+}

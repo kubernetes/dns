@@ -71,7 +71,8 @@ func (sync *kubeSync) Once() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	config, _, err := sync.processUpdate(result)
+	// Always build a config object so we return non-nil
+	config, _, err := sync.processUpdate(result, true)
 	return config, err
 }
 
@@ -80,7 +81,7 @@ func (sync *kubeSync) Periodic() <-chan *Config {
 		resultChan := sync.syncSource.Periodic()
 		for {
 			syncResult := <-resultChan
-			config, changed, err := sync.processUpdate(syncResult)
+			config, changed, err := sync.processUpdate(syncResult, false)
 			if err != nil {
 				continue
 			}
@@ -93,7 +94,7 @@ func (sync *kubeSync) Periodic() <-chan *Config {
 	return sync.channel
 }
 
-func (sync *kubeSync) processUpdate(result syncResult) (config *Config, changed bool, err error) {
+func (sync *kubeSync) processUpdate(result syncResult, buildUnchangedConfig bool) (config *Config, changed bool, err error) {
 	glog.V(4).Infof("processUpdate %+v", result)
 
 	if result.Version != sync.latestVersion {
@@ -102,7 +103,10 @@ func (sync *kubeSync) processUpdate(result syncResult) (config *Config, changed 
 		sync.latestVersion = result.Version
 	} else {
 		glog.V(4).Infof("Config was unchanged (version %v)", sync.latestVersion)
-		return
+		// short-circuit if we haven't been asked to build an unchanged config object
+		if !buildUnchangedConfig {
+			return
+		}
 	}
 
 	if result.Version == "" && len(result.Data) == 0 {
