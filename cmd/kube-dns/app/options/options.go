@@ -49,6 +49,8 @@ type KubeDNSConfig struct {
 
 	ConfigDir    string
 	ConfigPeriod time.Duration
+
+	NameServers string
 }
 
 func NewKubeDNSConfig() *KubeDNSConfig {
@@ -66,6 +68,8 @@ func NewKubeDNSConfig() *KubeDNSConfig {
 
 		ConfigPeriod: 10 * time.Second,
 		ConfigDir:    "",
+
+		NameServers: "",
 	}
 }
 
@@ -143,6 +147,11 @@ func (fv federationsVar) Type() string {
 func (s *KubeDNSConfig) AddFlags(fs *pflag.FlagSet) {
 	fs.Var(clusterDomainVar{&s.ClusterDomain}, "domain",
 		"domain under which to create names")
+
+	fs.StringVar(&s.NameServers, "nameservers", s.NameServers,
+		"List of ip:port, separated by commas of nameservers to forward queries to. "+
+			"If set, overrides upstream servers taken from the nameserver option in /etc/resolv.conf. "+
+			"Example: 8.8.8.8:53,8.8.4.4 (default port is 53)")
 
 	fs.StringVar(&s.KubeConfigFile, "kubecfg-file", s.KubeConfigFile,
 		"Location of kubecfg file for access to kubernetes master service;"+

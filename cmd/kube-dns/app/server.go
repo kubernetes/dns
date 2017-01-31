@@ -18,9 +18,13 @@ package app
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/golang/glog"
@@ -43,6 +47,7 @@ type KubeDNSServer struct {
 	healthzPort    int
 	dnsBindAddress string
 	dnsPort        int
+	nameServers    string
 	kd             *dns.KubeDNS
 }
 
@@ -75,6 +80,7 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 		healthzPort:    config.HealthzPort,
 		dnsBindAddress: config.DNSBindAddress,
 		dnsPort:        config.DNSPort,
+		nameServers:    config.NameServers,
 		kd:             dns.NewKubeDNS(kubeClient, config.ClusterDomain, config.InitialSyncTimeout, configSync),
 	}
 }
@@ -109,6 +115,9 @@ func (server *KubeDNSServer) Run() {
 	server.setupHandlers()
 
 	glog.V(0).Infof("Status HTTP port %v", server.healthzPort)
+	if server.nameServers != "" {
+		glog.V(0).Infof("Upstream nameservers: %s", server.nameServers)
+	}
 	glog.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", server.healthzPort), nil))
 }
 
@@ -145,11 +154,38 @@ func setupSignalHandlers() {
 	}()
 }
 
+func validateHostAndPort(hostAndPort string) error {
+	host, port, err := net.SplitHostPort(hostAndPort)
+	if err != nil {
+		return err
+	}
+	if ip := net.ParseIP(host); ip == nil {
+		return fmt.Errorf("bad IP address: %s", host)
+	}
+
+	if p, _ := strconv.Atoi(port); p < 1 || p > 65535 {
+		return fmt.Errorf("bad port number %s", port)
+	}
+	return nil
+}
+
 func (d *KubeDNSServer) startSkyDNSServer() {
 	glog.V(0).Infof("Starting SkyDNS server (%v:%v)", d.dnsBindAddress, d.dnsPort)
 	skydnsConfig := &server.Config{
 		Domain:  d.domain,
 		DnsAddr: fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
+	}
+	if d.nameServers != "" {
+		for _, nameServer := range strings.Split(d.nameServers, ",") {
+			r, _ := regexp.Compile(":\\d+$")
+			if !r.MatchString(nameServer) {
+				nameServer = nameServer + ":53"
+			}
+			if err := validateHostAndPort(nameServer); err != nil {
+				glog.Fatalf("nameserver is invalid: %s", err)
+			}
+			skydnsConfig.Nameservers = append(skydnsConfig.Nameservers, nameServer)
+		}
 	}
 	server.SetDefaults(skydnsConfig)
 	s := server.New(d.kd, skydnsConfig)
