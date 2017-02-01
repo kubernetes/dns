@@ -51,9 +51,12 @@ endif
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
 BUILDSTAMP_NAME = $(subst /,_,$(CONTAINER_NAME))_$(VERSION)
 
-GO_BINARIES := $(addprefix bin/$(ARCH)/,$(BINARIES))
-CONTAINER_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME)-container)
-PUSH_BUILDSTAMPS := $(foreach BINARY,$(BINARIES),.$(BUILDSTAMP_NAME)-push)
+ALL_BINARIES += $(BINARIES)
+ALL_BINARIES += $(CONTAINER_BINARIES)
+
+GO_BINARIES := $(addprefix bin/$(ARCH)/,$(ALL_BINARIES))
+CONTAINER_BUILDSTAMPS := $(foreach BINARY,$(CONTAINER_BINARIES),.$(BUILDSTAMP_NAME)-container)
+PUSH_BUILDSTAMPS := $(foreach BINARY,$(CONTAINER_BINARIES),.$(BUILDSTAMP_NAME)-push)
 
 ifeq ($(VERBOSE), 1)
 	DOCKER_BUILD_FLAGS :=
@@ -122,7 +125,7 @@ define DOCKERFILE_RULE
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
 endef
-$(foreach BINARY,$(BINARIES),$(eval $(DOCKERFILE_RULE)))
+$(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 
 
 # Rules for containers
@@ -137,7 +140,7 @@ define CONTAINER_RULE
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
 	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@
 endef
-$(foreach BINARY,$(BINARIES),$(eval $(CONTAINER_RULE)))
+$(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(CONTAINER_RULE)))
 
 .PHONY: containers
 containers: $(CONTAINER_BUILDSTAMPS) images-containers
@@ -155,7 +158,7 @@ push: $(PUSH_BUILDSTAMPS) images-push
 define PUSH_RULE
 only-push-$(BINARY): .$(BUILDSTAMP_NAME)-push
 endef
-$(foreach BINARY,$(BINARIES),$(eval $(PUSH_RULE)))
+$(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(PUSH_RULE)))
 
 
 # Rule for `test`
@@ -232,7 +235,7 @@ help:
 	@echo "  only-push-BINARY                push just BINARY"
 	@echo
 	@echo "  Available ARCH: $(ALL_ARCH)"
-	@echo "  Available BINARIES: $(BINARIES)"
+	@echo "  Available BINARIES: $(ALL_BINARIES)"
 	@echo
 	@echo "  Setting VERBOSE=1 will show additional build logging."
 	@echo
