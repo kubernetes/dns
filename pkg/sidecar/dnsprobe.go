@@ -152,7 +152,7 @@ func (p *dnsProbe) msg() (msg *dns.Msg) {
 	msg.RecursionDesired = true
 	msg.Question = make([]dns.Question, 1)
 	msg.Question[0] = dns.Question{
-		Name:   p.Name,
+		Name:   dns.Fqdn(p.Name),
 		Qtype:  p.Type,
 		Qclass: dns.ClassINET,
 	}
