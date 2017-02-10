@@ -20,8 +20,8 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 | ---- | ---- |
 |all, build | build all binaries |
 |test       | run unit tests |
-|containers | build the containers |
-|push       | push containers to the registry |
+|containers | build the images |
+|push       | push images to the registry |
 |help       | this help message |
 |version    | show package version |
 |{build,containers,push}-ARCH | do action for specific ARCH |
