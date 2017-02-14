@@ -59,7 +59,7 @@ endif
 
 BINARY:= $(OUTPUT_DIR)/dnsmasq
 
-BUILDSTAMP := $(subst /,_,$(REGISTRY))_$(IMAGE)_$(VERSION)
+BUILDSTAMP := $(subst :,_,$(subst /,_,$(REGISTRY))_$(IMAGE)_$(VERSION))
 CONTAINER_STAMP := .$(BUILDSTAMP)-container
 PUSH_STAMP := .$(BUILDSTAMP)-push
 
