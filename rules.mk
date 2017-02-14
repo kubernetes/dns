@@ -49,7 +49,7 @@ endif
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
-BUILDSTAMP_NAME = $(subst /,_,$(CONTAINER_NAME))_$(VERSION)
+BUILDSTAMP_NAME = $(subst :,_,$(subst /,_,$(CONTAINER_NAME))_$(VERSION))
 
 ALL_BINARIES += $(BINARIES)
 ALL_BINARIES += $(CONTAINER_BINARIES)
@@ -152,7 +152,11 @@ push: $(PUSH_BUILDSTAMPS) images-push
 
 .%-push: .%-container
 	@echo "pushing  :" $$(head -n 1 $<)
+ifeq (,$(findstring gcr.io,$(REGISTRY)))
+	@docker push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
+else
 	@gcloud docker -- push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
+endif
 	@cat $< > $@
 
 define PUSH_RULE
