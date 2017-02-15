@@ -27,7 +27,7 @@ export VERSION
 # directories which hold app source (not vendored)
 SRC_DIRS := cmd pkg
 
-ALL_ARCH := amd64 arm arm64 ppc64le
+ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
     BASEIMAGE?=alpine
@@ -43,6 +43,10 @@ ifeq ($(ARCH),arm64)
 endif
 ifeq ($(ARCH),ppc64le)
     BASEIMAGE?=ppc64le/busybox
+    NOBODY?=nobody
+endif
+ifeq ($(ARCH),s390x)
+    BASEIMAGE?=s390x/busybox
     NOBODY?=nobody
 endif
 

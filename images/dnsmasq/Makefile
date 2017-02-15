@@ -18,9 +18,9 @@ ARCH ?= amd64
 DNSMASQ_VERSION ?= dnsmasq-2.76
 CONTAINER_PREFIX ?= k8s-dns
 
-ALL_ARCH := amd64 arm arm64 ppc64le
+ALL_ARCH := amd64 arm arm64 ppc64le s390x
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
-COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.6.2-2
+COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.7.4-1
 OUTPUT_DIR := _output/$(ARCH)
 
 ifeq ($(ARCH),amd64)
