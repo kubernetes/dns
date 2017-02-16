@@ -34,7 +34,7 @@ import (
 
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	metav1 "k8s.io/client-go/pkg/api/unversioned"
 	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/dns/pkg/dns/config"

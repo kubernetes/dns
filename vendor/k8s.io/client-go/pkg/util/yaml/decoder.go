@@ -181,7 +181,6 @@ type YAMLOrJSONDecoder struct {
 	bufferSize int
 
 	decoder decoder
-	rawData []byte
 }
 
 // NewYAMLOrJSONDecoder returns a decoder that will process YAML documents
@@ -199,11 +198,10 @@ func NewYAMLOrJSONDecoder(r io.Reader, bufferSize int) *YAMLOrJSONDecoder {
 // provide object, or returns an error.
 func (d *YAMLOrJSONDecoder) Decode(into interface{}) error {
 	if d.decoder == nil {
-		buffer, origData, isJSON := GuessJSONStream(d.r, d.bufferSize)
+		buffer, isJSON := GuessJSONStream(d.r, d.bufferSize)
 		if isJSON {
 			glog.V(4).Infof("decoding stream as JSON")
 			d.decoder = json.NewDecoder(buffer)
-			d.rawData = origData
 		} else {
 			glog.V(4).Infof("decoding stream as YAML")
 			d.decoder = NewYAMLToJSONDecoder(buffer)
@@ -217,13 +215,6 @@ func (d *YAMLOrJSONDecoder) Decode(into interface{}) error {
 				glog.V(4).Infof("reading stream failed: %v", readErr)
 			}
 			js := string(data)
-
-			// if contents from io.Reader are not complete,
-			// use the original raw data to prevent panic
-			if int64(len(js)) <= syntax.Offset {
-				js = string(d.rawData)
-			}
-
 			start := strings.LastIndex(js[:syntax.Offset], "\n") + 1
 			line := strings.Count(js[:start], "\n")
 			return fmt.Errorf("json: line %d: %s", line, syntax.Error())
@@ -305,10 +296,10 @@ func (r *LineReader) Read() ([]byte, error) {
 // GuessJSONStream scans the provided reader up to size, looking
 // for an open brace indicating this is JSON. It will return the
 // bufio.Reader it creates for the consumer.
-func GuessJSONStream(r io.Reader, size int) (io.Reader, []byte, bool) {
+func GuessJSONStream(r io.Reader, size int) (io.Reader, bool) {
 	buffer := bufio.NewReaderSize(r, size)
 	b, _ := buffer.Peek(size)
-	return buffer, b, hasJSONPrefix(b)
+	return buffer, hasJSONPrefix(b)
 }
 
 var jsonPrefix = []byte("{")

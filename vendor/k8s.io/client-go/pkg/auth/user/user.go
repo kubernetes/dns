@@ -75,8 +75,4 @@ const (
 
 	Anonymous     = "system:anonymous"
 	APIServerUser = "system:apiserver"
-
-	// core kubernetes process identities
-	KubeProxy             = "system:kube-proxy"
-	KubeControllerManager = "system:kube-controller-manager"
 )
