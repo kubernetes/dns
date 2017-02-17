@@ -52,8 +52,8 @@ func ExtractDnsmasqArgs(cmdlineArgs *[]string) []string {
 }
 
 // Configure the nanny. This must be called before Start().
-func (d *Nanny) Configure(args []string, config *config.Config) {
-	d.args = args
+func (n *Nanny) Configure(args []string, config *config.Config) {
+	n.args = args
 
 	munge := func(s string) string {
 		return strings.Replace(s, ":", "#", -1)
@@ -63,34 +63,34 @@ func (d *Nanny) Configure(args []string, config *config.Config) {
 		for _, server := range serverList {
 			// dnsmasq port separator is '#' for some reason.
 			server = munge(server)
-			d.args = append(
-				d.args, "--server", fmt.Sprintf("/%v/%v", domain, server))
+			n.args = append(
+				n.args, "--server", fmt.Sprintf("/%v/%v", domain, server))
 		}
 	}
 
 	for _, server := range config.UpstreamNameservers {
 		// dnsmasq port separator is '#' for some reason.
 		server = munge(server)
-		d.args = append(d.args, "--server", server)
+		n.args = append(n.args, "--server", server)
 	}
 }
 
 // Start the nanny.
-func (d *Nanny) Start() error {
-	glog.V(0).Infof("Starting dnsmasq %v", d.args)
+func (n *Nanny) Start() error {
+	glog.V(0).Infof("Starting dnsmasq %v", n.args)
 
-	d.cmd = exec.Command(d.Exec, d.args...)
-	stderrReader, err := d.cmd.StderrPipe()
+	n.cmd = exec.Command(n.Exec, n.args...)
+	stderrReader, err := n.cmd.StderrPipe()
 	if err != nil {
 		return err
 	}
 
-	stdoutReader, err := d.cmd.StdoutPipe()
+	stdoutReader, err := n.cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
-	if err := d.cmd.Start(); err != nil {
+	if err := n.cmd.Start(); err != nil {
 		return err
 	}
 
@@ -116,27 +116,72 @@ func (d *Nanny) Start() error {
 	go logToGlog("stderr", stderrReader)
 	go logToGlog("stdout", stdoutReader)
 
-	d.ExitChannel = make(chan error)
+	n.ExitChannel = make(chan error)
 	go func() {
-		d.ExitChannel <- d.cmd.Wait()
+		n.ExitChannel <- n.cmd.Wait()
 	}()
 
 	return nil
 }
 
 // Kill the running Nanny.
-func (d *Nanny) Kill() error {
+func (n *Nanny) Kill() error {
 	glog.V(0).Infof("Killing dnsmasq")
-	if d.cmd == nil {
+	if n.cmd == nil {
 		return fmt.Errorf("Process is not running")
 	}
 
-	if err := d.cmd.Process.Kill(); err != nil {
+	if err := n.cmd.Process.Kill(); err != nil {
 		glog.Errorf("Error killing dnsmasq: %v", err)
 		return err
 	}
 
-	d.cmd = nil
+	n.cmd = nil
 
 	return nil
+}
+
+// RunNannyOpts for running the nanny.
+type RunNannyOpts struct {
+	// Location of the dnsmasq executable.
+	DnsmasqExec string
+	// Extra arguments to dnsmasq.
+	DnsmasqArgs []string
+	// Restart the daemon on ConfigMap changes.
+	RestartOnChange bool
+}
+
+// RunNanny runs the nanny and handles configuration updates.
+func RunNanny(sync config.Sync, opts RunNannyOpts) {
+	currentConfig, err := sync.Once()
+	if err != nil {
+		glog.Fatalf("Error getting initial config: %v", err)
+	}
+
+	nanny := &Nanny{Exec: opts.DnsmasqExec}
+	nanny.Configure(opts.DnsmasqArgs, currentConfig)
+	if err := nanny.Start(); err != nil {
+		glog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
+	}
+
+	configChan := sync.Periodic()
+
+	for {
+		select {
+		case status := <-nanny.ExitChannel:
+			glog.Fatalf("dnsmasq exited: %v", status)
+			break
+		case currentConfig = <-configChan:
+			if opts.RestartOnChange {
+				glog.V(0).Infof("Restarting dnsmasq with new configuration")
+				nanny.Kill()
+				nanny = &Nanny{Exec: opts.DnsmasqExec}
+				nanny.Configure(opts.DnsmasqArgs, currentConfig)
+				nanny.Start()
+			} else {
+				glog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
+			}
+			break
+		}
+	}
 }

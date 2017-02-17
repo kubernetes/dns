@@ -57,50 +57,48 @@ func TestExtractDnsmasqArgs(t *testing.T) {
 func TestNannyConfig(t *testing.T) {
 	gomega.RegisterTestingT(t)
 
-	nanny := &Nanny{Exec: "dnsmasq"}
-	nanny.Configure(
-		[]string{"--no-resolv"},
-		&config.Config{})
-
-	gomega.Expect(nanny.args).To(
-		gomega.Equal([]string{"--no-resolv"}))
-
-	nanny = &Nanny{Exec: "dnsmasq"}
-	nanny.Configure(
-		[]string{"--no-resolv"},
-		&config.Config{
-			StubDomains: map[string][]string{
-				"acme.local":   []string{"1.1.1.1"},
-				"widget.local": []string{"2.2.2.2:10053", "3.3.3.3"},
+	for _, testCase := range []struct {
+		c    *config.Config
+		e    []string
+		sort bool
+	}{
+		{c: &config.Config{}, e: []string{"--no-resolv"}},
+		{
+			c: &config.Config{
+				StubDomains: map[string][]string{
+					"acme.local":   []string{"1.1.1.1"},
+					"widget.local": []string{"2.2.2.2:10053", "3.3.3.3"},
+				}},
+			e: []string{
+				"--no-resolv",
+				"--server",
+				"--server",
+				"--server",
+				"/acme.local/1.1.1.1",
+				"/widget.local/2.2.2.2#10053",
+				"/widget.local/3.3.3.3",
 			},
-		})
-
-	sort.Sort(sort.StringSlice(nanny.args))
-	gomega.Expect(nanny.args).To(
-		gomega.Equal([]string{
-			"--no-resolv",
-			"--server",
-			"--server",
-			"--server",
-			"/acme.local/1.1.1.1",
-			"/widget.local/2.2.2.2#10053",
-			"/widget.local/3.3.3.3",
-		}))
-
-	nanny = &Nanny{Exec: "dnsmasq"}
-	nanny.Configure(
-		[]string{"--no-resolv"},
-		&config.Config{
-			UpstreamNameservers: []string{"2.2.2.2:10053", "3.3.3.3"},
-		})
-	gomega.Expect(nanny.args).To(
-		gomega.Equal([]string{
-			"--no-resolv",
-			"--server",
-			"2.2.2.2#10053",
-			"--server",
-			"3.3.3.3",
-		}))
+			sort: true,
+		},
+		{
+			c: &config.Config{
+				UpstreamNameservers: []string{"2.2.2.2:10053", "3.3.3.3"}},
+			e: []string{
+				"--no-resolv",
+				"--server",
+				"2.2.2.2#10053",
+				"--server",
+				"3.3.3.3",
+			},
+		},
+	} {
+		nanny := &Nanny{Exec: "dnsmasq"}
+		nanny.Configure([]string{"--no-resolv"}, testCase.c)
+		if testCase.sort {
+			sort.Sort(sort.StringSlice(nanny.args))
+		}
+		gomega.Expect(nanny.args).To(gomega.Equal(testCase.e))
+	}
 }
 
 func TestNannyLifecycle(t *testing.T) {

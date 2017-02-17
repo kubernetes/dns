@@ -74,12 +74,14 @@ func (*GinkgoLogger) LogWithPrefix(prefix string, str string) {
 	}
 }
 
-func logPreamble() (preamble string) {
-	preamble = "\x1b[1mLOG: \x1b[0m"
+func logPreamble() string {
 	if config.DefaultReporterConfig.NoColor {
-		preamble = "LOG: "
+		return "LOG: "
 	}
-	return
+
+	const BOLD = "\x1b[1m"
+	const OFF = "\x1b[0m"
+	return BOLD + "LOG: " + OFF
 }
 
 var _ = ginkgo.SynchronizedBeforeSuite(
