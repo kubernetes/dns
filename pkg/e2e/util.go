@@ -16,7 +16,6 @@ limitations under the License.
 package e2e
 
 import (
-	"log"
 	"os/exec"
 	"time"
 )
@@ -31,7 +30,7 @@ func KeepSudoActive() {
 	go func() {
 		if err := exec.Command("sudo", "-nv").Run(); err != nil {
 			if err != nil {
-				log.Fatalf("Unable to keep sudo active: %v", err)
+				Log.Fatalf("Unable to keep sudo active: %v", err)
 			}
 		}
 		time.Sleep(10 * time.Second)
@@ -46,15 +45,15 @@ func CanSudo() bool {
 
 func makeSharedMount(path string) {
 	if err := exec.Command("sudo", "mount", "--bind", path, path).Run(); err != nil {
-		log.Fatalf("Error bind mounting %v: %v", path, err)
+		Log.Fatalf("Error bind mounting %v: %v", path, err)
 	}
 	if err := exec.Command("sudo", "mount", "--make-rshared", path).Run(); err != nil {
-		log.Fatalf("Error mount --make-rshared %v: %v", path, err)
+		Log.Fatalf("Error mount --make-rshared %v: %v", path, err)
 	}
 }
 
 func umount(path string) {
 	if err := exec.Command("sudo", "umount", path).Run(); err != nil {
-		log.Fatalf("Error umount %v: %v", path, err)
+		Log.Fatalf("Error umount %v: %v", path, err)
 	}
 }

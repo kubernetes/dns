@@ -19,7 +19,6 @@ package e2e
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,18 +33,20 @@ type Framework struct {
 	Processes map[string]*exec.Cmd
 }
 
-var framework *Framework
+var (
+	framework *Framework
 
-// Failed is set to true if a test case has failed.
-var Failed bool
+	// Failed is set to true if a test case has failed. We are forced to
+	// communicate this to ginkgo via a global variable.
+	Failed bool
+)
 
 // InitFramework initializes the global framework.
 func InitFramework(baseDir string, workDir string) {
-	log.Printf("Creating framework (baseDir=%v, workDir=%v)",
-		baseDir, workDir)
+	Log.Logf("Creating framework (baseDir=%v, workDir=%v)", baseDir, workDir)
 
 	if !CanSudo() {
-		log.Fatalf(
+		Log.Fatalf(
 			"e2e test requires `sudo` to be active. Run `sudo -v` before running the e2e test.")
 	}
 	KeepSudoActive()
@@ -67,7 +68,7 @@ func InitFramework(baseDir string, workDir string) {
 		workDir + "/logs",
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Fatalf("Could not mkdir %v: %v", workDir, err)
+			Log.Fatalf("Could not mkdir %v: %v", workDir, err)
 		}
 	}
 }
@@ -75,7 +76,7 @@ func InitFramework(baseDir string, workDir string) {
 // GetFramework returns the global framework.
 func GetFramework() *Framework {
 	if framework == nil {
-		log.Fatal("InitFramework must be called before use")
+		Log.Fatal("InitFramework must be called before use")
 	}
 	return framework
 }
@@ -91,18 +92,18 @@ func (fr *Framework) TearDown() {
 
 	if Failed {
 		for name := range fr.Processes {
-			log.Printf("Failure detected, dumping logs for '%v'", name)
-			log.Printf("==== %v stdout ====", name)
+			Log.Logf("Failure detected, dumping logs for '%v'", name)
+			Log.Logf("==== %v stdout ====", name)
 			f, err := os.Open(fr.StdoutLogfile(name))
 			if err != nil {
-				log.Fatalf("Could not open %v: %v", fr.StdoutLogfile(name), err)
+				Log.Fatalf("Could not open %v: %v", fr.StdoutLogfile(name), err)
 			}
 			io.Copy(os.Stderr, f)
 
-			log.Printf("==== %v stderr ====", name)
+			Log.Logf("==== %v stderr ====", name)
 			f, err = os.Open(fr.StderrLogfile(name))
 			if err != nil {
-				log.Fatalf("Could not open %v: %v", fr.StderrLogfile(name), err)
+				Log.Fatalf("Could not open %v: %v", fr.StderrLogfile(name), err)
 			}
 			io.Copy(os.Stderr, f)
 		}
@@ -113,7 +114,7 @@ func (fr *Framework) TearDown() {
 func (fr *Framework) Path(relative string) string {
 	ret, err := filepath.Abs(fr.Options.BaseDir + "/" + relative)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	return ret
 }
@@ -131,10 +132,10 @@ func (fr *Framework) StderrLogfile(name string) string {
 // RunInBackground starts the given process in the background, redirecting the
 // output of the process to external log files.
 func (fr *Framework) RunInBackground(name string, binary string, args ...string) (*exec.Cmd, error) {
-	log.Printf("Starting %v (%v %v)", name, binary, args)
+	Log.Logf("Starting %v (%v %v)", name, binary, args)
 
 	if _, ok := fr.Processes[name]; ok {
-		log.Fatalf("Cannot run more than one process with the same name: %v", name)
+		Log.Fatalf("Cannot run more than one process with the same name: %v", name)
 	}
 
 	cmd := exec.Command(binary, args...)
@@ -142,13 +143,13 @@ func (fr *Framework) RunInBackground(name string, binary string, args ...string)
 	if stdout, err := os.Create(fr.StdoutLogfile(name)); err == nil {
 		cmd.Stdout = stdout
 	} else {
-		log.Fatalf("Could not create %v: %v", fr.StdoutLogfile(name), err)
+		Log.Fatalf("Could not create %v: %v", fr.StdoutLogfile(name), err)
 	}
 
 	if stderr, err := os.Create(fr.StderrLogfile(name)); err == nil {
 		cmd.Stderr = stderr
 	} else {
-		log.Fatalf("Could not create %v: %v", fr.StderrLogfile(name), err)
+		Log.Fatalf("Could not create %v: %v", fr.StderrLogfile(name), err)
 	}
 
 	fr.Processes[name] = cmd

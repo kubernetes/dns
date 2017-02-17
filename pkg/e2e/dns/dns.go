@@ -67,12 +67,12 @@ func (kd *KubeDNS) Start(args ...string) {
 		return err
 	}).Should(om.Succeed())
 
-	log.Printf("kube-dns started")
+	e2e.Log.Logf("kube-dns started")
 }
 
 // Stop kube DNS
 func (kd *KubeDNS) Stop() {
-	log.Printf("Stopping kube-dns")
+	e2e.Log.Logf("Stopping kube-dns")
 
 	om.Expect(kd.isRunning).Should(om.Equal(true), "kube-dns is not running")
 

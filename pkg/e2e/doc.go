@@ -15,4 +15,8 @@ limitations under the License.
 */
 
 // Package e2e contains end-to-end test for the DNS daemons.
+//
+// Code organization
+// - Support libraries for e2e tests should go under pkg/e2e.
+// - The actual e2e tests should go under test/e2e.
 package e2e
