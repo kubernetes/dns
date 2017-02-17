@@ -62,7 +62,7 @@ func TestNannyConfig(t *testing.T) {
 		e    []string
 		sort bool
 	}{
-		{c: &config.Config{}, e: []string{"--no-resolv"}},
+		{c: &config.Config{}, e: []string{"--abc"}},
 		{
 			c: &config.Config{
 				StubDomains: map[string][]string{
@@ -70,7 +70,7 @@ func TestNannyConfig(t *testing.T) {
 					"widget.local": []string{"2.2.2.2:10053", "3.3.3.3"},
 				}},
 			e: []string{
-				"--no-resolv",
+				"--abc",
 				"--server",
 				"--server",
 				"--server",
@@ -84,16 +84,17 @@ func TestNannyConfig(t *testing.T) {
 			c: &config.Config{
 				UpstreamNameservers: []string{"2.2.2.2:10053", "3.3.3.3"}},
 			e: []string{
-				"--no-resolv",
+				"--abc",
 				"--server",
 				"2.2.2.2#10053",
 				"--server",
 				"3.3.3.3",
+				"--no-resolv",
 			},
 		},
 	} {
 		nanny := &Nanny{Exec: "dnsmasq"}
-		nanny.Configure([]string{"--no-resolv"}, testCase.c)
+		nanny.Configure([]string{"--abc"}, testCase.c)
 		if testCase.sort {
 			sort.Sort(sort.StringSlice(nanny.args))
 		}
