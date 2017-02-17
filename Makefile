@@ -21,9 +21,17 @@ PKG := k8s.io/dns
 
 # List of binaries to build. You must have a matching Dockerfile.BINARY
 # for each BINARY.
-BINARIES := e2e ginkgo sidecar-e2e
+BINARIES := \
+    e2e \
+    ginkgo \
+    sidecar-e2e
+
 # List of binaries to build that are containerized and pushed.
-CONTAINER_BINARIES := kube-dns sidecar
+CONTAINER_BINARIES := \
+    dnsmasq-nanny \
+    kube-dns \
+    sidecar
+
 # List of images to build (contained in images/)
 IMAGES := dnsmasq
 # Registry to push to.
@@ -37,11 +45,14 @@ CONTAINER_PREFIX ?= k8s-dns
 
 # This version-strategy uses git tags to set the version string
 VERSION ?= $(shell git describe --tags --always --dirty)
-# This version-strategy uses a manual value to set the version string
-#VERSION := 1.2.3
 
 # Set to 1 to print more verbose output from the build.
 VERBOSE ?= 0
 
 # Include standard build rules.
 include rules.mk
+
+# Additional rule to ensure that the dnsmasq image is built before the
+# dnsmasq-nanny image.
+BINARY := dnsmasq-nanny
+.$(BUILDSTAMP_NAME)-container: images-containers

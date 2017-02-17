@@ -1,5 +1,4 @@
-/*
-Copyright 2016 The Kubernetes Authors.
+/* Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +17,6 @@ package e2e
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -48,7 +46,7 @@ type Cluster struct {
 
 // SetUp the e2e cluster.
 func (cl *Cluster) SetUp() {
-	log.Printf("SetUp")
+	Log.Logf("SetUp")
 
 	cl.resolveDirs()
 	cl.pullImages()
@@ -62,7 +60,7 @@ func (cl *Cluster) SetUp() {
 
 // TearDown the e2e cluster.
 func (cl *Cluster) TearDown() {
-	log.Printf("Teardown")
+	Log.Logf("Teardown")
 
 	cl.StopKubelet()
 	cl.StopApiServer()
@@ -81,22 +79,22 @@ func (cl *Cluster) resolveDirs() {
 
 	cl.manifestDir, err = filepath.Abs(cl.manifestDir)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	cl.varLibDocker, err = filepath.Abs(cl.varLibDocker)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	cl.varRun, err = filepath.Abs(cl.varRun)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	cl.varLibKubelet, err = filepath.Abs(cl.varLibKubelet)
 	if err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 }
 
@@ -107,7 +105,7 @@ func (cl *Cluster) pullImages() {
 }
 
 func (cl *Cluster) StartEtcd() {
-	log.Printf("Starting etcd")
+	Log.Logf("Starting etcd")
 
 	cl.containers.etcd = cl.Docker.Run("-d", "--net=host", cl.EtcdImage)
 }
@@ -117,14 +115,14 @@ func (cl *Cluster) StopEtcd() {
 		return
 	}
 
-	log.Printf("Stopping etcd")
+	Log.Logf("Stopping etcd")
 
 	cl.Docker.Kill(cl.containers.etcd)
 	cl.containers.etcd = ""
 }
 
 func (cl *Cluster) StartApiServer() {
-	log.Printf("Starting API server")
+	Log.Logf("Starting API server")
 
 	cl.containers.api = cl.Docker.Run(
 		"-d",
@@ -145,7 +143,7 @@ func (cl *Cluster) StopApiServer() {
 		return
 	}
 
-	log.Printf("Stopping API server")
+	Log.Logf("Stopping API server")
 	cl.Docker.Kill(cl.containers.api)
 	cl.containers.api = ""
 }
@@ -155,21 +153,21 @@ func (cl *Cluster) WaitForApiServer() {
 
 	for time.Now().Before(deadline) {
 		if _, err := http.Get("http://localhost:8080"); err == nil {
-			log.Printf("API server started")
+			Log.Logf("API server started")
 			return
 		}
-		log.Printf("Waiting for API server to start")
+		Log.Logf("Waiting for API server to start")
 		time.Sleep(1 * time.Second)
 	}
 
-	log.Fatal("API server failed to start")
+	Log.Fatal("API server failed to start")
 }
 
 func (cl *Cluster) StartKubelet() {
-	log.Printf("Starting Kubelet")
+	Log.Logf("Starting Kubelet")
 
 	if err := exec.Command("sudo", "mkdir", "-p", cl.varLibKubelet).Run(); err != nil {
-		log.Fatalf("Could not create %v: %v", cl.varLibKubelet, err)
+		Log.Fatalf("Could not create %v: %v", cl.varLibKubelet, err)
 	}
 	makeSharedMount(cl.varLibKubelet)
 
@@ -199,7 +197,6 @@ func (cl *Cluster) StartKubelet() {
 		"--config=/etc/kubernetes/manifests-e2e",
 	}
 
-	log.Printf("kubelet args: %v", args)
 	cl.containers.kubelet = cl.Docker.Run(args...)
 }
 
@@ -208,7 +205,7 @@ func (cl *Cluster) StopKubelet() {
 		return
 	}
 
-	log.Printf("Stopping Kubelet")
+	Log.Logf("Stopping Kubelet")
 
 	cl.Docker.Kill(cl.containers.kubelet)
 	cl.containers.kubelet = ""
@@ -220,6 +217,6 @@ func (cl *Cluster) StopKubelet() {
 
 	umount(cl.varLibKubelet)
 	if err := exec.Command("sudo", "rm", "-rf", cl.varLibKubelet).Run(); err != nil {
-		log.Fatalf("Could not remove kubelet dir %v: %v", cl.varLibKubelet, err)
+		Log.Fatalf("Could not remove kubelet dir %v: %v", cl.varLibKubelet, err)
 	}
 }

@@ -18,15 +18,12 @@ package e2e
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
-
-	"k8s.io/dns/pkg/util"
 )
 
-// Docker is a simple shim to a Docker instance. Most methods will log.Fatal
+// Docker is a simple shim to a Docker instance. Most methods will bail with Fatal
 // if there is an error.
 type Docker interface {
 	// Start the daemon (if needed)
@@ -81,10 +78,10 @@ func (d *dockerWrapper) Start() {
 	graphDir := d.baseDir + "/var/run/docker"
 
 	if err := os.MkdirAll(execDir, 0755); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	if err := os.MkdirAll(graphDir, 0755); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	pidfile := d.baseDir + "/pid"
@@ -103,9 +100,9 @@ func (d *dockerWrapper) Start() {
 
 	d.cmd = exec.Command("sudo", args...)
 
-	log.Printf("Starting Docker %v", args)
+	Log.Logf("Starting Docker %v", args)
 	if err := d.cmd.Start(); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 
 	d.waitForStart()
@@ -119,13 +116,13 @@ func (d *dockerWrapper) Stop() {
 	// Need to use sudo kill as the docker daemon is running as `root`.
 	if err := exec.Command(
 		"sudo", "kill", fmt.Sprintf("%v", d.cmd.Process.Pid)).Run(); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	state, err := d.cmd.Process.Wait()
 	if err != nil {
-		log.Printf("Wait for docker returned %v", err)
+		Log.Logf("Wait for docker returned %v", err)
 	}
-	log.Printf("Docker exited with %v", state)
+	Log.Logf("Docker exited with %v", state)
 }
 
 func (d *dockerWrapper) Pull(images ...string) {
@@ -138,15 +135,15 @@ func (d *dockerWrapper) Run(args ...string) string {
 	args = append(
 		[]string{"-H", d.socket, "run"},
 		args...)
-	log.Printf("docker run %v", args)
+	Log.Logf("docker run %v", args)
 
 	cmd := exec.Command(d.dockerExec, args...)
 	output, err := cmd.CombinedOutput()
-	util.LogWithPrefix("docker", string(output))
+	Log.LogWithPrefix("docker", string(output))
 
 	if err != nil {
-		util.LogWithPrefix("docker", string(output))
-		log.Fatalf("docker returned exit code %v", err)
+		Log.LogWithPrefix("docker", string(output))
+		Log.Fatalf("docker returned exit code %v", err)
 	}
 
 	// This will be the UUID of the running container.
@@ -166,11 +163,11 @@ func (d *dockerWrapper) List(filter string) []string {
 	if filter != "" {
 		args = append(args, "--filter", filter)
 	}
-	log.Printf("docker %v", args)
+	Log.Logf("docker %v", args)
 	out, err := exec.Command("docker", args...).Output()
 
 	if err != nil {
-		log.Fatalf("Error getting containers: %v", err)
+		Log.Fatalf("Error getting containers: %v", err)
 	}
 
 	var ret []string
@@ -184,32 +181,32 @@ func (d *dockerWrapper) List(filter string) []string {
 }
 
 func (d *dockerWrapper) runCommand(args []string) {
-	log.Printf("docker %v", args)
+	Log.Logf("docker %v", args)
 
 	cmd := exec.Command(d.dockerExec, args...)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		util.LogWithPrefix("docker", string(output))
-		log.Fatal(err)
+		Log.LogWithPrefix("docker", string(output))
+		Log.Fatal(err)
 	}
 }
 
 func (d *dockerWrapper) ensureBridge() {
 	if exec.Command("ip", "link", "show", d.bridge).Run() == nil {
-		log.Printf("Bridge device %v exists", d.bridge)
+		Log.Logf("Bridge device %v exists", d.bridge)
 		return
 	}
 
-	log.Printf("Creating bridge device %v (%v)", d.bridge, d.cidr)
+	Log.Logf("Creating bridge device %v (%v)", d.bridge, d.cidr)
 	if err := exec.Command("sudo", "brctl", "addbr", d.bridge).Run(); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	if err := exec.Command("sudo", "ip", "addr", "add", d.cidr, "dev", d.bridge); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 	if err := exec.Command("sudo", "ip", "link", "set", "dev", d.bridge, "up"); err != nil {
-		log.Fatal(err)
+		Log.Fatal(err)
 	}
 }
 

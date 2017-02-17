@@ -17,7 +17,10 @@ limitations under the License.
 package config
 
 import (
+	"fmt"
+
 	types "k8s.io/client-go/pkg/apis/meta/v1"
+	"k8s.io/client-go/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
 )
 
@@ -35,6 +38,15 @@ type Config struct {
 	// Map of federation names that the cluster in which this kube-dns
 	// is running belongs to, to the corresponding domain names.
 	Federations map[string]string `json:"federations"`
+
+	// Map of stub domain to nameserver IP. The key is the domain name suffix,
+	// e.g. "acme.local". Key cannot be equal to the cluster domain. Value is
+	// the IP of the nameserver to send DNS request for the given subdomain.
+	StubDomains map[string][]string `json:"stubDomains"`
+
+	// List of upstream nameservers to use. Overrides nameservers inherited
+	// from the node.
+	UpstreamNameservers []string `json:"upstreamNameservers"`
 }
 
 func NewDefaultConfig() *Config {
@@ -43,9 +55,17 @@ func NewDefaultConfig() *Config {
 	}
 }
 
-// IsValid returns whether or not the configuration is valid.
+// Validate returns whether or not the configuration is valid.
 func (config *Config) Validate() error {
 	if err := config.validateFederations(); err != nil {
+		return err
+	}
+
+	if err := config.validateStubDomains(); err != nil {
+		return err
+	}
+
+	if err := config.validateUpstreamNameserver(); err != nil {
 		return err
 	}
 
@@ -61,5 +81,36 @@ func (config *Config) validateFederations() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (config *Config) validateStubDomains() error {
+	for domain, nsList := range config.StubDomains {
+		if len(validation.IsDNS1123Subdomain(domain)) != 0 {
+			return fmt.Errorf("Invalid domain name: %q", domain)
+		}
+
+		for _, ns := range nsList {
+			if len(validation.IsValidIP(ns)) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
+				return fmt.Errorf("Invalid nameserver: %q", ns)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (config *Config) validateUpstreamNameserver() error {
+
+	if len(config.UpstreamNameservers) > 3 {
+		return fmt.Errorf("upstreamNameserver cannot have more than three entries")
+	}
+
+	for _, ns := range config.UpstreamNameservers {
+		if len(validation.IsValidIP(ns)) > 0 {
+			return fmt.Errorf("Invalid nameserver: %q", ns)
+		}
+	}
+
 	return nil
 }

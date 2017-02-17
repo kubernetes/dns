@@ -23,34 +23,34 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	for _, testCase := range []struct {
-		config   *Config
-		hasError bool
-	}{
-		{
-			config: &Config{Federations: map[string]string{}},
-		},
-		{
-			config: &Config{
-				Federations: map[string]string{
-					"abc": "d.e.f",
-				},
-			},
-		},
-		{
-			config: &Config{
-				Federations: map[string]string{
-					"a.b": "cdef",
-				},
-			},
-			hasError: true,
-		},
+	// valid
+	for _, testCase := range []Config{
+		{Federations: map[string]string{}},
+		{Federations: map[string]string{"abc": "d.e.f"}},
+		{StubDomains: map[string][]string{}},
+		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4"}}},
+		{StubDomains: map[string][]string{"foo.com": []string{"ns.foo.com"}}},
+		{StubDomains: map[string][]string{
+			"foo.com": []string{"ns.foo.com"},
+			"bar.com": []string{"1.2.3.4"},
+		}},
+		{UpstreamNameservers: []string{}},
+		{UpstreamNameservers: []string{"1.2.3.4"}},
+		{UpstreamNameservers: []string{"1.2.3.4", "8.8.4.4", "8.8.8.8"}},
 	} {
-		err := testCase.config.Validate()
-		if !testCase.hasError {
-			assert.Nil(t, err, "should be valid", testCase)
-		} else {
-			assert.NotNil(t, err, "should not be valid", testCase)
-		}
+		err := testCase.Validate()
+		assert.Nil(t, err, "should be valid: %+v", testCase)
+	}
+
+	// invalid
+	for _, testCase := range []Config{
+		{Federations: map[string]string{"a.b": "cdef"}},
+		{StubDomains: map[string][]string{"": []string{"1.2.3.4"}}},
+		{StubDomains: map[string][]string{"$$$$": []string{"1.2.3.4"}}},
+		{StubDomains: map[string][]string{"foo": []string{"$$$$"}}},
+		{UpstreamNameservers: []string{"1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"}},
+	} {
+		err := testCase.Validate()
+		assert.NotNil(t, err, "should not be valid: %+v", testCase)
 	}
 }
