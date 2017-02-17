@@ -70,6 +70,7 @@ else
 	VERBOSE_OUTPUT := >/dev/null
 endif
 
+# This MUST appear as the first rule in a Makefile
 all: build
 
 build-%:
@@ -122,10 +123,11 @@ define DOCKERFILE_RULE
 .$(BINARY)-$(ARCH)-dockerfile: Dockerfile.$(BINARY)
 	@echo generating Dockerfile $$@ from $$<
 	@sed					\
-	    -e 's|ARG_BIN|$(BINARY)|g'		\
-	    -e 's|ARG_ARCH|$(ARCH)|g'		\
-	    -e 's|ARG_FROM|$(BASEIMAGE)|g'	\
-	    -e 's|ARG_NOBODY|$(NOBODY)|g'	\
+	    -e 's|ARG_ARCH|$(ARCH)|g' \
+	    -e 's|ARG_BIN|$(BINARY)|g' \
+	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
+	    -e 's|ARG_NOBODY|$(NOBODY)|g' \
+	    -e 's|ARG_VERSION|$(VERSION)|g' \
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
 endef

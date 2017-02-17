@@ -51,3 +51,8 @@ VERBOSE ?= 0
 
 # Include standard build rules.
 include rules.mk
+
+# Additional rule to ensure that the dnsmasq image is built before the
+# dnsmasq-nanny image.
+BINARY := dnsmasq-nanny
+.$(BUILDSTAMP_NAME)-container: images-containers
