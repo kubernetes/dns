@@ -26,7 +26,7 @@ install:
 script:
 - make build
 - make test
-- make containers
+- make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
 - cd ${GOPATH}/src/k8s.io/dns && bin/amd64/ginkgo test/e2e
