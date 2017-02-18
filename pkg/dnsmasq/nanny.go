@@ -73,6 +73,12 @@ func (n *Nanny) Configure(args []string, config *config.Config) {
 		server = munge(server)
 		n.args = append(n.args, "--server", server)
 	}
+
+	// If upstream nameservers are explicitly specified, then do not look
+	// at /etc/resolv.conf.
+	if len(config.UpstreamNameservers) > 0 {
+		n.args = append(n.args, "--no-resolv")
+	}
 }
 
 // Start the nanny.

@@ -64,7 +64,7 @@ var _ = Describe("dnsmasq-nanny", func() {
 
 		By("Updating dnsmasq via a configuration change 2")
 		harness.Configure(``, `["5.6.7.8"]`)
-		harness.WaitForArgs(prefix + " --server 5.6.7.8")
+		harness.WaitForArgs(prefix + " --server 5.6.7.8 --no-resolv")
 
 		By("Updating dnsmasq to invalid change (ignored)")
 		harness.Configure(`$$$$asdf`, ``)
