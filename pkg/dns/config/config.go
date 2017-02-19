@@ -51,7 +51,8 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		Federations: make(map[string]string),
+		Federations: map[string]string{},
+		StubDomains: map[string][]string{},
 	}
 }
 
