@@ -159,9 +159,12 @@ type RunNannyOpts struct {
 
 // RunNanny runs the nanny and handles configuration updates.
 func RunNanny(sync config.Sync, opts RunNannyOpts) {
+	defer glog.Flush()
+
 	currentConfig, err := sync.Once()
 	if err != nil {
-		glog.Fatalf("Error getting initial config: %v", err)
+		glog.Errorf("Error getting initial config, using default: %v", err)
+		currentConfig = config.NewDefaultConfig()
 	}
 
 	nanny := &Nanny{Exec: opts.DnsmasqExec}
@@ -175,6 +178,7 @@ func RunNanny(sync config.Sync, opts RunNannyOpts) {
 	for {
 		select {
 		case status := <-nanny.ExitChannel:
+			glog.Flush()
 			glog.Fatalf("dnsmasq exited: %v", status)
 			break
 		case currentConfig = <-configChan:
