@@ -101,6 +101,8 @@ func newKubeClient(dnsConfig *options.KubeDNSConfig) (kubernetes.Interface, erro
 			return nil, err
 		}
 	}
+	// Use protobufs for communication with apiserver.
+ 	config.ContentType = "application/vnd.kubernetes.protobuf"
 
 	return kubernetes.NewForConfig(config)
 }
