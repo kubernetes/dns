@@ -18,6 +18,8 @@ package config
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	types "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/validation"
@@ -92,7 +94,14 @@ func (config *Config) validateStubDomains() error {
 		}
 
 		for _, ns := range nsList {
-			if len(validation.IsValidIP(ns)) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
+			nsStrings := strings.SplitN(ns, ":", 2)
+			// Validate port if specified
+			if len(nsStrings) == 2 {
+				if _, err := strconv.ParseUint(nsStrings[1], 10, 16); err != nil {
+					return fmt.Errorf("Invalid nameserver: %q", ns)
+				}
+			}
+			if len(validation.IsValidIP(nsStrings[0])) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
 				return fmt.Errorf("Invalid nameserver: %q", ns)
 			}
 		}

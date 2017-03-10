@@ -29,6 +29,7 @@ func TestValidate(t *testing.T) {
 		{Federations: map[string]string{"abc": "d.e.f"}},
 		{StubDomains: map[string][]string{}},
 		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4"}}},
+		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4:32564"}}},
 		{StubDomains: map[string][]string{"foo.com": []string{"ns.foo.com"}}},
 		{StubDomains: map[string][]string{
 			"foo.com": []string{"ns.foo.com"},
@@ -48,6 +49,7 @@ func TestValidate(t *testing.T) {
 		{StubDomains: map[string][]string{"": []string{"1.2.3.4"}}},
 		{StubDomains: map[string][]string{"$$$$": []string{"1.2.3.4"}}},
 		{StubDomains: map[string][]string{"foo": []string{"$$$$"}}},
+		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4:65564"}}},
 		{UpstreamNameservers: []string{"1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"}},
 	} {
 		err := testCase.Validate()
