@@ -28,7 +28,6 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/kubernetes/pkg/util/flag"
 	"k8s.io/kubernetes/pkg/util/logs"
-	"k8s.io/kubernetes/pkg/version/verflag"
 
 	"k8s.io/dns/pkg/sidecar"
 	"k8s.io/dns/pkg/version"
@@ -48,7 +47,7 @@ func main() {
 
 	glog.Infof("Version v%s", version.VERSION)
 
-	verflag.PrintAndExitIfRequested()
+	version.PrintAndExitIfRequested()
 
 	server := sidecar.NewServer()
 	server.Run(options)
