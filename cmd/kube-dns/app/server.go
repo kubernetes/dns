@@ -67,7 +67,7 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 		configSync = dnsconfig.NewConfigMapSync(kubeClient, config.ConfigMapNs, config.ConfigMap)
 
 	case config.ConfigDir != "":
-		glog.V(0).Infof("Using configuration read from directory: %v", config.ConfigDir, config.ConfigPeriod)
+		glog.V(0).Infof("Using configuration read from directory: %v with period %v", config.ConfigDir, config.ConfigPeriod)
 		configSync = dnsconfig.NewFileSync(config.ConfigDir, config.ConfigPeriod)
 
 	default:
