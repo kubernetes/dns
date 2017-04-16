@@ -24,10 +24,9 @@ import (
 
 	"k8s.io/dns/cmd/kube-dns/app"
 	"k8s.io/dns/cmd/kube-dns/app/options"
+	"k8s.io/dns/pkg/version"
 	"k8s.io/kubernetes/pkg/util/flag"
 	"k8s.io/kubernetes/pkg/util/logs"
-	"k8s.io/kubernetes/pkg/version"
-	"k8s.io/kubernetes/pkg/version/verflag"
 
 	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
 	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
@@ -44,9 +43,9 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	verflag.PrintAndExitIfRequested()
+	version.PrintAndExitIfRequested()
 
-	glog.V(0).Infof("version: %+v", version.Get())
+	glog.V(0).Infof("version: %+v", version.VERSION)
 
 	server := app.NewKubeDNSServerDefault(config)
 	server.Run()
