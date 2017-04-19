@@ -171,7 +171,7 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 				glog.V(0).Infof("Initialized services and endpoints from apiserver")
 				return
 			}
-			glog.V(0).Infof("DNS server not ready, retry in 500 milliseconds")
+			glog.V(0).Infof("Waiting for services and endpoints to be initialized from apiserver...")
 		}
 	}
 }
