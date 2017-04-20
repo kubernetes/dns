@@ -478,6 +478,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Service) error {
 	subCache := treecache.NewTreeCache()
 	glog.V(4).Infof("Endpoints Annotations: %v", e.Annotations)
+	generatedRecords := map[string]*skymsg.Service{}
 	for idx := range e.Subsets {
 		for subIdx := range e.Subsets[idx].Addresses {
 			address := &e.Subsets[idx].Addresses[subIdx]
@@ -501,13 +502,16 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 			// Generate PTR records only for Named Headless service.
 			if _, has := getHostname(address); has {
 				reverseRecord, _ := util.GetSkyMsg(kd.fqdn(svc, endpointName), 0)
-				kd.reverseRecordMap[endpointIP] = reverseRecord
+				generatedRecords[endpointIP] = reverseRecord
 			}
 		}
 	}
 	subCachePath := append(kd.domainPath, serviceSubdomain, svc.Namespace)
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
+	for endpointIP, reverseRecord := range generatedRecords {
+		kd.reverseRecordMap[endpointIP] = reverseRecord
+	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
 	return nil
 }
@@ -614,13 +618,13 @@ func (kd *KubeDNS) Records(name string, exact bool) (retval []skymsg.Service, er
 func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string, exact bool, federationSegments []string) (retval []skymsg.Service, err error) {
 	// For federation query, verify that the local service has endpoints.
 	validRecord := false
+	// isHeadlessServiceRecord and serviceWithClusterIPHasEndpoints assume
+	// they have cacheLock.
+	kd.cacheLock.RLock()
 	for _, val := range records {
 		// We know that a headless service has endpoints for sure if a
 		// record was returned for it. The record contains endpoint
 		// IPs. So nothing to check for headless services.
-		//
-		// TODO: this access to the cluster IP map does not seem to be
-		// threadsafe.
 		if !kd.isHeadlessServiceRecord(&val) {
 			ok, err := kd.serviceWithClusterIPHasEndpoints(&val)
 			if err != nil {
@@ -636,6 +640,7 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 		validRecord = true
 		break
 	}
+	kd.cacheLock.RUnlock()
 
 	if validRecord {
 		// There is a local service with valid endpoints, return its CNAME.
