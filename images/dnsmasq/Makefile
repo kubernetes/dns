@@ -102,10 +102,10 @@ $(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) dnsmasq.conf
 	@echo "building :" $(BINARY)
 	@mkdir -p $(@D)
 	@cp Dockerfile.cross $(OUTPUT_DIR)/Dockerfile
-	@cd $(OUTPUT_DIR) && sed -i "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile
+	@cd $(OUTPUT_DIR) && sed -i- "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile && rm Dockerfile-
 
 ifeq ($(ARCH),amd64)
-	@cd $(OUTPUT_DIR) && sed -i "/__CROSS_BUILD_COPY__/d" Dockerfile
+	@cd $(OUTPUT_DIR) && sed -i- "/__CROSS_BUILD_COPY__/d" Dockerfile && rm Dockerfile-
 	@docker run --rm --sig-proxy=true     \
 		-v `pwd`/$(OUTPUT_DIR):/build \
 		-v `pwd`:/src                 \
@@ -119,8 +119,8 @@ ifeq ($(ARCH),amd64)
 			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
 else
 	@cd $(OUTPUT_DIR)                                            \
-		&& sed -i "s|__ARCH__|$(QEMUARCH)|g" Dockerfile      \
-		&& sed -i "s/__CROSS_BUILD_COPY__/COPY/g" Dockerfile
+		&& sed -i- "s|__ARCH__|$(QEMUARCH)|g" Dockerfile && rm Dockerfile-     \
+		&& sed -i- "s/__CROSS_BUILD_COPY__/COPY/g" Dockerfile && rm Dockerfile-
 	@cd $(OUTPUT_DIR) \
 		&& curl -sSL $(MULTIARCH_RELEASE) | tar -xJ
 	@docker run --sig-proxy=true --rm            \
