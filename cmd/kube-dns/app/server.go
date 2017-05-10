@@ -89,7 +89,8 @@ func newKubeClient(dnsConfig *options.KubeDNSConfig) (kubernetes.Interface, erro
 	var config *rest.Config
 	var err error
 
-	if dnsConfig.KubeConfigFile == "" {
+	// If both kubeconfig and master URL are empty, use service account
+	if dnsConfig.KubeConfigFile == "" && dnsConfig.KubeMasterURL == "" {
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			return nil, err
