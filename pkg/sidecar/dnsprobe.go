@@ -90,12 +90,13 @@ func (p *dnsProbe) Start(options *Options) {
 func (p *dnsProbe) registerMetrics(options *Options) {
 	const dnsProbeSubsystem = "probe"
 
+	// create 500 buckets from 0.5ms to 9.7s
 	p.latencyHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: options.PrometheusNamespace,
 		Subsystem: dnsProbeSubsystem,
 		Name:      p.Label + "_latency_ms",
 		Help:      "Latency of the DNS probe request " + p.Label,
-		Buckets:   prometheus.LinearBuckets(0, 10, 500),
+		Buckets:   prometheus.ExponentialBuckets(0.5, 1.02, 500),
 	})
 	prometheus.MustRegister(p.latencyHistogram)
 
