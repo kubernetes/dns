@@ -345,6 +345,7 @@ func TestHeadlessServiceEndpointsUpdate(t *testing.T) {
 
 func TestNamedHeadlessServiceEndpointAdd(t *testing.T) {
 	kd := newKubeDNS()
+	kd.kubeClient = fake.NewSimpleClientset(newPods())
 
 	service := newHeadlessService()
 	// add service to store
@@ -378,6 +379,7 @@ func TestNamedHeadlessServiceEndpointAdd(t *testing.T) {
 
 func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 	kd := newKubeDNS()
+	kd.kubeClient = fake.NewSimpleClientset(newPods())
 
 	service := newHeadlessService()
 	// add service to store
@@ -427,6 +429,7 @@ func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 
 func TestNamedHeadlessServiceEndpointDelete(t *testing.T) {
 	kd := newKubeDNS()
+	kd.kubeClient = fake.NewSimpleClientset(newPods())
 
 	service := newHeadlessService()
 	// add service to store
@@ -721,6 +724,23 @@ func newNodes() *v1.NodeList {
 						metav1.LabelZoneFailureDomain: "testcontinent-testreg-testzone",
 						metav1.LabelZoneRegion:        "testcontinent-testreg",
 					},
+				},
+			},
+		},
+	}
+}
+
+func newPods() *v1.PodList {
+	return &v1.PodList{
+		Items: []v1.Pod{
+			// Node without annotation.
+			{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "foo",
+					Namespace: testNamespace,
+				},
+				Spec: v1.PodSpec{
+					Subdomain: newHeadlessService().Name,
 				},
 			},
 		},

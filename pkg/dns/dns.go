@@ -345,7 +345,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 				for subIdx := range oldEndpoints.Subsets[idx].Addresses {
 					address := &oldEndpoints.Subsets[idx].Addresses[subIdx]
 					endpointIP := address.IP
-					if _, has := getHostname(address); has {
+					if _, has := getHostname(address); has && kd.ensurePodSubdomain(address, svc) {
 						oldAddressMap[endpointIP] = true
 					}
 				}
@@ -359,7 +359,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 						address := &newEndpoints.Subsets[idx].Addresses[subIdx]
 						// Entries are both in old and new endpoint. Remove from the `oldAddressMap`
 						// if the address is still named to the service.
-						if _, has := getHostname(address); has {
+						if _, has := getHostname(address); has && kd.ensurePodSubdomain(address, svc) {
 							// The service is still named in the Pod
 							delete(oldAddressMap, endpointIP)
 						}
@@ -399,7 +399,7 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 				for subIdx := range endpoints.Subsets[idx].Addresses {
 					address := &endpoints.Subsets[idx].Addresses[subIdx]
 					endpointIP := address.IP
-					if _, has := getHostname(address); has {
+					if _, has := getHostname(address); has && kd.ensurePodSubdomain(address, svc) {
 						delete(kd.reverseRecordMap, endpointIP)
 					}
 				}
@@ -500,7 +500,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 			}
 
 			// Generate PTR records only for Named Headless service.
-			if _, has := getHostname(address); has {
+			if _, has := getHostname(address); has && kd.ensurePodSubdomain(address, svc) {
 				reverseRecord, _ := util.GetSkyMsg(kd.fqdn(svc, endpointName), 0)
 				generatedRecords[endpointIP] = reverseRecord
 			}
@@ -521,6 +521,23 @@ func getHostname(address *v1.EndpointAddress) (string, bool) {
 		return address.Hostname, true
 	}
 	return "", false
+}
+
+func (kd *KubeDNS) ensurePodSubdomain(address *v1.EndpointAddress, svc *v1.Service) bool {
+	// If we want to control ptr record generation for this service, we can have a
+	// annotation 'service.beta.kubernetes.io/ptr'
+	if len(address.Hostname) > 0 && address.TargetRef != nil {
+		// Endpoint Hostname is set. Get Target Pod and ensure Pod.Spec.Subdomain == svc.Name
+		pod, err := kd.kubeClient.CoreV1().Pods(address.TargetRef.Namespace).Get(address.TargetRef.Name, metav1.GetOptions{})
+		if err != nil {
+			return false
+		}
+
+		if pod.Spec.Subdomain == svc.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func (kd *KubeDNS) generateSRVRecordValue(svc *v1.Service, portNumber int, labels ...string) *skymsg.Service {
