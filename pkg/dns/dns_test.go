@@ -427,6 +427,40 @@ func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 	assertReverseDNSForNamedHeadlessService(t, kd, newEndpoints)
 }
 
+func TestNotNamedHeadlessServiceEndpointAdd(t *testing.T) {
+	kd := newKubeDNS()
+	kd.kubeClient = fake.NewSimpleClientset(newPods())
+
+	service := newHeadlessService()
+	// add service to store
+	assert.NoError(t, kd.servicesStore.Add(service))
+
+	endpoints := newEndpoints(service, v1.EndpointSubset{
+		Addresses: []v1.EndpointAddress{
+			{
+				IP: "10.0.0.2",
+				TargetRef: &v1.ObjectReference{
+					Kind:      "Pod",
+					Name:      "bar",
+					Namespace: testNamespace,
+				},
+				Hostname: "bar",
+			},
+		},
+		Ports: []v1.EndpointPort{},
+	})
+	// add endpoints to store
+	assert.NoError(t, kd.endpointsStore.Add(endpoints))
+
+	// add service
+	kd.newService(service)
+	assertDNSForHeadlessService(t, kd, endpoints)
+
+	kd.handleEndpointAdd(endpoints)
+	assertDNSForHeadlessService(t, kd, endpoints)
+	assertNoReverseDNSForHeadlessService(t, kd, endpoints)
+}
+
 func TestNamedHeadlessServiceEndpointDelete(t *testing.T) {
 	kd := newKubeDNS()
 	kd.kubeClient = fake.NewSimpleClientset(newPods())
@@ -741,6 +775,15 @@ func newPods() *v1.PodList {
 				},
 				Spec: v1.PodSpec{
 					Subdomain: newHeadlessService().Name,
+				},
+			},
+			{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "bar",
+					Namespace: testNamespace,
+				},
+				Spec: v1.PodSpec{
+					Subdomain: "another-service",
 				},
 			},
 		},
