@@ -255,7 +255,7 @@ func assertIsService(obj interface{}) (*v1.Service, bool) {
 		return service, ok
 	} else {
 		glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
-		return nil, ok
+		return nil, false
 	}
 }
 
