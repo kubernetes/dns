@@ -13,22 +13,22 @@
 # limitations under the License.
 
 VERSION ?= $(shell git describe --tags --always --dirty)
-REGISTRY ?= gcr.io/google_containers
+REGISTRY ?= gcr.io/google-containers
 ARCH ?= amd64
 DNSMASQ_VERSION ?= dnsmasq-2.76
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
-COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.7.4-1
+COMPILE_IMAGE := gcr.io/google-containers/kube-cross:v1.7.6-k8s1.6-0
 OUTPUT_DIR := _output/$(ARCH)
 
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= alpine:3.4
-	COMPILE_IMAGE := alpine:3.4
+	BASEIMAGE ?= alpine:3.6
+	COMPILE_IMAGE := alpine:3.6
 else ifeq ($(ARCH),arm)
 	BASEIMAGE ?= armel/busybox:glibc
-	TRIPLE    ?= arm-linux-gnueabi
+	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
 else ifeq ($(ARCH),arm64)
 	BASEIMAGE ?= aarch64/busybox:glibc
@@ -106,6 +106,7 @@ $(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) dnsmasq.conf
 
 ifeq ($(ARCH),amd64)
 	@cd $(OUTPUT_DIR) && sed -i- "/__CROSS_BUILD_COPY__/d" Dockerfile && rm Dockerfile-
+	@docker pull $(COMPILE_IMAGE)
 	@docker run --rm --sig-proxy=true     \
 		-v `pwd`/$(OUTPUT_DIR):/build \
 		-v `pwd`:/src                 \
@@ -126,6 +127,7 @@ else
 	@docker run --sig-proxy=true --rm            \
 		--privileged $(MULTIARCH_CONTAINER)  \
 		--reset $(VERBOSE_OUTPUT)
+	@docker pull $(COMPILE_IMAGE)
 	@docker run --rm --sig-proxy=true            \
 		-v `pwd`/$(OUTPUT_DIR):/build        \
 		-v `pwd`:/src                        \
@@ -147,7 +149,7 @@ containers: $(CONTAINER_STAMP)
 
 $(CONTAINER_STAMP): $(BINARY)
 	@echo "container:" $(REGISTRY)/$(IMAGE):$(VERSION)
-	@docker build \
+	@docker build --pull \
 		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR) > $@
 
 .PHONY: test
