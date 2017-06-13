@@ -99,6 +99,7 @@ build: $(GO_BINARIES) images-build
 # Rule for all bin/$(ARCH)/bin/$(BINARY)
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
+	@docker pull $(BUILD_IMAGE)
 	@docker run                                                            \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
@@ -138,6 +139,7 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
+	@docker pull $(BASEIMAGE)
 	@docker build					\
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
