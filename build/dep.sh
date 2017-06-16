@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2017 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,13 @@ GOLANG_IMAGE="golang:1.7-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
 REQUIRED_PKGS="./pkg/... ./cmd/..."
 
-USERGROUP=$(stat -c '%u:%g' build/dep.sh)
+OSNAME=$(uname -s)
+if [ ${OSNAME} = "Darwin" ]; then
+    USERGROUP=$(stat -f '%u:%g' build/dep.sh)
+else
+    USERGROUP=$(stat -c '%u:%g' build/dep.sh)
+fi
+   
 TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
