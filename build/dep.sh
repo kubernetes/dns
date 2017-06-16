@@ -16,7 +16,7 @@
 set -e
 
 IMAGE="k8s-dns-godep"
-GOLANG_IMAGE="golang:1.7-alpine"
+GOLANG_IMAGE="golang:1.8-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
 REQUIRED_PKGS="./pkg/... ./cmd/..."
 

@@ -39,7 +39,7 @@ REGISTRY ?= gcr.io/google_containers
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.7-alpine
+BUILD_IMAGE ?= golang:1.8-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
 
