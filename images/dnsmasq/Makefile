@@ -27,7 +27,7 @@ ifeq ($(ARCH),amd64)
 	BASEIMAGE ?= alpine:3.6
 	COMPILE_IMAGE := alpine:3.6
 else ifeq ($(ARCH),arm)
-	BASEIMAGE ?= armel/busybox:glibc
+	BASEIMAGE ?= armhf/busybox:glibc
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
 else ifeq ($(ARCH),arm64)
