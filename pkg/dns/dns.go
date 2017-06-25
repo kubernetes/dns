@@ -261,7 +261,7 @@ func assertIsService(obj interface{}) (*v1.Service, bool) {
 
 func (kd *KubeDNS) newService(obj interface{}) {
 	if service, ok := assertIsService(obj); ok {
-		glog.V(2).Infof("New service: %v", service.Name)
+		glog.V(3).Infof("New service: %v", service.Name)
 		glog.V(4).Infof("Service details: %v", service)
 
 		// ExternalName services are a special kind that return CNAME records
@@ -289,7 +289,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 		defer kd.cacheLock.Unlock()
 
 		success := kd.cache.DeletePath(subCachePath...)
-		glog.V(2).Infof("removeService %v at path %v. Success: %v",
+		glog.V(3).Infof("removeService %v at path %v. Success: %v",
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
@@ -459,7 +459,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 			srvValue := kd.generateSRVRecordValue(service, int(port.Port))
 
 			l := []string{"_" + strings.ToLower(string(port.Protocol)), "_" + port.Name}
-			glog.V(2).Infof("Added SRV record %+v", srvValue)
+			glog.V(3).Infof("Added SRV record %+v", srvValue)
 
 			subCache.SetEntry(recordLabel, srvValue, kd.fqdn(service, append(l, recordLabel)...), l...)
 		}
@@ -492,7 +492,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 				endpointPort := &e.Subsets[idx].Ports[portIdx]
 				if endpointPort.Name != "" && endpointPort.Protocol != "" {
 					srvValue := kd.generateSRVRecordValue(svc, int(endpointPort.Port), endpointName)
-					glog.V(2).Infof("Added SRV record %+v", srvValue)
+					glog.V(3).Infof("Added SRV record %+v", srvValue)
 
 					l := []string{"_" + strings.ToLower(string(endpointPort.Protocol)), "_" + endpointPort.Name}
 					subCache.SetEntry(endpointName, srvValue, kd.fqdn(svc, append(l, endpointName)...), l...)
@@ -565,7 +565,7 @@ func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
 	recordValue, _ := util.GetSkyMsg(service.Spec.ExternalName, 0)
 	cachePath := append(kd.domainPath, serviceSubdomain, service.Namespace)
 	fqdn := kd.fqdn(service)
-	glog.V(2).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
+	glog.V(3).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
 		service.Name, recordValue, fqdn, cachePath)
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
@@ -628,12 +628,12 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 		if !kd.isHeadlessServiceRecord(&val) {
 			ok, err := kd.serviceWithClusterIPHasEndpoints(&val)
 			if err != nil {
-				glog.V(2).Infof(
+				glog.V(3).Infof(
 					"Federation: error finding if service has endpoint: %v", err)
 				continue
 			}
 			if !ok {
-				glog.V(2).Infof("Federation: skipping record since service has no endpoint: %v", val)
+				glog.V(3).Infof("Federation: skipping record since service has no endpoint: %v", val)
 				continue
 			}
 		}
