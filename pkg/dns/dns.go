@@ -272,8 +272,7 @@ func (kd *KubeDNS) newService(obj interface{}) {
 		// if ClusterIP is not set, a DNS entry should not be created
 		if !v1.IsServiceIPSet(service) {
 			if err := kd.newHeadlessService(service); err != nil {
-				glog.Errorf("Error new headless service %s: %v",
-					service.Name, err)
+				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
 			}
 			return
 		}
@@ -320,8 +319,7 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 	if e, ok := obj.(*v1.Endpoints); ok {
 		if err := kd.addDNSUsingEndpoints(e); err != nil {
-			glog.Errorf("Error add dns using endpoints %s: %v",
-				e.Name, err)
+			glog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
 		}
 	}
 }
@@ -378,7 +376,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 			// the addresses that are no longer named.
 			kd.cacheLock.Lock()
 			for k := range oldAddressMap {
-				glog.V(4).Infof("remove old endpoint ip %q", k)
+				glog.V(4).Infof("Removing old endpoint IP %q", k)
 				delete(kd.reverseRecordMap, k)
 			}
 			kd.cacheLock.Unlock()
@@ -398,8 +396,7 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 
 	svc, err := kd.getServiceFromEndpoints(endpoints)
 	if err != nil {
-		glog.Errorf("Error get service from endpoints %s: %v",
-			endpoints.Name, err)
+		glog.Errorf("Error from getServiceFromEndpoints(%v): %v", endpoints.Name, err)
 		return
 	}
 	if svc != nil {
@@ -522,8 +519,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
 	for endpointIP, reverseRecord := range generatedRecords {
-		glog.V(4).Infof("generateRecordsForHeadlessService: save endpointIP %q with reverseRecord value: %s",
-			endpointIP, reverseRecord)
+		glog.V(4).Infof("Adding endpointIP %q to reverseRecord %+v", endpointIP, reverseRecord)
 		kd.reverseRecordMap[endpointIP] = reverseRecord
 	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
