@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2017 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@ set -e
 IMAGE="k8s-dns-godep"
 GOLANG_IMAGE="golang:1.8-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
-REQUIRED_PKGS="./pkg/... ./cmd/..."
+REQUIRED_PKGS="github.com/onsi/ginkgo/ginkgo/... golang.org/x/text/... ./pkg/... ./cmd/..."
 
 OSNAME=$(uname -s)
 if [ ${OSNAME} = "Darwin" ]; then
