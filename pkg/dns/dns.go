@@ -489,7 +489,17 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 			if hostLabel, exists := getHostname(address); exists {
 				endpointName = hostLabel
 			}
-			subCache.SetEntry(endpointName, recordValue, kd.fqdn(svc, endpointName))
+			if addresses := addressesForHostname(e, endpointName); len(addresses) > 1 {
+				endpointCache := treecache.NewTreeCache()
+				for _, address := range addresses {
+					recordValue, endpointName := util.GetSkyMsg(address.IP, 0)
+					endpointCache.SetEntry(recordValue.Host, recordValue, kd.fqdn(svc, endpointName, endpointName))
+					subCache.SetEntry(recordValue.Host, recordValue, kd.fqdn(svc, endpointName))
+				}
+				subCache.SetSubCache(endpointName, endpointCache)
+			} else {
+				subCache.SetEntry(endpointName, recordValue, kd.fqdn(svc, endpointName))
+			}
 			for portIdx := range e.Subsets[idx].Ports {
 				endpointPort := &e.Subsets[idx].Ports[portIdx]
 				if endpointPort.Name != "" && endpointPort.Protocol != "" {
@@ -517,6 +527,18 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
 	return nil
+}
+
+func addressesForHostname(e *v1.Endpoints, endpointName string) []v1.EndpointAddress {
+	var ret []v1.EndpointAddress
+	for _, subset := range e.Subsets {
+		for _, address := range subset.Addresses {
+			if hostLabel, exists := getHostname(&address); exists && hostLabel == endpointName {
+				ret = append(ret, address)
+			}
+		}
+	}
+	return ret
 }
 
 func getHostname(address *v1.EndpointAddress) (string, bool) {

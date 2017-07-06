@@ -278,6 +278,35 @@ func TestSimpleHeadlessService(t *testing.T) {
 	assertNoReverseDNSForHeadlessService(t, kd, endpoints)
 }
 
+func TestSimpleHeadlessServiceWithSameHostname(t *testing.T) {
+	kd := newKubeDNS()
+	service := newHeadlessService()
+	assert.NoError(t, kd.servicesStore.Add(service))
+	endpoints := newEndpoints(service, v1.EndpointSubset{
+		Addresses: []v1.EndpointAddress{
+			{IP: "10.0.0.1", Hostname: "service1"},
+			{IP: "10.0.0.2", Hostname: "service1"},
+		},
+		Ports: []v1.EndpointPort{
+			{Port: 80, Name: "", Protocol: "TCP"},
+		},
+	}, v1.EndpointSubset{
+		Addresses: []v1.EndpointAddress{
+			{IP: "10.0.0.3", Hostname: "service2"},
+		},
+		Ports: []v1.EndpointPort{
+			{Port: 443, Name: "", Protocol: "TCP"},
+		},
+	})
+
+	assert.NoError(t, kd.endpointsStore.Add(endpoints))
+	kd.newService(service)
+	assertDNSForHeadlessService(t, kd, endpoints)
+	assertReverseDNSForNamedHeadlessService(t, kd, endpoints)
+	kd.removeService(service)
+	assertNoDNSForHeadlessService(t, kd, service)
+}
+
 func TestHeadlessServiceWithNamedPorts(t *testing.T) {
 	kd := newKubeDNS()
 	service := newHeadlessService()
@@ -843,6 +872,28 @@ func assertDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
 		_, found := endpoints[record.Host]
 		assert.True(t, found)
 	}
+
+	assertDNSForPodsInHeadlessService(t, kd, e)
+}
+
+func assertDNSForPodsInHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
+	for _, subset := range e.Subsets {
+		for _, endpointAddress := range subset.Addresses {
+			if endpointAddress.Hostname != "" {
+				records, err := kd.Records(getPodsFQDN(kd, e, endpointAddress.Hostname), false)
+				require.NoError(t, err)
+				assert.Contains(t, getHosts(records), endpointAddress.IP, fmt.Sprintf("Hostname %s with IP %s not found", endpointAddress.Hostname, endpointAddress.IP))
+			}
+		}
+	}
+}
+
+func getHosts(records []skymsg.Service) []string {
+	ret := make([]string, len(records))
+	for _, record := range records {
+		ret = append(ret, record.Host)
+	}
+	return ret
 }
 
 func assertReverseDNSForNamedHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
