@@ -17,13 +17,11 @@ limitations under the License.
 package config
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/fields"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/util/wait"
-	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
 	"time"
@@ -40,16 +38,11 @@ func NewConfigMapSync(client kubernetes.Interface, ns string, name string) Sync 
 		channel: make(chan syncResult),
 	}
 
-	listWatch := &cache.ListWatch{
-		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = fields.Set{"metadata.name": name}.AsSelector().String()
-			return client.Core().ConfigMaps(ns).List(options)
-		},
-		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = fields.Set{"metadata.name": name}.AsSelector().String()
-			return client.Core().ConfigMaps(ns).Watch(options)
-		},
-	}
+	listWatch := cache.NewListWatchFromClient(
+		syncSource.client.Core().RESTClient(),
+		"configmaps",
+		ns,
+		fields.Everything())
 
 	store, controller := cache.NewInformer(
 		listWatch,
@@ -73,12 +66,10 @@ type kubeAPISyncSource struct {
 
 	client     kubernetes.Interface
 	store      cache.Store
-	controller *cache.Controller
+	controller cache.Controller
 
 	channel chan syncResult
 }
-
-var _ syncSource = (*kubeAPISyncSource)(nil)
 
 func (syncSource *kubeAPISyncSource) Once() (syncResult, error) {
 	cm, err := syncSource.client.Core().ConfigMaps(syncSource.ns).Get(syncSource.name, metav1.GetOptions{})
