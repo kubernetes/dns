@@ -34,7 +34,7 @@ ifeq ($(ARCH),amd64)
     NOBODY?=nobody
 endif
 ifeq ($(ARCH),arm)
-    BASEIMAGE?=armel/busybox
+    BASEIMAGE?=armhf/busybox
     NOBODY?=nogroup
 endif
 ifeq ($(ARCH),arm64)
