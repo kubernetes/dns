@@ -126,6 +126,7 @@ define DOCKERFILE_RULE
 	@sed					\
 	    -e 's|ARG_ARCH|$(ARCH)|g' \
 	    -e 's|ARG_BIN|$(BINARY)|g' \
+	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
 	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
 	    -e 's|ARG_NOBODY|$(NOBODY)|g' \
 	    -e 's|ARG_VERSION|$(VERSION)|g' \
