@@ -28,26 +28,22 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
+NOBODY ?= nobody
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
     BASEIMAGE?=alpine
-    NOBODY?=nobody
 endif
 ifeq ($(ARCH),arm)
-    BASEIMAGE?=armhf/busybox
-    NOBODY?=nogroup
+    BASEIMAGE?=arm32v6/alpine
 endif
 ifeq ($(ARCH),arm64)
-    BASEIMAGE?=aarch64/busybox
-    NOBODY?=nogroup
+    BASEIMAGE?=arm64v8/alpine
 endif
 ifeq ($(ARCH),ppc64le)
-    BASEIMAGE?=ppc64le/busybox
-    NOBODY?=nobody
+    BASEIMAGE?=ppc64le/alpine
 endif
 ifeq ($(ARCH),s390x)
-    BASEIMAGE?=s390x/busybox
-    NOBODY?=nobody
+    BASEIMAGE?=s390x/alpine
 endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
