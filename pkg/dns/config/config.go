@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	types "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/validation"
+	types "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
 )
 
