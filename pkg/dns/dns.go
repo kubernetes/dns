@@ -264,7 +264,9 @@ func (kd *KubeDNS) newService(obj interface{}) {
 		}
 		// if ClusterIP is not set, a DNS entry should not be created
 		if !v1.IsServiceIPSet(service) {
-			kd.newHeadlessService(service)
+			if err := kd.newHeadlessService(service); err != nil {
+				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
+			}
 			return
 		}
 		if len(service.Spec.Ports) == 0 {
@@ -309,7 +311,9 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 	if e, ok := obj.(*v1.Endpoints); ok {
-		kd.addDNSUsingEndpoints(e)
+		if err := kd.addDNSUsingEndpoints(e); err != nil {
+			glog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
+		}
 	}
 }
 
@@ -365,6 +369,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 			// the addresses that are no longer named.
 			kd.cacheLock.Lock()
 			for k := range oldAddressMap {
+				glog.V(4).Infof("Removing old endpoint IP %q", k)
 				delete(kd.reverseRecordMap, k)
 			}
 			kd.cacheLock.Unlock()
@@ -383,7 +388,11 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 	}
 
 	svc, err := kd.getServiceFromEndpoints(endpoints)
-	if svc != nil && err == nil {
+	if err != nil {
+		glog.Errorf("Error from getServiceFromEndpoints(%v): %v", endpoints.Name, err)
+		return
+	}
+	if svc != nil {
 		if !v1.IsServiceIPSet(svc) {
 			kd.cacheLock.Lock()
 			defer kd.cacheLock.Unlock()
@@ -503,6 +512,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
 	for endpointIP, reverseRecord := range generatedRecords {
+		glog.V(4).Infof("Adding endpointIP %q to reverseRecord %+v", endpointIP, reverseRecord)
 		kd.reverseRecordMap[endpointIP] = reverseRecord
 	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
