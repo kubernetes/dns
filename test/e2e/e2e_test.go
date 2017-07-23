@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	// Each suite must be imported explicitly.
+	_ "k8s.io/dns/test/e2e/diagnoser"
 	_ "k8s.io/dns/test/e2e/dnsmasq"
 	_ "k8s.io/dns/test/e2e/kubedns"
 )

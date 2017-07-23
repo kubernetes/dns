@@ -30,7 +30,8 @@ BINARIES := \
 CONTAINER_BINARIES := \
     dnsmasq-nanny \
     kube-dns \
-    sidecar
+    sidecar \
+    diagnoser
 
 # List of images to build (contained in images/)
 IMAGES := dnsmasq
