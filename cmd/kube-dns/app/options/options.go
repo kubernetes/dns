@@ -36,6 +36,7 @@ type KubeDNSConfig struct {
 	ClusterDomain      string
 	KubeConfigFile     string
 	KubeMasterURL      string
+	Namespace          string
 	InitialSyncTimeout time.Duration
 
 	HealthzPort    int
@@ -70,6 +71,7 @@ func NewKubeDNSConfig() *KubeDNSConfig {
 		ConfigDir:    "",
 
 		NameServers: "",
+		Namespace:   "",
 	}
 }
 
@@ -159,6 +161,9 @@ func (s *KubeDNSConfig) AddFlags(fs *pflag.FlagSet) {
 			" provided, defaults to service account tokens")
 	fs.Var(kubeMasterURLVar{&s.KubeMasterURL}, "kube-master-url",
 		"URL to reach kubernetes master. Env variables in this flag will be expanded.")
+	fs.StringVar(&s.Namespace, "namespace", s.Namespace,
+		"The namespace which kube-dns with serve on. If not specified, kube-dns will "+
+			"serve on all namespaces")
 
 	fs.IntVar(&s.HealthzPort, "healthz-port", s.HealthzPort,
 		"port on which to serve a kube-dns HTTP readiness probe.")

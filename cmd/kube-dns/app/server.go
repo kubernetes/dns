@@ -82,7 +82,7 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 		dnsBindAddress: config.DNSBindAddress,
 		dnsPort:        config.DNSPort,
 		nameServers:    config.NameServers,
-		kd:             dns.NewKubeDNS(kubeClient, config.ClusterDomain, config.InitialSyncTimeout, configSync),
+		kd:             dns.NewKubeDNS(kubeClient, config.ClusterDomain, config.Namespace, config.InitialSyncTimeout, configSync),
 	}
 }
 
