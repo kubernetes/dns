@@ -102,13 +102,10 @@ func (po *probeOptions) Set(value string) error {
 		switch splits[4] {
 		case "A":
 			option.Type = dns.TypeA
-			break
 		case "AAAA":
 			option.Type = dns.TypeAAAA
-			break
 		case "ANY":
 			option.Type = dns.TypeANY
-			break
 		default:
 			return fmt.Errorf("invalid type for DNS: %v", splits[5])
 		}
