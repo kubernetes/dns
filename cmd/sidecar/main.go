@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	goflag "flag"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -41,7 +42,9 @@ func main() {
 	options := sidecar.NewOptions()
 	configureFlags(options, pflag.CommandLine)
 	flag.InitFlags()
-
+	// Convinces goflags that we have called Parse() to avoid noisy logs.
+	// OSS Issue: kubernetes/kubernetes#17162.
+	goflag.CommandLine.Parse([]string{})
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -99,13 +102,10 @@ func (po *probeOptions) Set(value string) error {
 		switch splits[4] {
 		case "A":
 			option.Type = dns.TypeA
-			break
 		case "AAAA":
 			option.Type = dns.TypeAAAA
-			break
 		case "ANY":
 			option.Type = dns.TypeANY
-			break
 		default:
 			return fmt.Errorf("invalid type for DNS: %v", splits[5])
 		}
