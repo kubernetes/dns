@@ -28,7 +28,6 @@ import (
 )
 
 var opts struct {
-	action  string
 	baseDir string
 	workDir string
 }
