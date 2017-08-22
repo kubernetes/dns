@@ -90,7 +90,7 @@ func (d *dockerWrapper) Start() {
 	d.ensureBridge()
 
 	args := []string{
-		"docker", "daemon",
+		d.dockerExec, "daemon",
 		"--bridge=" + d.bridge,
 		"--exec-root=" + execDir,
 		"--graph=" + graphDir,
@@ -164,7 +164,7 @@ func (d *dockerWrapper) List(filter string) []string {
 		args = append(args, "--filter", filter)
 	}
 	Log.Logf("docker %v", args)
-	out, err := exec.Command("docker", args...).Output()
+	out, err := exec.Command(d.dockerExec, args...).Output()
 
 	if err != nil {
 		Log.Fatalf("Error getting containers: %v", err)
@@ -212,7 +212,7 @@ func (d *dockerWrapper) ensureBridge() {
 
 func (d *dockerWrapper) waitForStart() {
 	for {
-		if err := exec.Command("docker", "-H", d.socket, "info").Run(); err == nil {
+		if err := exec.Command(d.dockerExec, "-H", d.socket, "info").Run(); err == nil {
 			return
 		}
 	}
