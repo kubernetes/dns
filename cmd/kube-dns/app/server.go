@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"os/signal"
 	"regexp"
@@ -125,7 +124,7 @@ func (server *KubeDNSServer) Run() {
 	glog.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", server.healthzPort), nil))
 }
 
-// setupHandlers sets up a readiness and liveness endpoint for kube2sky.
+// setupHandlers sets up a readiness and liveness endpoint for kube-dns.
 func (server *KubeDNSServer) setupHandlers() {
 	glog.V(0).Infof("Setting up Healthz Handler (/readiness)")
 	http.HandleFunc("/readiness", func(w http.ResponseWriter, req *http.Request) {
@@ -142,12 +141,6 @@ func (server *KubeDNSServer) setupHandlers() {
 			fmt.Fprint(w, err)
 		}
 	})
-
-	glog.V(0).Infof("Setting up pprof handler (/debug/pprof)")
-	http.HandleFunc("/debug/pprof/", pprof.Index)
-	http.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	http.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	http.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }
 
 // setupSignalHandlers installs signal handler to ignore SIGINT and

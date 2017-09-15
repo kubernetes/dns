@@ -29,9 +29,7 @@ const (
 func KeepSudoActive() {
 	go func() {
 		if err := exec.Command("sudo", "-nv").Run(); err != nil {
-			if err != nil {
-				Log.Fatalf("Unable to keep sudo active: %v", err)
-			}
+			Log.Fatalf("Unable to keep sudo active: %v", err)
 		}
 		time.Sleep(10 * time.Second)
 	}()
