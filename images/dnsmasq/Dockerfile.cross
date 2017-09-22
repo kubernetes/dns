@@ -13,7 +13,6 @@
 # limitations under the License.
 
 FROM __BASEIMAGE__
-MAINTAINER Bowei Du <bowei@google.com>
 
 # If we're building for another architecture than amd64, the
 # CROSS_BUILD_ placeholder is removed so e.g. CROSS_BUILD_COPY turns
