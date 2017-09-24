@@ -32,6 +32,9 @@ fi
 
 export CGO_ENABLED=0
 export GOARCH="${ARCH}"
+if [ $GOARCH == "amd64" ]; then
+    export GOBIN="$GOPATH/bin/linux_amd64"
+fi
 
 go install                                                         \
     -installsuffix "static"                                        \
