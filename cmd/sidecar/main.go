@@ -76,7 +76,7 @@ func (po *probeOptions) Set(value string) error {
 		Type:     dns.TypeANY,
 	}
 
-	const labelRegexp = "^[a-zA-Z0-9_]+"
+	const labelRegexp = "^[a-zA-Z0-9_]+$"
 	if !regexp.MustCompile(labelRegexp).MatchString(option.Label) {
 		return fmt.Errorf("label must be of format %v", labelRegexp)
 	}
@@ -106,8 +106,10 @@ func (po *probeOptions) Set(value string) error {
 			option.Type = dns.TypeAAAA
 		case "ANY":
 			option.Type = dns.TypeANY
+		case "SRV":
+			option.Type = dns.TypeSRV
 		default:
-			return fmt.Errorf("invalid type for DNS: %v", splits[5])
+			return fmt.Errorf("invalid type for DNS: %v", splits[4])
 		}
 	}
 
@@ -140,7 +142,7 @@ func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 			" Healthcheck url will be exported under /healthcheck/<label>."+
 			" interval_seconds is optional."+
 			" This option may be specified multiple times to check multiple servers."+
-			" <type> is one of ANY, A, AAAA."+
+			" <type> is one of ANY, A, AAAA, SRV."+
 			" Example: 'mydns,127.0.0.1:53,example.com,10,A'.")
 	flagSet.StringVar(
 		&opt.PrometheusAddr, "prometheus-addr", opt.PrometheusAddr,
