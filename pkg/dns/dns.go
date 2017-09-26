@@ -23,18 +23,17 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/watch"
 	kcache "k8s.io/client-go/tools/cache"
 
+	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/dns/treecache"
 	"k8s.io/dns/pkg/dns/util"
-	"k8s.io/kubernetes/pkg/util/validation"
-	"k8s.io/kubernetes/pkg/util/wait"
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/golang/glog"
@@ -106,9 +105,9 @@ type KubeDNS struct {
 	domainPath []string
 
 	// endpointsController  invokes registered callbacks when endpoints change.
-	endpointsController *kcache.Controller
+	endpointsController kcache.Controller
 	// serviceController invokes registered callbacks when services change.
-	serviceController *kcache.Controller
+	serviceController kcache.Controller
 
 	// config set from the dynamic configuration source.
 	config *config.Config
@@ -210,14 +209,11 @@ func (kd *KubeDNS) GetCacheAsJSON() (string, error) {
 func (kd *KubeDNS) setServicesStore() {
 	// Returns a cache.ListWatch that gets all changes to services.
 	kd.servicesStore, kd.serviceController = kcache.NewInformer(
-		&kcache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return kd.kubeClient.Core().Services(v1.NamespaceAll).List(options)
-			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return kd.kubeClient.Core().Services(v1.NamespaceAll).Watch(options)
-			},
-		},
+		kcache.NewListWatchFromClient(
+			kd.kubeClient.Core().RESTClient(),
+			"services",
+			v1.NamespaceAll,
+			fields.Everything()),
 		&v1.Service{},
 		resyncPeriod,
 		kcache.ResourceEventHandlerFuncs{
@@ -231,14 +227,11 @@ func (kd *KubeDNS) setServicesStore() {
 func (kd *KubeDNS) setEndpointsStore() {
 	// Returns a cache.ListWatch that gets all changes to endpoints.
 	kd.endpointsStore, kd.endpointsController = kcache.NewInformer(
-		&kcache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return kd.kubeClient.Core().Endpoints(v1.NamespaceAll).List(options)
-			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return kd.kubeClient.Core().Endpoints(v1.NamespaceAll).Watch(options)
-			},
-		},
+		kcache.NewListWatchFromClient(
+			kd.kubeClient.Core().RESTClient(),
+			"endpoints",
+			v1.NamespaceAll,
+			fields.Everything()),
 		&v1.Endpoints{},
 		resyncPeriod,
 		kcache.ResourceEventHandlerFuncs{
@@ -261,7 +254,7 @@ func assertIsService(obj interface{}) (*v1.Service, bool) {
 
 func (kd *KubeDNS) newService(obj interface{}) {
 	if service, ok := assertIsService(obj); ok {
-		glog.V(2).Infof("New service: %v", service.Name)
+		glog.V(3).Infof("New service: %v", service.Name)
 		glog.V(4).Infof("Service details: %v", service)
 
 		// ExternalName services are a special kind that return CNAME records
@@ -271,7 +264,9 @@ func (kd *KubeDNS) newService(obj interface{}) {
 		}
 		// if ClusterIP is not set, a DNS entry should not be created
 		if !v1.IsServiceIPSet(service) {
-			kd.newHeadlessService(service)
+			if err := kd.newHeadlessService(service); err != nil {
+				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
+			}
 			return
 		}
 		if len(service.Spec.Ports) == 0 {
@@ -289,7 +284,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 		defer kd.cacheLock.Unlock()
 
 		success := kd.cache.DeletePath(subCachePath...)
-		glog.V(2).Infof("removeService %v at path %v. Success: %v",
+		glog.V(3).Infof("removeService %v at path %v. Success: %v",
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
@@ -316,7 +311,9 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 	if e, ok := obj.(*v1.Endpoints); ok {
-		kd.addDNSUsingEndpoints(e)
+		if err := kd.addDNSUsingEndpoints(e); err != nil {
+			glog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
+		}
 	}
 }
 
@@ -372,6 +369,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 			// the addresses that are no longer named.
 			kd.cacheLock.Lock()
 			for k := range oldAddressMap {
+				glog.V(4).Infof("Removing old endpoint IP %q", k)
 				delete(kd.reverseRecordMap, k)
 			}
 			kd.cacheLock.Unlock()
@@ -390,7 +388,11 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 	}
 
 	svc, err := kd.getServiceFromEndpoints(endpoints)
-	if svc != nil && err == nil {
+	if err != nil {
+		glog.Errorf("Error from getServiceFromEndpoints(%v): %v", endpoints.Name, err)
+		return
+	}
+	if svc != nil {
 		if !v1.IsServiceIPSet(svc) {
 			kd.cacheLock.Lock()
 			defer kd.cacheLock.Unlock()
@@ -459,7 +461,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 			srvValue := kd.generateSRVRecordValue(service, int(port.Port))
 
 			l := []string{"_" + strings.ToLower(string(port.Protocol)), "_" + port.Name}
-			glog.V(2).Infof("Added SRV record %+v", srvValue)
+			glog.V(3).Infof("Added SRV record %+v", srvValue)
 
 			subCache.SetEntry(recordLabel, srvValue, kd.fqdn(service, append(l, recordLabel)...), l...)
 		}
@@ -492,7 +494,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 				endpointPort := &e.Subsets[idx].Ports[portIdx]
 				if endpointPort.Name != "" && endpointPort.Protocol != "" {
 					srvValue := kd.generateSRVRecordValue(svc, int(endpointPort.Port), endpointName)
-					glog.V(2).Infof("Added SRV record %+v", srvValue)
+					glog.V(3).Infof("Added SRV record %+v", srvValue)
 
 					l := []string{"_" + strings.ToLower(string(endpointPort.Protocol)), "_" + endpointPort.Name}
 					subCache.SetEntry(endpointName, srvValue, kd.fqdn(svc, append(l, endpointName)...), l...)
@@ -510,6 +512,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
 	for endpointIP, reverseRecord := range generatedRecords {
+		glog.V(4).Infof("Adding endpointIP %q to reverseRecord %+v", endpointIP, reverseRecord)
 		kd.reverseRecordMap[endpointIP] = reverseRecord
 	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
@@ -565,7 +568,7 @@ func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
 	recordValue, _ := util.GetSkyMsg(service.Spec.ExternalName, 0)
 	cachePath := append(kd.domainPath, serviceSubdomain, service.Namespace)
 	fqdn := kd.fqdn(service)
-	glog.V(2).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
+	glog.V(3).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
 		service.Name, recordValue, fqdn, cachePath)
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
@@ -628,12 +631,12 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 		if !kd.isHeadlessServiceRecord(&val) {
 			ok, err := kd.serviceWithClusterIPHasEndpoints(&val)
 			if err != nil {
-				glog.V(2).Infof(
+				glog.V(3).Infof(
 					"Federation: error finding if service has endpoint: %v", err)
 				continue
 			}
 			if !ok {
-				glog.V(2).Infof("Federation: skipping record since service has no endpoint: %v", val)
+				glog.V(3).Infof("Federation: skipping record since service has no endpoint: %v", val)
 				continue
 			}
 		}
@@ -920,7 +923,7 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// wasteful in case of non-federated independent Kubernetes clusters. So carefully
 		// proceeding here.
 		// TODO(madhusudancs): Move this to external/v1 API.
-		nodeList, err := kd.kubeClient.Core().Nodes().List(v1.ListOptions{})
+		nodeList, err := kd.kubeClient.Core().Nodes().List(metav1.ListOptions{})
 		if err != nil || len(nodeList.Items) == 0 {
 			return "", "", fmt.Errorf("failed to retrieve the cluster nodes: %v", err)
 		}

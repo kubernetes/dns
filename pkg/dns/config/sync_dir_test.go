@@ -28,7 +28,7 @@ import (
 
 	"crypto/sha256"
 
-	"k8s.io/client-go/pkg/util/clock"
+	"k8s.io/client-go/util/clock"
 )
 
 func TestSyncFile(t *testing.T) {

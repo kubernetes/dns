@@ -59,8 +59,18 @@ func (kd *KubeDNS) Start(args ...string) {
 		kd.isRunning = false
 	}()
 
+	// dns service
 	om.Eventually(func() error {
 		conn, err := net.Dial("tcp", "localhost:10053")
+		if err == nil {
+			conn.Close()
+		}
+		return err
+	}).Should(om.Succeed())
+
+	// health check service
+	om.Eventually(func() error {
+		conn, err := net.Dial("tcp", "localhost:8081")
 		if err == nil {
 			conn.Close()
 		}

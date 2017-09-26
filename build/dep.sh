@@ -16,11 +16,17 @@
 set -e
 
 IMAGE="k8s-dns-godep"
-GOLANG_IMAGE="golang:1.7-alpine"
+GOLANG_IMAGE="golang:1.8-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
-REQUIRED_PKGS="./pkg/... ./cmd/..."
+REQUIRED_PKGS="github.com/onsi/ginkgo/ginkgo/... golang.org/x/text/... ./pkg/... ./cmd/..."
 
-USERGROUP=$(stat -c '%u:%g' build/dep.sh)
+OSNAME=$(uname -s)
+if [ ${OSNAME} = "Darwin" ]; then
+    USERGROUP=$(stat -f '%u:%g' build/dep.sh)
+else
+    USERGROUP=$(stat -c '%u:%g' build/dep.sh)
+fi
+   
 TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 

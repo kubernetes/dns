@@ -28,26 +28,22 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
+NOBODY ?= nobody
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
     BASEIMAGE?=alpine
-    NOBODY?=nobody
 endif
 ifeq ($(ARCH),arm)
-    BASEIMAGE?=armel/busybox
-    NOBODY?=nogroup
+    BASEIMAGE?=arm32v6/alpine
 endif
 ifeq ($(ARCH),arm64)
-    BASEIMAGE?=aarch64/busybox
-    NOBODY?=nogroup
+    BASEIMAGE?=arm64v8/alpine
 endif
 ifeq ($(ARCH),ppc64le)
-    BASEIMAGE?=ppc64le/busybox
-    NOBODY?=nobody
+    BASEIMAGE?=ppc64le/alpine
 endif
 ifeq ($(ARCH),s390x)
-    BASEIMAGE?=s390x/busybox
-    NOBODY?=nobody
+    BASEIMAGE?=s390x/alpine
 endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
@@ -99,13 +95,13 @@ build: $(GO_BINARIES) images-build
 # Rule for all bin/$(ARCH)/bin/$(BINARY)
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
+	@docker pull $(BUILD_IMAGE)
 	@docker run                                                            \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
 	    -v $$(pwd)/.go:/go                                                 \
 	    -v $$(pwd):/go/src/$(PKG)                                          \
-	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)                       \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
 	    -w /go/src/$(PKG)                                                  \
@@ -125,6 +121,7 @@ define DOCKERFILE_RULE
 	@sed					\
 	    -e 's|ARG_ARCH|$(ARCH)|g' \
 	    -e 's|ARG_BIN|$(BINARY)|g' \
+	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
 	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
 	    -e 's|ARG_NOBODY|$(NOBODY)|g' \
 	    -e 's|ARG_VERSION|$(VERSION)|g' \
@@ -138,6 +135,7 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
+	@docker pull $(BASEIMAGE)
 	@docker build					\
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\

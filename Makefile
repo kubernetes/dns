@@ -19,14 +19,14 @@
 # Golang package.
 PKG := k8s.io/dns
 
-# List of binaries to build. You must have a matching Dockerfile.BINARY
-# for each BINARY.
+# List of binaries to build.
 BINARIES := \
     e2e \
     ginkgo \
     sidecar-e2e
 
 # List of binaries to build that are containerized and pushed.
+# You must have a matching Dockerfile.BINARY for each BINARY.
 CONTAINER_BINARIES := \
     dnsmasq-nanny \
     kube-dns \
@@ -39,7 +39,7 @@ REGISTRY ?= gcr.io/google_containers
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.7-alpine
+BUILD_IMAGE ?= golang:1.8-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
 

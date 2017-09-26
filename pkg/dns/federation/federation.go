@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/kubernetes/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 var ErrExpectedKeyEqualsValue = errors.New("invalid format, must be key=value")

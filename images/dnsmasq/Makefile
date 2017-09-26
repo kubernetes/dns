@@ -13,22 +13,22 @@
 # limitations under the License.
 
 VERSION ?= $(shell git describe --tags --always --dirty)
-REGISTRY ?= gcr.io/google_containers
+REGISTRY ?= gcr.io/google-containers
 ARCH ?= amd64
-DNSMASQ_VERSION ?= dnsmasq-2.76
+DNSMASQ_VERSION ?= dnsmasq-2.77
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
-COMPILE_IMAGE := gcr.io/google_containers/kube-cross:v1.7.4-1
+COMPILE_IMAGE := gcr.io/google-containers/kube-cross:v1.7.6-k8s1.6-0
 OUTPUT_DIR := _output/$(ARCH)
 
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= alpine:3.4
-	COMPILE_IMAGE := alpine:3.4
+	BASEIMAGE ?= alpine:3.6
+	COMPILE_IMAGE := alpine:3.6
 else ifeq ($(ARCH),arm)
-	BASEIMAGE ?= armel/busybox:glibc
-	TRIPLE    ?= arm-linux-gnueabi
+	BASEIMAGE ?= armhf/busybox:glibc
+	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
 else ifeq ($(ARCH),arm64)
 	BASEIMAGE ?= aarch64/busybox:glibc
@@ -57,7 +57,8 @@ ifeq ($(findstring gcr.io/,$(REGISTRY)),gcr.io/)
 	DOCKER := gcloud docker --
 endif
 
-BINARY:= $(OUTPUT_DIR)/dnsmasq
+PATCHES := $(shell find patches/ -name *.patch)
+BINARY := $(OUTPUT_DIR)/docker/dnsmasq
 
 BUILDSTAMP := $(subst :,_,$(subst /,_,$(REGISTRY))_$(IMAGE)_$(VERSION))
 CONTAINER_STAMP := .$(BUILDSTAMP)-container
@@ -98,45 +99,49 @@ all-push: $(addprefix push-, $(ALL_ARCH))
 .PHONY: build
 build: $(BINARY)
 
-$(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) dnsmasq.conf
+$(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) $(PATCHES) dnsmasq.conf
 	@echo "building :" $(BINARY)
 	@mkdir -p $(@D)
-	@cp Dockerfile.cross $(OUTPUT_DIR)/Dockerfile
-	@cd $(OUTPUT_DIR) && sed -i- "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile && rm Dockerfile-
+	@mkdir -p $(@D)/docker
+	@cp Dockerfile.cross $(OUTPUT_DIR)/docker/Dockerfile
+	@cd $(OUTPUT_DIR)/docker && sed -i- "s|__BASEIMAGE__|$(BASEIMAGE)|g" Dockerfile && rm Dockerfile-
+	@cd $(OUTPUT_DIR) && tar -xJf dnsmasq.tar.xz
+	@for patch in $(PATCHES); do patch -p0 -d $(OUTPUT_DIR)/$(DNSMASQ_VERSION) < $${patch}; done
+	@cp dnsmasq.conf $(OUTPUT_DIR)/docker
 
 ifeq ($(ARCH),amd64)
-	@cd $(OUTPUT_DIR) && sed -i- "/__CROSS_BUILD_COPY__/d" Dockerfile && rm Dockerfile-
-	@docker run --rm --sig-proxy=true     \
+	@cd $(OUTPUT_DIR)/docker && \
+		sed -i- "/__CROSS_BUILD_COPY__/d" Dockerfile && rm Dockerfile-
+	@docker pull $(COMPILE_IMAGE)
+	@docker run --rm --sig-proxy=true \
 		-v `pwd`/$(OUTPUT_DIR):/build \
 		-v `pwd`:/src                 \
 		$(COMPILE_IMAGE)              \
 		/bin/sh -c                    \
-		"apk update                                 \
+		"apk update                           \
 			&& apk add alpine-sdk xz libcap-dev \
-			&& tar -xJf /build/dnsmasq.tar.xz   \
-			&& cd $(DNSMASQ_VERSION)            \
+			&& cd /build/$(DNSMASQ_VERSION)     \
 			&& make -j                          \
-			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
+			&& cp src/dnsmasq /build/docker/dnsmasq" $(VERBOSE_OUTPUT)
 else
-	@cd $(OUTPUT_DIR)                                            \
+	@cd $(OUTPUT_DIR)/docker                                                 \
 		&& sed -i- "s|__ARCH__|$(QEMUARCH)|g" Dockerfile && rm Dockerfile-     \
 		&& sed -i- "s/__CROSS_BUILD_COPY__/COPY/g" Dockerfile && rm Dockerfile-
-	@cd $(OUTPUT_DIR) \
+	@cd $(OUTPUT_DIR)/docker \
 		&& curl -sSL $(MULTIARCH_RELEASE) | tar -xJ
-	@docker run --sig-proxy=true --rm            \
+	@docker run --sig-proxy=true --rm      \
 		--privileged $(MULTIARCH_CONTAINER)  \
 		--reset $(VERBOSE_OUTPUT)
-	@docker run --rm --sig-proxy=true            \
-		-v `pwd`/$(OUTPUT_DIR):/build        \
-		-v `pwd`:/src                        \
-		$(COMPILE_IMAGE)                     \
-		/bin/bash -c                         \
-		"tar -xJf /build/dnsmasq.tar.xz      \
-			&& cd $(DNSMASQ_VERSION)     \
-			&& CC=$(TRIPLE)-gcc make -j  \
-			&& cp src/dnsmasq /build" $(VERBOSE_OUTPUT)
+	@docker pull $(COMPILE_IMAGE)
+	@docker run --rm --sig-proxy=true \
+		-v `pwd`/$(OUTPUT_DIR):/build   \
+		-v `pwd`:/src                   \
+		$(COMPILE_IMAGE)                \
+		/bin/bash -c                    \
+		"cd /build/$(DNSMASQ_VERSION)   \
+			&& CC=$(TRIPLE)-gcc make -j   \
+			&& cp src/dnsmasq /build/docker/dnsmasq" $(VERBOSE_OUTPUT)
 endif
-	@cp dnsmasq.conf $(OUTPUT_DIR)
 
 $(DNSMASQ_ARCHIVE):
 	@mkdir -p $(@D)
@@ -147,8 +152,8 @@ containers: $(CONTAINER_STAMP)
 
 $(CONTAINER_STAMP): $(BINARY)
 	@echo "container:" $(REGISTRY)/$(IMAGE):$(VERSION)
-	@docker build \
-		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR) > $@
+	@docker build --pull \
+		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR)/docker > $@
 
 .PHONY: test
 test: containers

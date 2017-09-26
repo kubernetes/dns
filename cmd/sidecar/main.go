@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	goflag "flag"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -26,7 +27,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	"github.com/spf13/pflag"
-	"k8s.io/kubernetes/pkg/util/flag"
+	"k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/kubernetes/pkg/util/logs"
 
 	"k8s.io/dns/pkg/sidecar"
@@ -41,7 +42,9 @@ func main() {
 	options := sidecar.NewOptions()
 	configureFlags(options, pflag.CommandLine)
 	flag.InitFlags()
-
+	// Convinces goflags that we have called Parse() to avoid noisy logs.
+	// OSS Issue: kubernetes/kubernetes#17162.
+	goflag.CommandLine.Parse([]string{})
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -73,7 +76,7 @@ func (po *probeOptions) Set(value string) error {
 		Type:     dns.TypeANY,
 	}
 
-	const labelRegexp = "^[a-zA-Z0-9_]+"
+	const labelRegexp = "^[a-zA-Z0-9_]+$"
 	if !regexp.MustCompile(labelRegexp).MatchString(option.Label) {
 		return fmt.Errorf("label must be of format %v", labelRegexp)
 	}
@@ -99,15 +102,14 @@ func (po *probeOptions) Set(value string) error {
 		switch splits[4] {
 		case "A":
 			option.Type = dns.TypeA
-			break
 		case "AAAA":
 			option.Type = dns.TypeAAAA
-			break
 		case "ANY":
 			option.Type = dns.TypeANY
-			break
+		case "SRV":
+			option.Type = dns.TypeSRV
 		default:
-			return fmt.Errorf("invalid type for DNS: %v", splits[5])
+			return fmt.Errorf("invalid type for DNS: %v", splits[4])
 		}
 	}
 
@@ -140,7 +142,7 @@ func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 			" Healthcheck url will be exported under /healthcheck/<label>."+
 			" interval_seconds is optional."+
 			" This option may be specified multiple times to check multiple servers."+
-			" <type> is one of ANY, A, AAAA."+
+			" <type> is one of ANY, A, AAAA, SRV."+
 			" Example: 'mydns,127.0.0.1:53,example.com,10,A'.")
 	flagSet.StringVar(
 		&opt.PrometheusAddr, "prometheus-addr", opt.PrometheusAddr,
