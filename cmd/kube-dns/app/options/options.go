@@ -27,9 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/util/validation"
 )
 
 type KubeDNSConfig struct {

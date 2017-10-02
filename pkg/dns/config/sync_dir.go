@@ -28,7 +28,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/client-go/pkg/util/clock"
+	"k8s.io/client-go/util/clock"
 )
 
 // NewFileSync returns a Sync that scans the given dir periodically for config data

@@ -32,15 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/dns/treecache"
 	"k8s.io/dns/pkg/dns/util"
-	"k8s.io/kubernetes/pkg/util/sets"
 )
 
 const (
@@ -707,12 +707,12 @@ func newNodes() *v1.NodeList {
 		Items: []v1.Node{
 			// Node without annotation.
 			{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: "testnode-0",
 				},
 			},
 			{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: "testnode-1",
 					Labels: map[string]string{
 						// Note: The zone name here is an arbitrary string and doesn't exactly follow the
@@ -729,7 +729,7 @@ func newNodes() *v1.NodeList {
 
 func newService(namespace, serviceName, clusterIP, portName string, portNumber int32) *v1.Service {
 	service := v1.Service{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
 			Namespace: namespace,
 		},
@@ -745,7 +745,7 @@ func newService(namespace, serviceName, clusterIP, portName string, portNumber i
 
 func newExternalNameService() *v1.Service {
 	service := v1.Service{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      testService,
 			Namespace: testNamespace,
 		},
@@ -763,7 +763,7 @@ func newExternalNameService() *v1.Service {
 
 func newHeadlessService() *v1.Service {
 	service := v1.Service{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      testService,
 			Namespace: testNamespace,
 		},

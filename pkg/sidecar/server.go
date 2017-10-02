@@ -56,10 +56,10 @@ func (s *server) Run(options *Options) {
 func (s *server) runMetrics(options *Options) {
 	InitializeMetrics(options)
 
-	client := dnsmasq.NewMetricsClient(options.DnsMasqAddr, options.DnsMasqPort)
+	s.metricsClient = dnsmasq.NewMetricsClient(options.DnsMasqAddr, options.DnsMasqPort)
 
 	for {
-		metrics, err := client.GetMetrics()
+		metrics, err := s.metricsClient.GetMetrics()
 		if err != nil {
 			glog.Warningf("Error getting metrics from dnsmasq: %v", err)
 			errorsCounter.Add(1)
