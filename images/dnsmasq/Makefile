@@ -15,7 +15,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty)
 REGISTRY ?= gcr.io/google-containers
 ARCH ?= amd64
-DNSMASQ_VERSION ?= dnsmasq-2.76
+DNSMASQ_VERSION ?= dnsmasq-2.78
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
