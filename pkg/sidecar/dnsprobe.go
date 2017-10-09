@@ -94,7 +94,7 @@ func (p *dnsProbe) registerMetrics(options *Options) {
 		Namespace: options.PrometheusNamespace,
 		Subsystem: dnsProbeSubsystem,
 		Name:      p.Label + "_probe_kubedns_latency_ms",
-		Help:      "Latency of the DNS probe request " + p.Label
+		Help:      "Latency of the DNS probe request " + p.Label,
 		Buckets:   prometheus.LinearBuckets(0, 10, 500),
 	})
 	prometheus.MustRegister(p.latencyHistogram)
