@@ -93,7 +93,7 @@ func (p *dnsProbe) registerMetrics(options *Options) {
 	p.latencyHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: options.PrometheusNamespace,
 		Subsystem: dnsProbeSubsystem,
-		Name:      p.Label + "_probe_latency_ms",
+		Name:      p.Label + "_probe_kubedns_latency_ms",
 		Help:      "Latency of the DNS probe request " + p.Label
 		Buckets:   prometheus.LinearBuckets(0, 10, 500),
 	})
@@ -102,7 +102,7 @@ func (p *dnsProbe) registerMetrics(options *Options) {
 	p.errorCount = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: options.PrometheusNamespace,
 		Subsystem: dnsProbeSubsystem,
-		Name:      p.Label + "_probe_errors",
+		Name:      p.Label + "_probe_kubedns_errors",
 		Help:      "Count of errors in name resolution of " + p.Label,
 	})
 	prometheus.MustRegister(p.errorCount)
