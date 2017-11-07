@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/dns/pkg/version"
 )
 
 type KubeDNSServer struct {
@@ -103,8 +105,13 @@ func newKubeClient(dnsConfig *options.KubeDNSConfig) (kubernetes.Interface, erro
 	}
 	// Use protobufs for communication with apiserver.
 	config.ContentType = "application/vnd.kubernetes.protobuf"
+	config.UserAgent = userAgent()
 
 	return kubernetes.NewForConfig(config)
+}
+
+func userAgent() string {
+	return fmt.Sprintf("kube-dns/%s (%s/%s)", version.VERSION, runtime.GOOS, runtime.GOARCH)
 }
 
 func (server *KubeDNSServer) Run() {
