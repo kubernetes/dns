@@ -200,8 +200,9 @@ func validateNameServer(nameServer string) (string, error) {
 func (d *KubeDNSServer) startSkyDNSServer() {
 	glog.V(0).Infof("Starting SkyDNS server (%v:%v)", d.dnsBindAddress, d.dnsPort)
 	skydnsConfig := &server.Config{
-		Domain:  d.domain,
-		DnsAddr: fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
+		Domain:     d.domain,
+		DnsAddr:    fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
+		RoundRobin: true,
 	}
 	if d.nameServers != "" {
 		for _, nameServer := range strings.Split(d.nameServers, ",") {
