@@ -83,6 +83,6 @@ func exportMetrics(metrics *dnsmasq.Metrics) {
 		newValue := previousValue + delta
 		// Update cache to new value.
 		countersCache[key] = newValue
-		counters[key].Add(newValue)
+		counters[key].Add(delta)
 	}
 }
