@@ -16,16 +16,16 @@ limitations under the License.
 
 package sidecar
 
-import(
+import (
 	"testing"
 
-	"k8s.io/dns/pkg/dnsmasq"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/dns/pkg/dnsmasq"
 )
 
 // initMetrics initializes dnsmasq.Metrics with values for testing.
 func initMetrics(metricsList []*dnsmasq.Metrics, values []int64) {
-	defineDnsmasqMetrics(&Options{PrometheusNamespace:"dnsmasq"})
+	defineDnsmasqMetrics(&Options{PrometheusNamespace: "dnsmasq"})
 	for i := range metricsList {
 		metricsList[i] = &dnsmasq.Metrics{}
 		for j := range dnsmasq.AllMetrics {
@@ -39,7 +39,7 @@ func initMetrics(metricsList []*dnsmasq.Metrics, values []int64) {
 // TestExportMetrics tests if our countersCache works as expected.
 func TestExportMetrics(t *testing.T) {
 	var m1, m2, m3 *dnsmasq.Metrics
-        l := []*dnsmasq.Metrics{m1, m2, m3}
+	l := []*dnsmasq.Metrics{m1, m2, m3}
 
 	testMetricValues := []int64{10, 20, 30, 40, 50}
 	initMetrics(l, testMetricValues)
@@ -47,7 +47,7 @@ func TestExportMetrics(t *testing.T) {
 	for i := range l {
 		exportMetrics(l[i])
 		for j := range dnsmasq.AllMetrics {
-			assert.Equal(t, countersCache[dnsmasq.AllMetrics[j]], float64(testMetricValues[j] * int64(i+1)))
+			assert.Equal(t, countersCache[dnsmasq.AllMetrics[j]], float64(testMetricValues[j]*int64(i+1)))
 		}
 	}
 }
