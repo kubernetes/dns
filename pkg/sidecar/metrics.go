@@ -27,7 +27,9 @@ import (
 )
 
 var (
-	gauges = make(map[dnsmasq.MetricName]prometheus.Gauge)
+	counters = make(map[dnsmasq.MetricName]prometheus.Counter)
+
+	countersCache = make(map[dnsmasq.MetricName]float64)
 
 	errorsCounter prometheus.Counter
 )
@@ -35,44 +37,44 @@ var (
 func defineDnsmasqMetrics(options *Options) {
 	const dnsmasqSubsystem = "dnsmasq"
 
-	gauges[dnsmasq.CacheHits] = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	counters[dnsmasq.CacheHits] = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Namespace: options.PrometheusNamespace,
 			Subsystem: dnsmasqSubsystem,
 			Name:      "hits",
 			Help:      "Number of DNS cache hits (from start of process)",
 		})
-	gauges[dnsmasq.CacheMisses] = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	counters[dnsmasq.CacheMisses] = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Namespace: options.PrometheusNamespace,
 			Subsystem: dnsmasqSubsystem,
 			Name:      "misses",
 			Help:      "Number of DNS cache misses (from start of process)",
 		})
-	gauges[dnsmasq.CacheEvictions] = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	counters[dnsmasq.CacheEvictions] = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Namespace: options.PrometheusNamespace,
 			Subsystem: dnsmasqSubsystem,
 			Name:      "evictions",
 			Help:      "Counter of DNS cache evictions (from start of process)",
 		})
-	gauges[dnsmasq.CacheInsertions] = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	counters[dnsmasq.CacheInsertions] = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Namespace: options.PrometheusNamespace,
 			Subsystem: dnsmasqSubsystem,
 			Name:      "insertions",
 			Help:      "Counter of DNS cache insertions (from start of process)",
 		})
-	gauges[dnsmasq.CacheSize] = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	counters[dnsmasq.CacheSize] = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Namespace: options.PrometheusNamespace,
 			Subsystem: dnsmasqSubsystem,
 			Name:      "max_size",
 			Help:      "Maximum size of the DNS cache",
 		})
 
-	for i := range gauges {
-		prometheus.MustRegister(gauges[i])
+	for i := range counters {
+		prometheus.MustRegister(counters[i])
 	}
 
 	errorsCounter = prometheus.NewCounter(
