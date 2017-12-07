@@ -71,6 +71,10 @@ type KubeDNS struct {
 	// disabled.
 	configMap string
 
+	// The namespace which kube-dns with serve on. If not specified, kube-dns will
+	// serve on all namespaces.
+	namespace string
+
 	// endpointsStore that contains all the endpoints in the system.
 	endpointsStore kcache.Store
 	// servicesStore that contains all the services in the system.
@@ -120,9 +124,10 @@ type KubeDNS struct {
 	initialSyncTimeout time.Duration
 }
 
-func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.Duration, configSync config.Sync) *KubeDNS {
+func NewKubeDNS(client clientset.Interface, clusterDomain, namespace string, timeout time.Duration, configSync config.Sync) *KubeDNS {
 	kd := &KubeDNS{
 		kubeClient:          client,
+		namespace:           namespace,
 		domain:              clusterDomain,
 		cache:               treecache.NewTreeCache(),
 		cacheLock:           sync.RWMutex{},
@@ -207,12 +212,18 @@ func (kd *KubeDNS) GetCacheAsJSON() (string, error) {
 }
 
 func (kd *KubeDNS) setServicesStore() {
+	// Set namespace.
+	namespace := v1.NamespaceAll
+	if kd.namespace != "" {
+		namespace = kd.namespace
+	}
+
 	// Returns a cache.ListWatch that gets all changes to services.
 	kd.servicesStore, kd.serviceController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
 			kd.kubeClient.Core().RESTClient(),
 			"services",
-			v1.NamespaceAll,
+			namespace,
 			fields.Everything()),
 		&v1.Service{},
 		resyncPeriod,
@@ -225,12 +236,18 @@ func (kd *KubeDNS) setServicesStore() {
 }
 
 func (kd *KubeDNS) setEndpointsStore() {
+	// Set namespace.
+	namespace := v1.NamespaceAll
+	if kd.namespace != "" {
+		namespace = kd.namespace
+	}
+
 	// Returns a cache.ListWatch that gets all changes to endpoints.
 	kd.endpointsStore, kd.endpointsController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
 			kd.kubeClient.Core().RESTClient(),
 			"endpoints",
-			v1.NamespaceAll,
+			namespace,
 			fields.Everything()),
 		&v1.Endpoints{},
 		resyncPeriod,
