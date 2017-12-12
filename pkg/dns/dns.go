@@ -50,13 +50,6 @@ const (
 
 	// Resync period for the kube controller loop.
 	resyncPeriod = 5 * time.Minute
-
-	// Duration for which the TTL cache should hold the node resource to retrieve the zone
-	// annotation from it so that it could be added to federation CNAMEs. There is ideally
-	// no need to expire this cache, but we don't want to assume that node annotations
-	// never change. So we expire the cache and retrieve a node once every 180 seconds.
-	// The value is chosen to be neither too long nor too short.
-	nodeCacheTTL = 180 * time.Second
 )
 
 type KubeDNS struct {
