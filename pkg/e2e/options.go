@@ -18,7 +18,7 @@ package e2e
 
 const (
 	etcdImage      = "quay.io/coreos/etcd:v3.0.14"
-	hyperkubeImage = "gcr.io/google_containers/hyperkube:v1.5.1"
+	hyperkubeImage = "k8s.gcr.io/hyperkube:v1.5.1"
 )
 
 type Options struct {
