@@ -35,7 +35,7 @@ CONTAINER_BINARIES := \
 # List of images to build (contained in images/)
 IMAGES := dnsmasq
 # Registry to push to.
-REGISTRY ?= gcr.io/google_containers
+REGISTRY ?= k8s.gcr.io
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
