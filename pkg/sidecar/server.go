@@ -18,6 +18,7 @@ package sidecar
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -66,6 +67,18 @@ func (s *server) Run(options *Options) {
 	}
 
 	s.runMetrics(options)
+
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, "ok (%v)\n", time.Now())
+	})
+
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:9000", nil)
+
+		if err != nil {
+			glog.Fatalf("Error starting metrics server: %v", err)
+		}
+	}()
 }
 
 func (s *server) runMetrics(options *Options) {
@@ -79,14 +92,18 @@ func (s *server) runMetrics(options *Options) {
 			s.statsdClient.Incr("errors", nil, 1)
 		} else {
 			glog.V(3).Infof("DnsMasq metrics %+v", metrics)
-			s.exportMetrics(metrics)
+			err := s.exportMetrics(metrics)
+
+			if err != nil {
+				glog.Warningf("Error sending metrics to statsd: %v", err)
+			}
 		}
 
 		time.Sleep(time.Duration(options.DnsMasqPollIntervalMs) * time.Millisecond)
 	}
 }
 
-func (s *server) exportMetrics(metrics *dnsmasq.Metrics) {
+func (s *server) exportMetrics(metrics *dnsmasq.Metrics) error {
 	for key := range *metrics {
 		// Retrieve the previous value of the metric and get the delta
 		// between the previous and current values. Add the delta to the
@@ -99,6 +116,12 @@ func (s *server) exportMetrics(metrics *dnsmasq.Metrics) {
 		countersCache[key] = newValue
 
 		// Could this be a gauge and the above messing removed?
-		s.statsdClient.Count(fmt.Sprintf("%s", key), delta, nil, 1)
+		err := s.statsdClient.Count(fmt.Sprintf("%s", key), delta, nil, 1)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }

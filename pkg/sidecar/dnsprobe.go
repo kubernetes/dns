@@ -101,12 +101,17 @@ func (p *dnsProbe) loop() {
 			err = fmt.Errorf("no RRs for domain %q", p.Name)
 		}
 
-		p.update(err, latency)
+		err = p.update(err, latency)
+
+		if err != nil {
+			glog.Warningf("error during dns probe update: %v", err)
+		}
+
 		p.delayer.Sleep(latency)
 	}
 }
 
-func (p *dnsProbe) update(err error, latency time.Duration) {
+func (p *dnsProbe) update(err error, latency time.Duration) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -114,13 +119,13 @@ func (p *dnsProbe) update(err error, latency time.Duration) {
 		p.lastResolveLatency = latency
 		p.lastError = nil
 
-		p.statsdClient.Histogram(fmt.Sprintf("%s.latency", p.Label), latency.Seconds()*1000, nil, 1)
+		return p.statsdClient.Histogram(fmt.Sprintf("%s.latency", p.Label), latency.Seconds()*1000, nil, 1)
 	} else {
 		glog.V(3).Infof("DNS resolution error for %v: %v", p.Label, err)
 		p.lastResolveLatency = 0
 		p.lastError = err
 
-		p.statsdClient.Incr(fmt.Sprintf("%s.errors", p.Label), nil, 1)
+		return p.statsdClient.Incr(fmt.Sprintf("%s.errors", p.Label), nil, 1)
 	}
 }
 
