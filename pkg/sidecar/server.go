@@ -17,11 +17,15 @@ limitations under the License.
 package sidecar
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/datadog/datadog-go/statsd"
 	"github.com/golang/glog"
 	"k8s.io/dns/pkg/dnsmasq"
 )
+
+var countersCache = make(map[dnsmasq.MetricName]int64)
 
 // Server that runs the dnsmasq-metrics daemon.
 type Server interface {
@@ -31,6 +35,7 @@ type Server interface {
 type server struct {
 	options       *Options
 	metricsClient dnsmasq.MetricsClient
+	statsdClient  *statsd.Client
 	probes        []*dnsProbe
 }
 
@@ -42,10 +47,20 @@ func NewServer() Server {
 // Run the server (does not return)
 func (s *server) Run(options *Options) {
 	s.options = options
+
+	statsdClient, err := statsd.New(fmt.Sprintf("%s:%d", options.DatadogAddr, options.DatadogPort))
+
+	if err != nil {
+		panic(err)
+	}
+
+	statsdClient.Namespace = options.DatadogNamespace
+	s.statsdClient = statsdClient
+
 	glog.Infof("Starting server (options %+v)", *s.options)
 
 	for _, probeOption := range options.Probes {
-		probe := &dnsProbe{DNSProbeOption: probeOption}
+		probe := &dnsProbe{DNSProbeOption: probeOption, statsdClient: statsdClient}
 		s.probes = append(s.probes, probe)
 		probe.Start(options)
 	}
@@ -54,35 +69,36 @@ func (s *server) Run(options *Options) {
 }
 
 func (s *server) runMetrics(options *Options) {
-	InitializeMetrics(options)
-
 	s.metricsClient = dnsmasq.NewMetricsClient(options.DnsMasqAddr, options.DnsMasqPort)
 
 	for {
 		metrics, err := s.metricsClient.GetMetrics()
+
 		if err != nil {
 			glog.Warningf("Error getting metrics from dnsmasq: %v", err)
-			errorsCounter.Add(1)
+			s.statsdClient.Incr("errors", nil, 1)
 		} else {
 			glog.V(3).Infof("DnsMasq metrics %+v", metrics)
-			exportMetrics(metrics)
+			s.exportMetrics(metrics)
 		}
 
 		time.Sleep(time.Duration(options.DnsMasqPollIntervalMs) * time.Millisecond)
 	}
 }
 
-func exportMetrics(metrics *dnsmasq.Metrics) {
+func (s *server) exportMetrics(metrics *dnsmasq.Metrics) {
 	for key := range *metrics {
 		// Retrieve the previous value of the metric and get the delta
 		// between the previous and current values. Add the delta to the
 		// previous to get the proper value. This is needed because the
 		// Counter API does not allow us to set the counter to a value.
 		previousValue := countersCache[key]
-		delta := float64((*metrics)[key]) - previousValue
+		delta := (*metrics)[key] - previousValue
 		newValue := previousValue + delta
 		// Update cache to new value.
 		countersCache[key] = newValue
-		counters[key].Add(delta)
+
+		// Could this be a gauge and the above messing removed?
+		s.statsdClient.Count(fmt.Sprintf("%s", key), delta, nil, 1)
 	}
 }

@@ -40,10 +40,9 @@ type Options struct {
 
 	Probes []DNSProbeOption
 
-	PrometheusAddr      string
-	PrometheusPort      int
-	PrometheusPath      string
-	PrometheusNamespace string
+	DatadogAddr      string
+	DatadogPort      int
+	DatadogNamespace string
 }
 
 // NewOptions creates a new options struct with default values.
@@ -53,9 +52,8 @@ func NewOptions() *Options {
 		DnsMasqPort:           53,
 		DnsMasqPollIntervalMs: 5000,
 
-		PrometheusAddr:      "0.0.0.0",
-		PrometheusPort:      10054,
-		PrometheusPath:      "/metrics",
-		PrometheusNamespace: "kubedns",
+		DatadogAddr:      "0.0.0.0",
+		DatadogPort:      8125,
+		DatadogNamespace: "kubedns",
 	}
 }

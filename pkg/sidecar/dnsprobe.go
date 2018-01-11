@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/datadog/datadog-go/statsd"
 	"github.com/golang/glog"
 	"github.com/miekg/dns"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // loopDelayer encapsulates the delay-loop timing logic. This
@@ -64,8 +64,8 @@ type dnsProbe struct {
 	lock               sync.Mutex
 	lastResolveLatency time.Duration
 	lastError          error
-	latencyHistogram   prometheus.Histogram
-	errorCount         prometheus.Counter
+	statsdClient       *statsd.Client
+
 	// loopDelay to use. If set to nil, dnsProbe will use
 	// defaultLoopDelayer.
 	delayer loopDelayer
@@ -77,7 +77,6 @@ func (p *dnsProbe) Start(options *Options) {
 	p.lastError = fmt.Errorf("waiting for first probe")
 
 	http.HandleFunc("/healthcheck/"+p.Label, p.httpHandler)
-	p.registerMetrics(options)
 
 	if p.delayer == nil {
 		glog.V(4).Infof("Using defaultLoopDelayer")
@@ -85,27 +84,6 @@ func (p *dnsProbe) Start(options *Options) {
 	}
 
 	go p.loop()
-}
-
-func (p *dnsProbe) registerMetrics(options *Options) {
-	const dnsProbeSubsystem = "probe"
-
-	p.latencyHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: options.PrometheusNamespace,
-		Subsystem: dnsProbeSubsystem,
-		Name:      p.Label + "_latency_ms",
-		Help:      "Latency of the DNS probe request " + p.Label,
-		Buckets:   prometheus.ExponentialBuckets(0.25, 2, 16), // from 0.25ms to 8 seconds
-	})
-	prometheus.MustRegister(p.latencyHistogram)
-
-	p.errorCount = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: options.PrometheusNamespace,
-		Subsystem: dnsProbeSubsystem,
-		Name:      p.Label + "_errors",
-		Help:      "Count of errors in name resolution of " + p.Label,
-	})
-	prometheus.MustRegister(p.errorCount)
 }
 
 func (p *dnsProbe) loop() {
@@ -136,13 +114,13 @@ func (p *dnsProbe) update(err error, latency time.Duration) {
 		p.lastResolveLatency = latency
 		p.lastError = nil
 
-		p.latencyHistogram.Observe(latency.Seconds() * 1000)
+		p.statsdClient.Histogram(fmt.Sprintf("%s.latency", p.Label), latency.Seconds()*1000, nil, 1)
 	} else {
 		glog.V(3).Infof("DNS resolution error for %v: %v", p.Label, err)
 		p.lastResolveLatency = 0
 		p.lastError = err
 
-		p.errorCount.Add(1)
+		p.statsdClient.Incr(fmt.Sprintf("%s.errors", p.Label), nil, 1)
 	}
 }
 

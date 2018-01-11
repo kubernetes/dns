@@ -40,7 +40,7 @@ func (d *mockLoopDelayer) Sleep(latency time.Duration) {
 
 func makeOptions(label string, addr string, port int) *Options {
 	return &Options{
-		PrometheusNamespace: "test",
+		DatadogNamespace: "test",
 		Probes: []DNSProbeOption{
 			{
 				Label:    label,
