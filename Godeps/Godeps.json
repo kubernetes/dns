@@ -10,11 +10,6 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "bitbucket.org/ww/goautoneg",
-			"Comment": "null-5",
-			"Rev": "75cd24fc2f2c2a2088577d12123ddee5f54e0675"
-		},
-		{
 			"ImportPath": "github.com/PuerkitoBio/purell",
 			"Comment": "v1.1.0",
 			"Rev": "0bcb03f4b4d0a9428594752bd2a3b9aa0a9d4bd4"
@@ -51,6 +46,11 @@
 			"ImportPath": "github.com/coreos/go-systemd/activation",
 			"Comment": "v14-11-g7c95333",
 			"Rev": "7c9533367ef925dc1078d75e5b7141e10da2c4e8"
+		},
+		{
+			"ImportPath": "github.com/datadog/datadog-go/statsd",
+			"Comment": "1.1.0-16-g4d2e569",
+			"Rev": "4d2e5696ebe914940bd7459d2266fb7d555ea1b7"
 		},
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
