@@ -145,15 +145,12 @@ func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 			" <type> is one of ANY, A, AAAA, SRV."+
 			" Example: 'mydns,127.0.0.1:53,example.com,10,A'.")
 	flagSet.StringVar(
-		&opt.PrometheusAddr, "prometheus-addr", opt.PrometheusAddr,
-		"http addr to bind metrics server to")
+		&opt.DatadogAddr, "datadog-addr", opt.DatadogAddr,
+		"dogstatsd host")
 	flagSet.IntVar(
-		&opt.PrometheusPort, "prometheus-port", opt.PrometheusPort,
-		"http port to use to export prometheus metrics")
+		&opt.DatadogPort, "datadog-port", opt.DatadogPort,
+		"dogstatsd port")
 	flagSet.StringVar(
-		&opt.PrometheusPath, "prometheus-path", opt.PrometheusPath,
-		"http path used to export metrics")
-	flagSet.StringVar(
-		&opt.PrometheusNamespace, "prometheus-namespace", opt.PrometheusNamespace,
-		"prometheus metric namespace")
+		&opt.DatadogNamespace, "datadog-namespace", opt.DatadogNamespace,
+		"datadog metric namespace")
 }
