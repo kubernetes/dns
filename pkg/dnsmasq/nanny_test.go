@@ -92,6 +92,20 @@ func TestNannyConfig(t *testing.T) {
 				"--no-resolv",
 			},
 		},
+		{
+			c: &config.Config{
+				UpstreamNameservers: []string{"2001:db8:1::1", "[2001:db8:2::2]", "[2001:db8:3::3]:53"}},
+			e: []string{
+				"--abc",
+				"--server",
+				"2001:db8:1::1",
+				"--server",
+				"[2001:db8:2::2]",
+				"--server",
+				"[2001:db8:3::3]#53",
+				"--no-resolv",
+			},
+		},
 	} {
 		nanny := &Nanny{Exec: "dnsmasq"}
 		nanny.Configure([]string{"--abc"}, testCase.c)

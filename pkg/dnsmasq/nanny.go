@@ -56,7 +56,15 @@ func (n *Nanny) Configure(args []string, config *config.Config) {
 	n.args = args
 
 	munge := func(s string) string {
-		return strings.Replace(s, ":", "#", -1)
+		if colonIndex := strings.LastIndex(s, ":"); colonIndex != -1 {
+			bracketIndex := strings.Index(s, "]")
+			isV4 := strings.Count(s, ":") == 1
+			isBracketedV6 := bracketIndex != -1
+			if isV4 || isBracketedV6 && colonIndex > bracketIndex {
+				s = s[:colonIndex] + "#" + s[colonIndex+1:]
+			}
+		}
+		return s
 	}
 
 	for domain, serverList := range config.StubDomains {

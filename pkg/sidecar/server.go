@@ -74,6 +74,15 @@ func (s *server) runMetrics(options *Options) {
 
 func exportMetrics(metrics *dnsmasq.Metrics) {
 	for key := range *metrics {
-		gauges[key].Set(float64((*metrics)[key]))
+		// Retrieve the previous value of the metric and get the delta
+		// between the previous and current values. Add the delta to the
+		// previous to get the proper value. This is needed because the
+		// Counter API does not allow us to set the counter to a value.
+		previousValue := countersCache[key]
+		delta := float64((*metrics)[key]) - previousValue
+		newValue := previousValue + delta
+		// Update cache to new value.
+		countersCache[key] = newValue
+		counters[key].Add(delta)
 	}
 }

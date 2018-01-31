@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/dns/pkg/version"
 )
 
 type KubeDNSServer struct {
@@ -104,8 +105,13 @@ func newKubeClient(dnsConfig *options.KubeDNSConfig) (kubernetes.Interface, erro
 	}
 	// Use protobufs for communication with apiserver.
 	config.ContentType = "application/vnd.kubernetes.protobuf"
+	config.UserAgent = userAgent()
 
 	return kubernetes.NewForConfig(config)
+}
+
+func userAgent() string {
+	return fmt.Sprintf("kube-dns/%s (%s/%s)", version.VERSION, runtime.GOOS, runtime.GOARCH)
 }
 
 func (server *KubeDNSServer) Run() {
@@ -172,6 +178,25 @@ func validateHostAndPort(hostAndPort string) error {
 	return nil
 }
 
+// validateNameServer validates a configured name server and
+// appends a ":53" if a :port is not included. IPv6 addresses are also
+// enclosed in square brackets if not already so enclosed.
+func validateNameServer(nameServer string) (string, error) {
+	if ip := net.ParseIP(nameServer); ip != nil {
+		if ip.To4() != nil {
+			// IPv4 without port
+			nameServer = nameServer + ":53"
+		} else {
+			// IPv6 without port
+			nameServer = "[" + nameServer + "]:53"
+		}
+		return nameServer, nil
+	}
+	// Assume it's IP:port
+	err := validateHostAndPort(nameServer)
+	return nameServer, err
+}
+
 func (d *KubeDNSServer) startSkyDNSServer() {
 	glog.V(0).Infof("Starting SkyDNS server (%v:%v)", d.dnsBindAddress, d.dnsPort)
 	skydnsConfig := &server.Config{
@@ -180,14 +205,11 @@ func (d *KubeDNSServer) startSkyDNSServer() {
 	}
 	if d.nameServers != "" {
 		for _, nameServer := range strings.Split(d.nameServers, ",") {
-			r, _ := regexp.Compile(":\\d+$")
-			if !r.MatchString(nameServer) {
-				nameServer = nameServer + ":53"
+			server, err := validateNameServer(nameServer)
+			if err != nil {
+				glog.Fatalf("nameserver '%s' is invalid: %v\n", nameServer, err)
 			}
-			if err := validateHostAndPort(nameServer); err != nil {
-				glog.Fatalf("nameserver is invalid: %s", err)
-			}
-			skydnsConfig.Nameservers = append(skydnsConfig.Nameservers, nameServer)
+			skydnsConfig.Nameservers = append(skydnsConfig.Nameservers, server)
 		}
 	}
 	server.SetDefaults(skydnsConfig)

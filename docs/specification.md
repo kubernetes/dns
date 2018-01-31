@@ -11,7 +11,7 @@ is intended to provide a baseline for commonality between implementations.
 
 ## 1 - Schema Version
 
-This document describes version 1.0.0 of the schema.
+This document describes version 1.0.1 of the schema.
 
 ## 2 - Resource Records
 
@@ -171,7 +171,21 @@ Given a _ready_ endpoint with _hostname_ of `<hostname>` and IP address
 - Answer Example:
   - `100.0.3.10.in-addr.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
 
-### 2.5 - Deprecated Records
+### 2.5 - Records for External Name Services
+
+Given a Service named `<service>` in Namespace `<ns>` with ExternalName `<extname>`,
+a `CNAME` record named `<service>.<ns>.svc.<zone>` pointing to `<extname>` must
+exist.
+
+- Record Format:
+  - `<service>.<ns>.svc.<zone>. <ttl> IN CNAME <extname>.`
+- Question Example:
+  - `foo.default.svc.cluster.local. IN A`
+- Answer Example:
+  - `foo.default.svc.cluster.local. 10 IN CNAME www.example.com.`
+  - `www.example.com. 28715 IN A 192.0.2.53`
+
+### 2.6 - Deprecated Records
 Kube-DNS versions prior to implementation of this specification also replied
 with an `A` record of the form below for any values of `<a>`, `<b>`, `<c>`, and `<d>` between 0 and 255:
 - Record Format:
