@@ -676,6 +676,9 @@ func (kd *KubeDNS) getRecordsForPath(path []string, exact bool) ([]skymsg.Servic
 	if kd.isPodRecord(path) {
 		ip, err := kd.getPodIP(path)
 		if err == nil {
+			if ip == "" {
+				return []skymsg.Service{}, nil
+			}
 			skyMsg, _ := util.GetSkyMsg(ip, 0)
 			return []skymsg.Service{*skyMsg}, nil
 		}
@@ -791,6 +794,14 @@ func (kd *KubeDNS) getPodIP(path []string) (string, error) {
 	ip := strings.Replace(ipStr, "-", ".", -1)
 	if parsed := net.ParseIP(ip); parsed != nil {
 		return ip, nil
+	} else {
+		namespace := path[len(kd.domainPath)+1]
+		podName := path[len(kd.domainPath)+2]
+		pod, err := kd.kubeClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+		if err != nil {
+			return "", nil
+		}
+		return pod.Status.PodIP, nil
 	}
 	return "", fmt.Errorf("Invalid IP Address %v", ip)
 }
