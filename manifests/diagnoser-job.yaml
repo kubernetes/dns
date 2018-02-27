@@ -1,0 +1,13 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: diagnoser
+spec:
+  template:
+    metadata:
+      name: diagnoser
+    spec:
+      containers:
+      - name: diagnoser
+        image: gcr.io/google_containers/k8s-dns-diagnoser-amd64:1.14.30
+      restartPolicy: Never
