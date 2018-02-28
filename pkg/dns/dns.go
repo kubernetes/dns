@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	kcache "k8s.io/client-go/tools/cache"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -34,6 +34,8 @@ import (
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/dns/treecache"
 	"k8s.io/dns/pkg/dns/util"
+	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/golang/glog"
@@ -256,7 +258,7 @@ func (kd *KubeDNS) newService(obj interface{}) {
 			return
 		}
 		// if ClusterIP is not set, a DNS entry should not be created
-		if !v1.IsServiceIPSet(service) {
+		if !helper.IsServiceIPSet(service) {
 			if err := kd.newHeadlessService(service); err != nil {
 				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
 			}
@@ -281,7 +283,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
-		if v1.IsServiceIPSet(s) {
+		if helper.IsServiceIPSet(s) {
 			delete(kd.reverseRecordMap, s.Spec.ClusterIP)
 			delete(kd.clusterIPServiceMap, s.Spec.ClusterIP)
 		}
@@ -330,7 +332,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 	// svc is same for both old and new endpoints
 	svc, err := kd.getServiceFromEndpoints(oldEndpoints)
 	if svc != nil && err == nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !helper.IsServiceIPSet(svc) {
 			for idx := range oldEndpoints.Subsets {
 				for subIdx := range oldEndpoints.Subsets[idx].Addresses {
 					address := &oldEndpoints.Subsets[idx].Addresses[subIdx]
@@ -386,7 +388,7 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 		return
 	}
 	if svc != nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !helper.IsServiceIPSet(svc) {
 			kd.cacheLock.Lock()
 			defer kd.cacheLock.Unlock()
 			// When endpoints for Named headless services deleted, delete old reverse dns records.
@@ -408,7 +410,7 @@ func (kd *KubeDNS) addDNSUsingEndpoints(e *v1.Endpoints) error {
 	if err != nil {
 		return err
 	}
-	if svc == nil || v1.IsServiceIPSet(svc) {
+	if svc == nil || helper.IsServiceIPSet(svc) {
 		// No headless service found corresponding to endpoints object.
 		return nil
 	}
@@ -924,8 +926,8 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// Select a node (arbitrarily the first node) that has
 		// `LabelZoneFailureDomain` and `LabelZoneRegion` set.
 		for _, nodeItem := range nodeList.Items {
-			_, zfound := nodeItem.Labels[metav1.LabelZoneFailureDomain]
-			_, rfound := nodeItem.Labels[metav1.LabelZoneRegion]
+			_, zfound := nodeItem.Labels[kubeletapis.LabelZoneFailureDomain]
+			_, rfound := nodeItem.Labels[kubeletapis.LabelZoneRegion]
 			if !zfound || !rfound {
 				continue
 			}
@@ -943,11 +945,11 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		return "", "", fmt.Errorf("Could not find any nodes")
 	}
 
-	zone, ok := node.Labels[metav1.LabelZoneFailureDomain]
+	zone, ok := node.Labels[kubeletapis.LabelZoneFailureDomain]
 	if !ok || zone == "" {
 		return "", "", fmt.Errorf("unknown cluster zone")
 	}
-	region, ok := node.Labels[metav1.LabelZoneRegion]
+	region, ok := node.Labels[kubeletapis.LabelZoneRegion]
 	if !ok || region == "" {
 		return "", "", fmt.Errorf("unknown cluster region")
 	}
