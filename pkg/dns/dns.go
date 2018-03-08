@@ -408,7 +408,7 @@ func (kd *KubeDNS) addDNSUsingEndpoints(e *v1.Endpoints) error {
 	if err != nil {
 		return err
 	}
-	if svc == nil || v1.IsServiceIPSet(svc) {
+	if svc == nil || v1.IsServiceIPSet(svc) || svc.Spec.Type == v1.ServiceTypeExternalName {
 		// No headless service found corresponding to endpoints object.
 		return nil
 	}
