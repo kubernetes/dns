@@ -83,6 +83,11 @@ func exportMetrics(metrics *dnsmasq.Metrics) {
 		newValue := previousValue + delta
 		// Update cache to new value.
 		countersCache[key] = newValue
-		counters[key].Add(delta)
+		// Adding a negative delta will cause a panic.
+		if delta < 0 {
+			counters[key].Add(0)
+		} else {
+			counters[key].Add(delta)
+		}
 	}
 }
