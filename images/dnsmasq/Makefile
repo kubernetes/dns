@@ -75,6 +75,8 @@ BUILDSTAMP := $(subst :,_,$(subst /,_,$(REGISTRY))_$(IMAGE)_$(VERSION))
 CONTAINER_STAMP := .$(BUILDSTAMP)-container
 PUSH_STAMP := .$(BUILDSTAMP)-push
 
+DOCKER_PULL ?= 1
+
 ifeq ($(VERBOSE), 1)
 	VERBOSE_OUTPUT := >&1
 else
@@ -123,7 +125,9 @@ $(BINARY): Dockerfile.cross $(DNSMASQ_ARCHIVE) $(PATCHES) dnsmasq.conf
 ifeq ($(ARCH),amd64)
 	@cd $(OUTPUT_DIR)/docker && \
 		sed -i- "/__CROSS_BUILD_COPY__/d" Dockerfile && rm Dockerfile-
+ifeq (DOCKER_PULL, 1)
 	@docker pull $(COMPILE_IMAGE)
+endif
 	@docker run --rm --sig-proxy=true \
 		-v `pwd`/$(OUTPUT_DIR):/build \
 		-v `pwd`:/src                 \
@@ -143,7 +147,9 @@ else
 	@docker run --sig-proxy=true --rm      \
 		--privileged $(MULTIARCH_CONTAINER)  \
 		--reset $(VERBOSE_OUTPUT)
+ifeq (DOCKER_PULL, 1)
 	@docker pull $(COMPILE_IMAGE)
+endif
 	@docker run --rm --sig-proxy=true \
 		-v `pwd`/$(OUTPUT_DIR):/build   \
 		-v `pwd`:/src                   \
@@ -165,8 +171,13 @@ containers: $(CONTAINER_STAMP)
 
 $(CONTAINER_STAMP): $(BINARY)
 	@echo "container:" $(REGISTRY)/$(IMAGE):$(VERSION)
+ifeq (DOCKER_PULL, 1)
 	@docker build --pull \
 		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR)/docker > $@
+else
+	@docker build \
+		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR)/docker > $@
+endif
 
 .PHONY: test
 test: containers
