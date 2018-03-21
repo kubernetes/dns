@@ -40,7 +40,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     echo export PATH=$PATH:/go/bin | tee -a /etc/profile
-    go get github.com/jteeuwen/go-bindata/go-bindata github.com/tools/godep  
+    go get github.com/jteeuwen/go-bindata/go-bindata github.com/golang/dep
   SHELL
   
 end

@@ -17,9 +17,17 @@ type Verifier interface {
 	Verified() bool
 }
 
-// NewDigestVerifier is deprecated. Please use Digest.Verifier.
+// NewDigestVerifier returns a verifier that compares the written bytes
+// against a passed in digest.
 func NewDigestVerifier(d Digest) (Verifier, error) {
-	return d.Verifier(), nil
+	if err := d.Validate(); err != nil {
+		return nil, err
+	}
+
+	return hashVerifier{
+		hash:   d.Algorithm().Hash(),
+		digest: d,
+	}, nil
 }
 
 type hashVerifier struct {

@@ -96,8 +96,7 @@ func ConcatJSON(blobs ...[]byte) []byte {
 
 	last := len(blobs) - 1
 	var opening, closing byte
-	a := 0
-	idx := 0
+	var idx, a int
 	buf := bytes.NewBuffer(nil)
 
 	for i, b := range blobs {
@@ -237,6 +236,8 @@ func newNameIndex(tpe reflect.Type) nameIndex {
 
 // GetJSONNames gets all the json property names for a type
 func (n *NameProvider) GetJSONNames(subject interface{}) []string {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 	tpe := reflect.Indirect(reflect.ValueOf(subject)).Type()
 	names, ok := n.index[tpe]
 	if !ok {
@@ -258,6 +259,8 @@ func (n *NameProvider) GetJSONName(subject interface{}, name string) (string, bo
 
 // GetJSONNameForType gets the json name for a go property name on a given type
 func (n *NameProvider) GetJSONNameForType(tpe reflect.Type, name string) (string, bool) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 	names, ok := n.index[tpe]
 	if !ok {
 		names = n.makeNameIndex(tpe)
@@ -267,8 +270,6 @@ func (n *NameProvider) GetJSONNameForType(tpe reflect.Type, name string) (string
 }
 
 func (n *NameProvider) makeNameIndex(tpe reflect.Type) nameIndex {
-	n.lock.Lock()
-	defer n.lock.Unlock()
 	names := newNameIndex(tpe)
 	n.index[tpe] = names
 	return names
@@ -282,6 +283,8 @@ func (n *NameProvider) GetGoName(subject interface{}, name string) (string, bool
 
 // GetGoNameForType gets the go name for a given type for a json property name
 func (n *NameProvider) GetGoNameForType(tpe reflect.Type, name string) (string, bool) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 	names, ok := n.index[tpe]
 	if !ok {
 		names = n.makeNameIndex(tpe)

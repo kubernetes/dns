@@ -1,0 +1,82 @@
+# Gopkg.toml example
+#
+# Refer to https://golang.github.io/dep/docs/Gopkg.toml.html
+# for detailed Gopkg.toml documentation.
+#
+# required = ["github.com/user/thing/cmd/thing"]
+# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
+#
+# [[constraint]]
+#   name = "github.com/user/project"
+#   version = "1.0.0"
+#
+# [[constraint]]
+#   name = "github.com/user/project2"
+#   branch = "dev"
+#   source = "github.com/myfork/project2"
+#
+# [[override]]
+#   name = "github.com/x/y"
+#   version = "2.4.0"
+#
+# [prune]
+#   non-go = false
+#   go-tests = true
+#   unused-packages = true
+
+
+[[constraint]]
+  name = "github.com/coreos/etcd"
+  revision = "v3.1.0-rc.1-217-g61064a7b"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/golang/glog"
+
+[[constraint]]
+  name = "github.com/miekg/dns"
+  version = "1.0.4"
+
+[[constraint]]
+  name = "github.com/onsi/ginkgo"
+  version = "1.4.0"
+
+[[constraint]]
+  name = "github.com/onsi/gomega"
+  version = "1.3.0"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = "0.8.0"
+
+[[constraint]]
+  name = "github.com/skynetservices/skydns"
+  revision = "2a758afb327924d46fb5424e7286bff3f94a36ea"
+
+[[constraint]]
+  name = "github.com/spf13/pflag"
+  version = "1.0.0"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.2.1"
+
+[[constraint]]
+  name = "k8s.io/apiserver"
+  revision = "dd487397362dc1c0f8728ef0ebb7320dc6872f35"
+
+[[constraint]]
+  name = "k8s.io/client-go"
+  version = "3.0.0"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  revision = "85ace5365f33b16fc735c866a12e3c765b9700f2"
+
+[[constraint]]
+  name = "k8s.io/kubernetes"
+  revision = "326cf6c2d0e2d72b82e5014710f1b0cf1bacf3b4"
+
+[prune]
+  go-tests = true
+  unused-packages = true
