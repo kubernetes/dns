@@ -28,5 +28,4 @@ to accept your pull requests.
 ### Adding dependencies
 
 If your patch depends on new packages, add that package with
-[`godep`](https://github.com/tools/godep). Follow the [instructions to add a
-dependency](https://github.com/kubernetes/dns/blob/master/docs/go-dependencies.md).
+[`dep`](https://github.com/golang/dep).

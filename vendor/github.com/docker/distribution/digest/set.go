@@ -75,7 +75,7 @@ func (dst *Set) Lookup(d string) (Digest, error) {
 		alg        Algorithm
 		hex        string
 	)
-	dgst, err := Parse(d)
+	dgst, err := ParseDigest(d)
 	if err == ErrDigestInvalidFormat {
 		hex = d
 		searchFunc = func(i int) bool {
