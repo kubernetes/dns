@@ -32,15 +32,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/cache"
-
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/dns/treecache"
 	"k8s.io/dns/pkg/dns/util"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
 const (
@@ -718,8 +718,8 @@ func newNodes() *v1.NodeList {
 						// Note: The zone name here is an arbitrary string and doesn't exactly follow the
 						// format used by the cloud providers to name their zones. But that shouldn't matter
 						// for these tests here.
-						metav1.LabelZoneFailureDomain: "testcontinent-testreg-testzone",
-						metav1.LabelZoneRegion:        "testcontinent-testreg",
+						kubeletapis.LabelZoneFailureDomain: "testcontinent-testreg-testzone",
+						kubeletapis.LabelZoneRegion:        "testcontinent-testreg",
 					},
 				},
 			},
