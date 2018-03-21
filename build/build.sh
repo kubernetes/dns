@@ -36,7 +36,13 @@ if [ $GOARCH == "amd64" ]; then
     export GOBIN="$GOPATH/bin/linux_amd64"
 fi
 
+# ./vendor/... is specified to include installing binary from vendor folder.
+# Since Go 1.9, vendor matching will no longer work with ./...
+# (https://golang.org/doc/go1.9#vendor-dotdotdot).
+# This is currently required because our travis CI is expecting the ginkgo
+# binary. We might get rid of this after removing that dependency.
 go install                                                         \
     -installsuffix "static"                                        \
     -ldflags "-X ${PKG}/pkg/version.VERSION=${VERSION}"            \
-    ./...
+    ./...                                                          \
+    ./vendor/...
