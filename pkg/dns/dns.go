@@ -39,6 +39,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	skymsg "github.com/skynetservices/skydns/msg"
+	"github.com/skynetservices/skydns/server"
 )
 
 const (
@@ -56,6 +57,9 @@ type KubeDNS struct {
 	// kubeClient makes calls to API Server and registers calls with API Server
 	// to get Endpoints and Service objects.
 	kubeClient clientset.Interface
+
+	// skydns points to the skydns server instance for configuration syncing.
+	SkyDNSConfig *server.Config
 
 	// domain for which this DNS Server is authoritative.
 	domain string
@@ -135,6 +139,26 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 	return kd
 }
 
+func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
+	kd.configLock.Lock()
+	defer kd.configLock.Unlock()
+
+	if kd.SkyDNSConfig != nil {
+		var nameServers []string
+		for _, nameServer := range nextConfig.UpstreamNameservers {
+			if ip, port, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
+				glog.V(1).Infof("Invalid nameserver %q: %v", nameServer, err)
+				return
+			} else {
+				nameServers = append(nameServers, net.JoinHostPort(ip, port))
+			}
+		}
+		kd.SkyDNSConfig.Nameservers = nameServers
+	}
+	kd.config = nextConfig
+	glog.V(2).Infof("Configuration updated: %+v", *kd.config)
+}
+
 func (kd *KubeDNS) Start() {
 	glog.V(2).Infof("Starting endpointsController")
 	go kd.endpointsController.Run(wait.NeverStop)
@@ -183,7 +207,7 @@ func (kd *KubeDNS) startConfigMapSync() {
 			"Error getting initial ConfigMap: %v, starting with default values", err)
 		kd.config = config.NewDefaultConfig()
 	} else {
-		kd.config = initialConfig
+		kd.updateConfig(initialConfig)
 	}
 
 	go kd.syncConfigMap(kd.configSync.Periodic())
@@ -193,10 +217,7 @@ func (kd *KubeDNS) syncConfigMap(syncChan <-chan *config.Config) {
 	for {
 		nextConfig := <-syncChan
 
-		kd.configLock.Lock()
-		kd.config = nextConfig
-		glog.V(2).Infof("Configuration updated: %+v", *kd.config)
-		kd.configLock.Unlock()
+		kd.updateConfig(nextConfig)
 	}
 }
 

@@ -24,6 +24,7 @@ import (
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
+	"k8s.io/dns/pkg/dns/util"
 )
 
 // Config populated either from the configuration source (command
@@ -117,19 +118,10 @@ func (config *Config) validateUpstreamNameserver() error {
 		return fmt.Errorf("upstreamNameserver cannot have more than three entries")
 	}
 
-	for _, ns := range config.UpstreamNameservers {
-		// TODO(rramkumar): Use net.SplitHostPort to support ipv6 case.
-		nsStrings := strings.SplitN(ns, ":", 2)
-		// Validate port if specified
-		if len(nsStrings) == 2 {
-			if _, err := strconv.ParseUint(nsStrings[1], 10, 16); err != nil {
-				return fmt.Errorf("invalid nameserver: %q", ns)
-			}
-		}
-		if len(validation.IsValidIP(nsStrings[0])) > 0 {
-			return fmt.Errorf("invalid nameserver: %q", ns)
+	for _, nameServer := range config.UpstreamNameservers {
+		if _, _, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
+			return err
 		}
 	}
-
 	return nil
 }

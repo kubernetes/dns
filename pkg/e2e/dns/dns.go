@@ -31,12 +31,15 @@ import (
 
 // KubeDNS daemon
 type KubeDNS struct {
+	name      string
 	cmd       *exec.Cmd
 	isRunning bool
 }
 
-// Start kube DNS, passing in extra arguments
-func (kd *KubeDNS) Start(args ...string) {
+// Start kube DNS, passing in the desired process name and extra arguments
+func (kd *KubeDNS) Start(name string, args ...string) {
+	kd.name = name
+
 	fr := e2e.GetFramework()
 	bin := fr.Path("bin/amd64/kube-dns")
 
@@ -47,7 +50,7 @@ func (kd *KubeDNS) Start(args ...string) {
 		"--kubecfg-file", fr.Path("test/e2e/cluster/config"))
 
 	var err error
-	kd.cmd, err = fr.RunInBackground("kube-dns", bin, args...)
+	kd.cmd, err = fr.RunInBackground(kd.name, bin, args...)
 	if err != nil {
 		log.Fatal(err)
 	}
