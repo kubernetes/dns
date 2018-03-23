@@ -569,6 +569,12 @@ func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
 	kd.cache.SetEntry(service.Name, recordValue, fqdn, cachePath...)
 }
 
+// HasSynced returns true if the initial sync of services and endpoints
+// from the API server has completed
+func (kd *KubeDNS) HasSynced() bool {
+	return kd.endpointsController.HasSynced() && kd.serviceController.HasSynced()
+}
+
 // Records responds with DNS records that match the given name, in a format
 // understood by the skydns server. If "exact" is true, a single record
 // matching the given name is returned, otherwise all records stored under
