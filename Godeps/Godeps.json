@@ -392,7 +392,7 @@
 		{
 			"ImportPath": "github.com/skynetservices/skydns/server",
 			"Comment": "2.5.3a-48-g2a758af",
-			"Rev": "2a758afb327924d46fb5424e7286bff3f94a36ea"
+			"Rev": "4ecf023198fec9ab999f92b7379010761ff053d3"
 		},
 		{
 			"ImportPath": "github.com/skynetservices/skydns/singleflight",
