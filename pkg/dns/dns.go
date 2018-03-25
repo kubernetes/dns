@@ -159,11 +159,19 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 		case <-timeout:
 			glog.Fatalf("Timeout waiting for initialization")
 		case <-ticker.C:
-			if kd.endpointsController.HasSynced() && kd.serviceController.HasSynced() {
-				glog.V(0).Infof("Initialized services and endpoints from apiserver")
-				return
+			unsyncedResources := []string{}
+			if !kd.endpointsController.HasSynced() {
+				unsyncedResources = append(unsyncedResources, "endpoints")
 			}
-			glog.V(0).Infof("Waiting for services and endpoints to be initialized from apiserver...")
+			if !kd.serviceController.HasSynced() {
+				unsyncedResources = append(unsyncedResources, "services")
+			}
+			if len(unsyncedResources) > 0 {
+				glog.V(0).Infof("Waiting for %v to be initialized from apiserver...", unsyncedResources)
+				continue
+			}
+			glog.V(0).Infof("Initialized services and endpoints from apiserver")
+			return
 		}
 	}
 }
