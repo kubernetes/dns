@@ -56,7 +56,7 @@ DNSMASQ_URL := http://www.thekelleys.org.uk/dnsmasq/$(DNSMASQ_VERSION).tar.xz
 # gpg: Good signature from "Simon Kelley <simon@thekelleys.org.uk>" [unknown]
 # gpg:                 aka "Simon Kelley <srk@debian.org>" [unknown]
 # ...
-# $ sha256sum dnsmasq-2.78.tar.xz.asx
+# $ sha256sum dnsmasq-2.78.tar.xz
 DNSMASQ_SHA256 := 89949f438c74b0c7543f06689c319484bd126cc4b1f8c745c742ab397681252b
 DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
 
