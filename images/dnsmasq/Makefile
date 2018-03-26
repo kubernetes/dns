@@ -47,6 +47,17 @@ $(error Unsupported ARCH: $(ARCH))
 endif
 
 DNSMASQ_URL := http://www.thekelleys.org.uk/dnsmasq/$(DNSMASQ_VERSION).tar.xz
+# SHA-256 computed from GPG-verified download:
+# $ gpg --recv 15CDDA6AE19135A2
+# ...
+# $ gpg --verify dnsmasq-2.78.tar.xz.asc dnsmasq-2.78.tar.xz
+# gpg: Signature made Mon 02 Oct 2017 06:40:03 AM PDT
+# gpg:                using RSA key 15CDDA6AE19135A2
+# gpg: Good signature from "Simon Kelley <simon@thekelleys.org.uk>" [unknown]
+# gpg:                 aka "Simon Kelley <srk@debian.org>" [unknown]
+# ...
+# $ sha256sum dnsmasq-2.78.tar.xz.asx
+DNSMASQ_SHA256 := 89949f438c74b0c7543f06689c319484bd126cc4b1f8c745c742ab397681252b
 DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
 
 MULTIARCH_CONTAINER := multiarch/qemu-user-static:register
@@ -146,6 +157,8 @@ endif
 $(DNSMASQ_ARCHIVE):
 	@mkdir -p $(@D)
 	@curl -sSL $(DNSMASQ_URL) > $@
+	@echo "$(DNSMASQ_SHA256) $(DNSMASQ_ARCHIVE)" > $(@D)/sha256.txt
+	@sha256sum -c $(@D)/sha256.txt
 
 .PHONY: containers
 containers: $(CONTAINER_STAMP)
