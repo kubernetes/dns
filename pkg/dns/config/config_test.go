@@ -38,6 +38,7 @@ func TestValidate(t *testing.T) {
 		{UpstreamNameservers: []string{}},
 		{UpstreamNameservers: []string{"1.2.3.4"}},
 		{UpstreamNameservers: []string{"1.2.3.4", "8.8.4.4", "8.8.8.8"}},
+		{UpstreamNameservers: []string{"1.2.3.4:53"}},
 	} {
 		err := testCase.Validate()
 		assert.Nil(t, err, "should be valid: %+v", testCase)
@@ -51,6 +52,7 @@ func TestValidate(t *testing.T) {
 		{StubDomains: map[string][]string{"foo": []string{"$$$$"}}},
 		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4:65564"}}},
 		{UpstreamNameservers: []string{"1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"}},
+		{UpstreamNameservers: []string{"1.1.1.1:abc", "1.1.1.1:", "1.1.1.1:123456789"}},
 	} {
 		err := testCase.Validate()
 		assert.NotNil(t, err, "should not be valid: %+v", testCase)

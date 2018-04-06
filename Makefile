@@ -35,11 +35,11 @@ CONTAINER_BINARIES := \
 # List of images to build (contained in images/)
 IMAGES := dnsmasq
 # Registry to push to.
-REGISTRY ?= gcr.io/google_containers
+REGISTRY ?= staging-k8s.gcr.io
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.8-alpine
+BUILD_IMAGE ?= golang:1.9.3-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
 

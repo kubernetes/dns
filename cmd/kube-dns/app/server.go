@@ -18,12 +18,10 @@ package app
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -73,7 +71,7 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 
 	default:
 		glog.V(0).Infof("ConfigMap and ConfigDir not configured, using values from command line flags")
-		configSync = dnsconfig.NewNopSync(&dnsconfig.Config{Federations: config.Federations})
+		configSync = dnsconfig.NewNopSync(&dnsconfig.Config{Federations: config.Federations, UpstreamNameservers: strings.Split(config.NameServers, ",")})
 	}
 
 	return &KubeDNSServer{
@@ -163,55 +161,12 @@ func setupSignalHandlers() {
 	}()
 }
 
-func validateHostAndPort(hostAndPort string) error {
-	host, port, err := net.SplitHostPort(hostAndPort)
-	if err != nil {
-		return err
-	}
-	if ip := net.ParseIP(host); ip == nil {
-		return fmt.Errorf("bad IP address: %s", host)
-	}
-
-	if p, _ := strconv.Atoi(port); p < 1 || p > 65535 {
-		return fmt.Errorf("bad port number %s", port)
-	}
-	return nil
-}
-
-// validateNameServer validates a configured name server and
-// appends a ":53" if a :port is not included. IPv6 addresses are also
-// enclosed in square brackets if not already so enclosed.
-func validateNameServer(nameServer string) (string, error) {
-	if ip := net.ParseIP(nameServer); ip != nil {
-		if ip.To4() != nil {
-			// IPv4 without port
-			nameServer = nameServer + ":53"
-		} else {
-			// IPv6 without port
-			nameServer = "[" + nameServer + "]:53"
-		}
-		return nameServer, nil
-	}
-	// Assume it's IP:port
-	err := validateHostAndPort(nameServer)
-	return nameServer, err
-}
-
 func (d *KubeDNSServer) startSkyDNSServer() {
 	glog.V(0).Infof("Starting SkyDNS server (%v:%v)", d.dnsBindAddress, d.dnsPort)
 	skydnsConfig := &server.Config{
 		Domain:     d.domain,
 		DnsAddr:    fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
 		RoundRobin: true,
-	}
-	if d.nameServers != "" {
-		for _, nameServer := range strings.Split(d.nameServers, ",") {
-			server, err := validateNameServer(nameServer)
-			if err != nil {
-				glog.Fatalf("nameserver '%s' is invalid: %v\n", nameServer, err)
-			}
-			skydnsConfig.Nameservers = append(skydnsConfig.Nameservers, server)
-		}
 	}
 	server.SetDefaults(skydnsConfig)
 	s := server.New(d.kd, skydnsConfig)
@@ -223,5 +178,6 @@ func (d *KubeDNSServer) startSkyDNSServer() {
 		glog.V(0).Infof("Skydns metrics not enabled")
 	}
 
+	d.kd.SkyDNSConfig = skydnsConfig
 	go s.Run()
 }

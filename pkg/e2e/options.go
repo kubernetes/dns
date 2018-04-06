@@ -18,7 +18,8 @@ package e2e
 
 const (
 	etcdImage      = "quay.io/coreos/etcd:v3.0.14"
-	hyperkubeImage = "gcr.io/google_containers/hyperkube:v1.5.1"
+	hyperkubeImage = "k8s.gcr.io/hyperkube:v1.5.1"
+	dnsmasqImage   = "k8s.gcr.io/k8s-dns-dnsmasq-amd64:1.14.5"
 )
 
 type Options struct {
@@ -32,6 +33,7 @@ type Options struct {
 	EtcdImage      string
 	HyperkubeImage string
 	ClusterIpRange string
+	DnsmasqImage   string
 }
 
 // DefaultOptions to use to run the e2e test.
@@ -46,6 +48,7 @@ func DefaultOptions(baseDir string, workDir string) Options {
 		Docker:         "docker",
 		EtcdImage:      etcdImage,
 		HyperkubeImage: hyperkubeImage,
+		DnsmasqImage:   dnsmasqImage,
 		ClusterIpRange: "10.0.0.0/24",
 	}
 

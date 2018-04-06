@@ -39,6 +39,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	skymsg "github.com/skynetservices/skydns/msg"
+	"github.com/skynetservices/skydns/server"
 )
 
 const (
@@ -50,19 +51,15 @@ const (
 
 	// Resync period for the kube controller loop.
 	resyncPeriod = 5 * time.Minute
-
-	// Duration for which the TTL cache should hold the node resource to retrieve the zone
-	// annotation from it so that it could be added to federation CNAMEs. There is ideally
-	// no need to expire this cache, but we don't want to assume that node annotations
-	// never change. So we expire the cache and retrieve a node once every 180 seconds.
-	// The value is chosen to be neither too long nor too short.
-	nodeCacheTTL = 180 * time.Second
 )
 
 type KubeDNS struct {
 	// kubeClient makes calls to API Server and registers calls with API Server
 	// to get Endpoints and Service objects.
 	kubeClient clientset.Interface
+
+	// skydns points to the skydns server instance for configuration syncing.
+	SkyDNSConfig *server.Config
 
 	// domain for which this DNS Server is authoritative.
 	domain string
@@ -142,6 +139,26 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 	return kd
 }
 
+func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
+	kd.configLock.Lock()
+	defer kd.configLock.Unlock()
+
+	if kd.SkyDNSConfig != nil {
+		var nameServers []string
+		for _, nameServer := range nextConfig.UpstreamNameservers {
+			if ip, port, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
+				glog.V(1).Infof("Invalid nameserver %q: %v", nameServer, err)
+				return
+			} else {
+				nameServers = append(nameServers, net.JoinHostPort(ip, port))
+			}
+		}
+		kd.SkyDNSConfig.Nameservers = nameServers
+	}
+	kd.config = nextConfig
+	glog.V(2).Infof("Configuration updated: %+v", *kd.config)
+}
+
 func (kd *KubeDNS) Start() {
 	glog.V(2).Infof("Starting endpointsController")
 	go kd.endpointsController.Run(wait.NeverStop)
@@ -166,11 +183,19 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 		case <-timeout:
 			glog.Fatalf("Timeout waiting for initialization")
 		case <-ticker.C:
-			if kd.endpointsController.HasSynced() && kd.serviceController.HasSynced() {
-				glog.V(0).Infof("Initialized services and endpoints from apiserver")
-				return
+			unsyncedResources := []string{}
+			if !kd.endpointsController.HasSynced() {
+				unsyncedResources = append(unsyncedResources, "endpoints")
 			}
-			glog.V(0).Infof("Waiting for services and endpoints to be initialized from apiserver...")
+			if !kd.serviceController.HasSynced() {
+				unsyncedResources = append(unsyncedResources, "services")
+			}
+			if len(unsyncedResources) > 0 {
+				glog.V(0).Infof("Waiting for %v to be initialized from apiserver...", unsyncedResources)
+				continue
+			}
+			glog.V(0).Infof("Initialized services and endpoints from apiserver")
+			return
 		}
 	}
 }
@@ -182,7 +207,7 @@ func (kd *KubeDNS) startConfigMapSync() {
 			"Error getting initial ConfigMap: %v, starting with default values", err)
 		kd.config = config.NewDefaultConfig()
 	} else {
-		kd.config = initialConfig
+		kd.updateConfig(initialConfig)
 	}
 
 	go kd.syncConfigMap(kd.configSync.Periodic())
@@ -192,10 +217,7 @@ func (kd *KubeDNS) syncConfigMap(syncChan <-chan *config.Config) {
 	for {
 		nextConfig := <-syncChan
 
-		kd.configLock.Lock()
-		kd.config = nextConfig
-		glog.V(2).Infof("Configuration updated: %+v", *kd.config)
-		kd.configLock.Unlock()
+		kd.updateConfig(nextConfig)
 	}
 }
 
@@ -415,7 +437,7 @@ func (kd *KubeDNS) addDNSUsingEndpoints(e *v1.Endpoints) error {
 	if err != nil {
 		return err
 	}
-	if svc == nil || v1.IsServiceIPSet(svc) {
+	if svc == nil || v1.IsServiceIPSet(svc) || svc.Spec.Type == v1.ServiceTypeExternalName {
 		// No headless service found corresponding to endpoints object.
 		return nil
 	}
@@ -574,6 +596,12 @@ func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
 	defer kd.cacheLock.Unlock()
 	// Store the service name directly as the leaf key
 	kd.cache.SetEntry(service.Name, recordValue, fqdn, cachePath...)
+}
+
+// HasSynced returns true if the initial sync of services and endpoints
+// from the API server has completed
+func (kd *KubeDNS) HasSynced() bool {
+	return kd.endpointsController.HasSynced() && kd.serviceController.HasSynced()
 }
 
 // Records responds with DNS records that match the given name, in a format

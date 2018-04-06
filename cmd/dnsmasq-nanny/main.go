@@ -41,8 +41,6 @@ var (
 		configDir:    "/etc/k8s/dns/dnsmasq-nanny",
 		syncInterval: 10 * time.Second,
 	}
-
-	currentConfig *config.Config
 )
 
 func parseFlags() {

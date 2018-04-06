@@ -19,6 +19,8 @@ package util
 import (
 	"fmt"
 	"hash/fnv"
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
@@ -86,4 +88,24 @@ func HashServiceRecord(msg *msg.Service) string {
 	h := fnv.New32a()
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum32())
+}
+
+// ValidateNameserverIpAndPort splits and validates ip and port for nameserver.
+// If there is no port in the given address, a default 53 port will be returned.
+func ValidateNameserverIpAndPort(nameServer string) (string, string, error) {
+	if ip := net.ParseIP(nameServer); ip != nil {
+		return ip.String(), "53", nil
+	}
+
+	host, port, err := net.SplitHostPort(nameServer)
+	if err != nil {
+		return "", "", err
+	}
+	if ip := net.ParseIP(host); ip == nil {
+		return "", "", fmt.Errorf("bad IP address: %q", host)
+	}
+	if p, err := strconv.Atoi(port); err != nil || p < 1 || p > 65535 {
+		return "", "", fmt.Errorf("bad port number: %q", port)
+	}
+	return host, port, nil
 }
