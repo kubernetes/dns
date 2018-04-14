@@ -19,6 +19,7 @@ package dns
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -139,6 +140,19 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 	return kd
 }
 
+func (kd *KubeDNS) loadDefaultNameserver() []string {
+	nameservers := []string{}
+	if c, err := dns.ClientConfigFromFile("/etc/resolv.conf"); !os.IsNotExist(err) {
+		if err != nil {
+			return nameservers
+		}
+		for _, s := range c.Servers {
+			nameservers = append(nameservers, net.JoinHostPort(s, c.Port))
+		}
+	}
+	return nameservers
+}
+
 func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 	kd.configLock.Lock()
 	defer kd.configLock.Unlock()
@@ -153,7 +167,11 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 				nameServers = append(nameServers, net.JoinHostPort(ip, port))
 			}
 		}
-		kd.SkyDNSConfig.Nameservers = nameServers
+		if len(nameServers) == 0 {
+			kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
+		} else {
+			kd.SkyDNSConfig.Nameservers = nameServers
+		}
 	}
 	kd.config = nextConfig
 	glog.V(2).Infof("Configuration updated: %+v", *kd.config)

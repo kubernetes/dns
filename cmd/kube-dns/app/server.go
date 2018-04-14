@@ -71,7 +71,11 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 
 	default:
 		glog.V(0).Infof("ConfigMap and ConfigDir not configured, using values from command line flags")
-		configSync = dnsconfig.NewNopSync(&dnsconfig.Config{Federations: config.Federations, UpstreamNameservers: strings.Split(config.NameServers, ",")})
+		conf := dnsconfig.Config{Federations: config.Federations}
+		if len(config.NameServers) > 0 {
+			conf.UpstreamNameservers = strings.Split(config.NameServers, ",")
+		}
+		configSync = dnsconfig.NewNopSync(&conf)
 	}
 
 	return &KubeDNSServer{
