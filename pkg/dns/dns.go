@@ -166,7 +166,7 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 			if ip, port, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
 				glog.Errorf("Invalid nameserver %q: %v", nameServer, err)
 				if len(kd.SkyDNSConfig.Nameservers) == 0 {
-					// Fall back to resolv.conf on initialization failed.
+					// Fall back to resolv.conf on initialization failure.
 					kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
 				}
 				return
