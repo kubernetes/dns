@@ -18,7 +18,10 @@ package dns
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -700,6 +703,36 @@ func TestConfigSyncInitialMap(t *testing.T) {
 
 	kd.startConfigMapSync()
 	checkConfigEqual(t, kd, &config.Config{Federations: map[string]string{"name3": "domain3"}})
+}
+
+func TestUpdateConfig(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "test")
+	defaultResolvFile = filepath.Join(tmpdir, "resolv.conf")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	kd := newKubeDNS()
+	kd.SkyDNSConfig = new(skyserver.Config)
+
+	nextConfig := &config.Config{UpstreamNameservers: []string{"badNameserver"}}
+	kd.updateConfig(nextConfig)
+	assert.NotEqual(t, nextConfig, kd.config)
+	assert.Equal(t, []string{}, kd.SkyDNSConfig.Nameservers)
+
+	err = ioutil.WriteFile(defaultResolvFile, []byte("nameserver 127.0.0.1"), 0666)
+	require.NoError(t, err)
+
+	kd.updateConfig(nextConfig)
+	assert.Equal(t, []string{"127.0.0.1:53"}, kd.SkyDNSConfig.Nameservers)
+
+	nextConfig = &config.Config{UpstreamNameservers: []string{"192.0.2.123:10086", "192.0.2.123"}}
+	kd.updateConfig(nextConfig)
+	assert.Equal(t, nextConfig, kd.config)
+	assert.Equal(t, []string{"192.0.2.123:10086", "192.0.2.123:53"}, kd.SkyDNSConfig.Nameservers)
+
+	nextConfig = new(config.Config)
+	kd.updateConfig(nextConfig)
+	assert.Equal(t, []string{"127.0.0.1:53"}, kd.SkyDNSConfig.Nameservers)
 }
 
 func newNodes() *v1.NodeList {
