@@ -19,7 +19,6 @@ package dns
 import (
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +51,10 @@ const (
 
 	// Resync period for the kube controller loop.
 	resyncPeriod = 5 * time.Minute
+)
+
+var (
+	defaultResolvFile = "/etc/resolv.conf"
 )
 
 type KubeDNS struct {
@@ -141,16 +144,16 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 }
 
 func (kd *KubeDNS) loadDefaultNameserver() []string {
-	nameservers := []string{}
-	if c, err := dns.ClientConfigFromFile("/etc/resolv.conf"); !os.IsNotExist(err) {
-		if err != nil {
-			return nameservers
-		}
+	if c, err := dns.ClientConfigFromFile(defaultResolvFile); err != nil {
+		glog.Errorf("Load nameserver from resolv.conf failed: %v", err)
+		return []string{}
+	} else {
+		nameservers := []string{}
 		for _, s := range c.Servers {
 			nameservers = append(nameservers, net.JoinHostPort(s, c.Port))
 		}
+		return nameservers
 	}
-	return nameservers
 }
 
 func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
@@ -161,7 +164,11 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 		var nameServers []string
 		for _, nameServer := range nextConfig.UpstreamNameservers {
 			if ip, port, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
-				glog.V(1).Infof("Invalid nameserver %q: %v", nameServer, err)
+				glog.Errorf("Invalid nameserver %q: %v", nameServer, err)
+				if len(kd.SkyDNSConfig.Nameservers) == 0 {
+					// Fall back to resolv.conf on initialization failed.
+					kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
+				}
 				return
 			} else {
 				nameServers = append(nameServers, net.JoinHostPort(ip, port))
