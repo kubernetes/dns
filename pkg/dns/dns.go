@@ -377,7 +377,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	// oldAddressMap is use to hold oldEndpoints addresses that are not
+	// oldAddressMap is used to hold oldEndpoints addresses that are not
 	// in newEndpoints
 	oldAddressMap := make(map[string]bool)
 
