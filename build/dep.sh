@@ -16,7 +16,7 @@
 set -e
 
 IMAGE="k8s-dns-godep"
-GOLANG_IMAGE="golang:1.8-alpine"
+GOLANG_IMAGE="golang:1.9-alpine"
 DNS_SRC="/go/src/k8s.io/dns"
 REQUIRED_PKGS="github.com/onsi/ginkgo/ginkgo/... golang.org/x/text/... ./pkg/... ./cmd/..."
 
