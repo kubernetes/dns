@@ -567,9 +567,18 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 }
 
 func getHostname(address *v1.EndpointAddress) (string, bool) {
+	// If hostname is specified, we use that
 	if len(address.Hostname) > 0 {
 		return address.Hostname, true
 	}
+
+	// If hostname is not specified, we use pod name
+	if address.TargetRef != nil {
+		if address.TargetRef.Kind == "Pod" {
+			return address.TargetRef.Name, true
+		}
+	}
+
 	return "", false
 }
 

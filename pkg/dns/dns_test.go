@@ -1016,3 +1016,32 @@ func getPodsFQDN(kd *KubeDNS, e *v1.Endpoints, podHostName string) string {
 func getSRVFQDN(kd *KubeDNS, s *v1.Service, portName string) string {
 	return fmt.Sprintf("_%s._tcp.%s.%s.svc.%s", portName, s.Name, s.Namespace, kd.domain)
 }
+
+func TestgetHostName_HostnameSpecfied_UseHostname(t *testing.T) {
+	endpointAddress := v1.EndpointAddress{
+		IP: "10.0.0.1",
+		TargetRef: &v1.ObjectReference{
+			Kind:      "Pod",
+			Name:      "foo-bar-zah",
+			Namespace: testNamespace,
+		},
+		Hostname: "foo",
+	}
+	hostname, found := getHostname(&endpointAddress)
+	assert.True(t, found)
+	assert.Equal(t, hostname, "foo")
+}
+
+func TestgetHostName_HostnameNotSpecfied_UsePodname(t *testing.T) {
+	endpointAddress := v1.EndpointAddress{
+		IP: "10.0.0.1",
+		TargetRef: &v1.ObjectReference{
+			Kind:      "Pod",
+			Name:      "foo-bar-zah",
+			Namespace: testNamespace,
+		},
+	}
+	hostname, found := getHostname(&endpointAddress)
+	assert.True(t, found)
+	assert.Equal(t, hostname, "foo-bar-zah")
+}
