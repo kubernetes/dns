@@ -104,10 +104,9 @@ Given a headless Service `<service>` in Namespace `<ns>` (i.e., a Service with
 no ClusterIP), the following records must exist.
 
 #### 2.4.1 - `A` Records
-There must be an `A` record for each _ready_ endpoint of the Service with IP
-address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints,
-there must be no `A` records of this form; however, a query for them will have
-an empty answer with `rcode` 0 rather than `NXDOMAIN`, since the Service exists.
+There must be an `A` record for each _ready_ endpoint of the headless Service
+with IP address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints
+for the headless Service, the answer should be `NXDOMAIN`.
 
 - Record Format:
   - `<service>.<ns>.svc.<zone>. <ttl> IN A <endpoint-ip>`
