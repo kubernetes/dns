@@ -168,8 +168,9 @@ func setupSignalHandlers() {
 func (d *KubeDNSServer) startSkyDNSServer() {
 	glog.V(0).Infof("Starting SkyDNS server (%v:%v)", d.dnsBindAddress, d.dnsPort)
 	skydnsConfig := &server.Config{
-		Domain:  d.domain,
-		DnsAddr: fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
+		Domain:     d.domain,
+		DnsAddr:    fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
+		RoundRobin: true,
 	}
 	server.SetDefaults(skydnsConfig)
 	s := server.New(d.kd, skydnsConfig)
