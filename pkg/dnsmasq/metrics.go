@@ -91,7 +91,7 @@ func (mc *metricsClient) GetMetrics() (ret *Metrics, err error) {
 func (mc *metricsClient) getSingleMetric(name string) (int64, error) {
 	msg := new(dns.Msg)
 	msg.Id = dns.Id()
-	msg.RecursionDesired = false
+	msg.RecursionDesired = true
 	msg.Question = make([]dns.Question, 1)
 	msg.Question[0] = dns.Question{
 		Name:   name,
