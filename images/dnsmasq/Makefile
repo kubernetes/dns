@@ -19,9 +19,13 @@ DNSMASQ_VERSION ?= dnsmasq-2.78
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
+MANIFEST_IMAGE := $(REGISTRY)/$(CONTAINER_PREFIX)-dnsmasq
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
 COMPILE_IMAGE := k8s.gcr.io/kube-cross:v1.7.6-k8s1.6-0
 OUTPUT_DIR := _output/$(ARCH)
+
+# Ensure that the docker command line supports the manifest images
+export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifeq ($(ARCH),amd64)
 	BASEIMAGE ?= alpine:3.6
@@ -106,6 +110,9 @@ all-test: $(addprefix test-, $(ALL_ARCH))
 
 .PHONY: all-push
 all-push: $(addprefix push-, $(ALL_ARCH))
+	docker manifest create --amend $(MANIFEST_IMAGE):$(VERSION) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(MANIFEST_IMAGE)\-&:$(VERSION)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${MANIFEST_IMAGE}:${VERSION} ${MANIFEST_IMAGE}-$${arch}:${VERSION}; done
+	docker manifest push ${MANIFEST_IMAGE}:${VERSION}
 
 .PHONY: build
 build: $(BINARY)
