@@ -146,7 +146,7 @@ func configureFlags(opt *sidecar.Options, flagSet *pflag.FlagSet) {
 			" Example: 'mydns,127.0.0.1:53,example.com,10,A'.")
 	flagSet.StringVar(
 		&opt.PrometheusAddr, "prometheus-addr", opt.PrometheusAddr,
-		"http addr to bind metrics server to")
+		"http address to bind metrics server to")
 	flagSet.IntVar(
 		&opt.PrometheusPort, "prometheus-port", opt.PrometheusPort,
 		"http port to use to export prometheus metrics")
