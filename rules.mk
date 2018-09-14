@@ -48,8 +48,12 @@ endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
+MANIFEST_IMAGE = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
 BUILDSTAMP_NAME = $(subst :,_,$(subst /,_,$(CONTAINER_NAME))_$(VERSION))
+
+# Ensure that the docker command line supports the manifest images
+export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ALL_BINARIES += $(BINARIES)
 ALL_BINARIES += $(CONTAINER_BINARIES)
@@ -87,6 +91,9 @@ all-containers: $(addprefix containers-, $(ALL_ARCH))
 
 .PHONY: all-push
 all-push: $(addprefix push-, $(ALL_ARCH))
+	docker manifest create --amend $(MANIFEST_IMAGE):$(VERSION) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(MANIFEST_IMAGE)\-&:$(VERSION)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${MANIFEST_IMAGE}:${VERSION} ${MANIFEST_IMAGE}-$${arch}:${VERSION}; done
+	docker manifest push ${MANIFEST_IMAGE}:${VERSION}
 
 .PHONY: build
 build: $(GO_BINARIES) images-build
