@@ -18,6 +18,7 @@
 
 # Variables exported to submake
 export ARCH
+export MANIFEST_IMAGE
 export CONTAINER_PREFIX
 export IMAGES
 export REGISTRY
@@ -48,7 +49,6 @@ endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
-MANIFEST_IMAGE = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
 BUILDSTAMP_NAME = $(subst :,_,$(subst /,_,$(CONTAINER_NAME))_$(VERSION))
 
@@ -91,9 +91,14 @@ all-containers: $(addprefix containers-, $(ALL_ARCH))
 
 .PHONY: all-push
 all-push: $(addprefix push-, $(ALL_ARCH))
-	docker manifest create --amend $(MANIFEST_IMAGE):$(VERSION) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(MANIFEST_IMAGE)\-&:$(VERSION)~g")
-	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${MANIFEST_IMAGE}:${VERSION} ${MANIFEST_IMAGE}-$${arch}:${VERSION}; done
-	docker manifest push ${MANIFEST_IMAGE}:${VERSION}
+	@for binary in $(CONTAINER_BINARIES); do \
+		MANIFEST_IMAGE=$(REGISTRY)/$(CONTAINER_PREFIX)-$${binary} ; \
+		for arch in $(ALL_ARCH); do \
+			docker manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ; \
+			docker manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION}; \
+		done ; \
+		docker manifest push $$MANIFEST_IMAGE:${VERSION} ; \
+	done
 
 .PHONY: build
 build: $(GO_BINARIES) images-build
