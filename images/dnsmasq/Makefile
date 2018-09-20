@@ -28,8 +28,8 @@ OUTPUT_DIR := _output/$(ARCH)
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= alpine:3.6
-	COMPILE_IMAGE := alpine:3.6
+	BASEIMAGE ?= alpine:3.8
+	COMPILE_IMAGE := alpine:3.8
 else ifeq ($(ARCH),arm)
 	BASEIMAGE ?= armhf/busybox:glibc
 	TRIPLE    ?= arm-linux-gnueabihf
