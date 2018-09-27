@@ -97,7 +97,7 @@ all-push: $(addprefix push-, $(ALL_ARCH))
 			docker manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ; \
 			docker manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION}; \
 		done ; \
-		docker manifest push $$MANIFEST_IMAGE:${VERSION} ; \
+		docker manifest push --purge $$MANIFEST_IMAGE:${VERSION} ; \
 	done
 
 .PHONY: build

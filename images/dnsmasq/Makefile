@@ -112,7 +112,7 @@ all-test: $(addprefix test-, $(ALL_ARCH))
 all-push: $(addprefix push-, $(ALL_ARCH))
 	docker manifest create --amend $(MANIFEST_IMAGE):$(VERSION) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(MANIFEST_IMAGE)\-&:$(VERSION)~g")
 	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${MANIFEST_IMAGE}:${VERSION} ${MANIFEST_IMAGE}-$${arch}:${VERSION}; done
-	docker manifest push ${MANIFEST_IMAGE}:${VERSION}
+	docker manifest push --purge ${MANIFEST_IMAGE}:${VERSION}
 
 .PHONY: build
 build: $(BINARY)
