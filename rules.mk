@@ -29,7 +29,6 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
-NOBODY ?= nobody
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
     BASEIMAGE?=alpine:3.8
@@ -135,7 +134,6 @@ define DOCKERFILE_RULE
 	    -e 's|ARG_BIN|$(BINARY)|g' \
 	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
 	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
-	    -e 's|ARG_NOBODY|$(NOBODY)|g' \
 	    -e 's|ARG_VERSION|$(VERSION)|g' \
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile

@@ -18,5 +18,5 @@ MAINTAINER Bowei Du <bowei@google.com>
 
 ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
 
-USER nobody:ARG_NOBODY
+USER nobody:nobody
 ENTRYPOINT ["/ARG_BIN"]
