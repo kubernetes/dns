@@ -1,8 +1,5 @@
 Change history of go-restful
 =
-2016-12-22
-- (API change) Remove code related to caching request content. Removes SetCacheReadEntity(doCache bool)
-
 2016-11-26
 - Default change! now use CurlyRouter (was RouterJSR311)
 - Default change! no more caching of request content
