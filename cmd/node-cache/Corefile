@@ -1,0 +1,11 @@
+.:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind 1.2.3.4
+        forward . 8.8.8.8 {
+                force_tcp
+        }
+        prometheus :9153
+}
