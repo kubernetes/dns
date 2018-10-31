@@ -39,7 +39,7 @@ REGISTRY ?= staging-k8s.gcr.io
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.10.3-alpine
+BUILD_IMAGE ?= golang:1.11-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
 

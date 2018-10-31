@@ -13,11 +13,13 @@
 # limitations under the License.
 
 sudo: required
+language: go
 # trusty required for docker
 # https://github.com/travis-ci/travis-ci/issues/5448
 dist: trusty
 go:
-- 1.7
+- 1.11.x
+
 services:
 - docker
 install:

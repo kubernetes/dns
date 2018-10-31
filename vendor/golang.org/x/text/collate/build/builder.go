@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package build
+package build // import "golang.org/x/text/collate/build"
 
 import (
 	"fmt"
@@ -472,7 +472,6 @@ func (b *Builder) build() (*table, error) {
 }
 
 // Build builds the root Collator.
-// TODO: return Weighter instead
 func (b *Builder) Build() (colltab.Weighter, error) {
 	table, err := b.build()
 	if err != nil {

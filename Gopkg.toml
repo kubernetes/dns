@@ -1,0 +1,92 @@
+# Gopkg.toml example
+#
+# Refer to https://golang.github.io/dep/docs/Gopkg.toml.html
+# for detailed Gopkg.toml documentation.
+#
+# required = ["github.com/user/thing/cmd/thing"]
+# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
+#
+# [[constraint]]
+#   name = "github.com/user/project"
+#   version = "1.0.0"
+#
+# [[constraint]]
+#   name = "github.com/user/project2"
+#   branch = "dev"
+#   source = "github.com/myfork/project2"
+#
+# [[override]]
+#   name = "github.com/x/y"
+#   version = "2.4.0"
+#
+# [prune]
+#   non-go = false
+#   go-tests = true
+#   unused-packages = true
+
+
+[[constraint]]
+  name = "github.com/coreos/etcd"
+  version = "v3.1.0-rc.1-217-g61064a7be"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/golang/glog"
+
+[[constraint]]
+  name = "github.com/miekg/dns"
+  version = "1.0.14"
+
+[[constraint]]
+  name = "github.com/onsi/ginkgo"
+  version = "1.6.0"
+
+[[constraint]]
+  name = "github.com/onsi/gomega"
+  version = "1.4.2"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = "0.8.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/skynetservices/skydns"
+
+[[constraint]]
+  name = "github.com/spf13/pflag"
+  version = "1.0.3"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.2.2"
+
+[[constraint]]
+  branch = "release-1.10"
+  name = "k8s.io/apiserver"
+
+[[constraint]]
+  name = "k8s.io/client-go"
+  version = "3.0.0"
+
+[[constraint]]
+  name = "k8s.io/kubernetes"
+  revision = "326cf6c2d0e2d72b82e5014710f1b0cf1bacf3b4"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  revision = "85ace5365f33b16fc735c866a12e3c765b9700f2"
+
+[[override]]
+  name = "github.com/ugorji/go"
+  revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
+
+[prune]
+  go-tests = true
+  unused-packages = true
+  # Do not prune unused files in ginkgo. Those are needed to build ginkgo
+  [[prune.project]]
+    name = "github.com/onsi/ginkgo"
+    go-tests = true
+    unused-packages = false
+    non-go = false
