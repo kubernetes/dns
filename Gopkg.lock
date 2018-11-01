@@ -34,6 +34,52 @@
   version = "v3.5.1"
 
 [[projects]]
+  digest = "1:8f229e2b9f51a5f982f4a8cc500919cf5642eb69f5f06a36f172ff9cb7f2572d"
+  name = "github.com/coredns/coredns"
+  packages = [
+    "core/dnsserver",
+    "coremain",
+    "pb",
+    "plugin",
+    "plugin/bind",
+    "plugin/cache",
+    "plugin/cache/freq",
+    "plugin/debug",
+    "plugin/errors",
+    "plugin/etcd/msg",
+    "plugin/forward",
+    "plugin/health",
+    "plugin/log",
+    "plugin/loop",
+    "plugin/metrics",
+    "plugin/metrics/vars",
+    "plugin/pkg/cache",
+    "plugin/pkg/dnstest",
+    "plugin/pkg/dnsutil",
+    "plugin/pkg/doh",
+    "plugin/pkg/edns",
+    "plugin/pkg/fuzz",
+    "plugin/pkg/log",
+    "plugin/pkg/nonwriter",
+    "plugin/pkg/parse",
+    "plugin/pkg/rcode",
+    "plugin/pkg/replacer",
+    "plugin/pkg/response",
+    "plugin/pkg/tls",
+    "plugin/pkg/trace",
+    "plugin/pkg/transport",
+    "plugin/pkg/uniq",
+    "plugin/pkg/up",
+    "plugin/pkg/watch",
+    "plugin/reload",
+    "plugin/test",
+    "request",
+  ]
+  pruneopts = "UT"
+  revision = "204537b3245bee2ed248ad587c83ba2cc4c129e9"
+  version = "v1.2.5"
+
+[[projects]]
   digest = "1:d2bf3686993c6674049180c5b3c608ceeae8fe99df6b9675594306fba9373b77"
   name = "github.com/coreos/etcd"
   packages = [
@@ -44,6 +90,14 @@
   pruneopts = "UT"
   revision = "61064a7be383053811e1535829a7b500feb7ef8f"
   version = "v3.1.0-rc.1-217-g61064a7be"
+
+[[projects]]
+  digest = "1:0ef770954bca104ee99b3b6b7f9b240605ac03517d9f98cbc1893daa03f3c038"
+  name = "github.com/coreos/go-semver"
+  packages = ["semver"]
+  pruneopts = "UT"
+  revision = "8ab6407b697782a06568d4b7f1db25550ec2e4c6"
+  version = "v0.2.0"
 
 [[projects]]
   digest = "1:97590846d4c85cfd1d68adb3e0a1e2028ce3fb9868b7112bf13c1f3d77395eeb"
@@ -81,6 +135,14 @@
   ]
   pruneopts = "UT"
   revision = "09691a3b6378b740595c1002f40c34dd5f218a22"
+
+[[projects]]
+  branch = "master"
+  digest = "1:50a46ab1d5edbbdd55125b4d37f1bf503d0807c26461f9ad7b358d6006641d09"
+  name = "github.com/flynn/go-shlex"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3f9db97f856818214da2e1057f8ad84803971cff"
 
 [[projects]]
   digest = "1:c45cef8e0074ea2f8176a051df38553ba997a3616f1ec2d35222b1cf9864881e"
@@ -121,6 +183,14 @@
   version = "v0.17.2"
 
 [[projects]]
+  digest = "1:dae52e85e2f3d0a734799e74ec0711d3ddd673b21a9e83be6c899af64c3a98f6"
+  name = "github.com/godbus/dbus"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "66d97aec3384421e393c2a76b770a1b5c31d07a8"
+  version = "v5.0"
+
+[[projects]]
   digest = "1:dfd5a02af6e5ccc2974549f63aa3c432c1da98d47c2abf0e2bf8a52bc15e64e2"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -139,9 +209,15 @@
   revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
 
 [[projects]]
-  digest = "1:97df918963298c287643883209a2c3f642e6593379f97ab400c2a2e219ab647d"
+  digest = "1:4c0989ca0bcd10799064318923b9bc2db6b4d6338dd75f3f2d86c3511aaaf5cf"
   name = "github.com/golang/protobuf"
-  packages = ["proto"]
+  packages = [
+    "proto",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/timestamp",
+  ]
   pruneopts = "UT"
   revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
   version = "v1.2.0"
@@ -160,6 +236,14 @@
   pruneopts = "UT"
   revision = "d460ce9f8df2e77fb1ba55ca87fafed96c607494"
   version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:1a1206efd03a54d336dce7bb8719e74f2f8932f661cb9f57d5813a1d99c083d8"
+  name = "github.com/grpc-ecosystem/grpc-opentracing"
+  packages = ["go/otgrpc"]
+  pruneopts = "UT"
+  revision = "8e809c8a86450a29b90dcc9efbf062d0fe6d9746"
 
 [[projects]]
   digest = "1:9c54f515aa0161336e75139f0458ca04a9274de15d03e20dd471f494f46dda24"
@@ -215,6 +299,18 @@
   pruneopts = "UT"
   revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
   version = "v1.0.1"
+
+[[projects]]
+  digest = "1:69e506fbd63b6c8a6eaa53459ea7272fd0ea78cfbe6aaba3e990bebbb9f9e9d0"
+  name = "github.com/mholt/caddy"
+  packages = [
+    ".",
+    "caddyfile",
+    "telemetry",
+  ]
+  pruneopts = "UT"
+  revision = "1f7b5abc80679fb71ee0e04ed98cbe284b1fc181"
+  version = "v0.11.0"
 
 [[projects]]
   digest = "1:c22d250c583ec1136ecad8b74a43f408c08ddbbcbae715341ec4a49f332628e0"
@@ -273,6 +369,18 @@
   version = "v1.4.2"
 
 [[projects]]
+  digest = "1:450b7623b185031f3a456801155c8320209f75d0d4c4e633c6b1e59d44d6e392"
+  name = "github.com/opentracing/opentracing-go"
+  packages = [
+    ".",
+    "ext",
+    "log",
+  ]
+  pruneopts = "UT"
+  revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
+  version = "v1.0.2"
+
+[[projects]]
   digest = "1:e5d0bd87abc2781d14e274807a470acd180f0499f8bf5bb18606e9ec22ad9de9"
   name = "github.com/pborman/uuid"
   packages = ["."]
@@ -289,9 +397,12 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:b6221ec0f8903b556e127c449e7106b63e6867170c2d10a7c058623d086f2081"
+  digest = "1:d14a5f4bfecf017cb780bdde1b6483e5deb87e12c332544d2c430eda58734bcb"
   name = "github.com/prometheus/client_golang"
-  packages = ["prometheus"]
+  packages = [
+    "prometheus",
+    "prometheus/promhttp",
+  ]
   pruneopts = "UT"
   revision = "c5b7fccd204277076155f10851dad72b76a49317"
   version = "v0.8.0"
@@ -370,6 +481,25 @@
   revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
 
 [[projects]]
+  digest = "1:2d9d06cb9d46dacfdbb45f8575b39fc0126d083841a29d4fbf8d97708f43107e"
+  name = "github.com/vishvananda/netlink"
+  packages = [
+    ".",
+    "nl",
+  ]
+  pruneopts = "UT"
+  revision = "a2ad57a690f3caf3015351d2d6e1c0b95c349752"
+  version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:e4e30678fb2560b5c62f6308c5023d6c294fc7713216fa379411cc74465e866f"
+  name = "github.com/vishvananda/netns"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "13995c7128ccc8e51e9a6bd2b551020a27180abd"
+
+[[projects]]
   branch = "master"
   digest = "1:583f2f436bab7b59a7bd3e759f1375b06f460760ed1f9235604d143eaab83009"
   name = "golang.org/x/crypto"
@@ -383,7 +513,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:36b4bc5dcbf6d5419798896438acd2289da76bf5e8d1d3cc1bcf33e7227f5aeb"
+  digest = "1:47f92395b1ee324fea0e525180551afdbe0c2bf0f7d2130df3ba9f92ff3d6507"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -397,8 +527,10 @@
     "idna",
     "internal/iana",
     "internal/socket",
+    "internal/timeseries",
     "ipv4",
     "ipv6",
+    "trace",
   ]
   pruneopts = "UT"
   revision = "c44066c5c816ec500d459a2a324a753f78531ae0"
@@ -449,6 +581,49 @@
   pruneopts = "UT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:56b0bca90b7e5d1facf5fbdacba23e4e0ce069d25381b8e2f70ef1e7ebfb9c1a"
+  name = "google.golang.org/genproto"
+  packages = ["googleapis/rpc/status"]
+  pruneopts = "UT"
+  revision = "b69ba1387ce2108ac9bc8e8e5e5a46e7d5c72313"
+
+[[projects]]
+  digest = "1:c3ad9841823db6da420a5625b367913b4ff54bbe60e8e3c98bd20e243e62e2d2"
+  name = "google.golang.org/grpc"
+  packages = [
+    ".",
+    "balancer",
+    "balancer/base",
+    "balancer/roundrobin",
+    "codes",
+    "connectivity",
+    "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclog",
+    "internal",
+    "internal/backoff",
+    "internal/channelz",
+    "internal/envconfig",
+    "internal/grpcrand",
+    "internal/transport",
+    "keepalive",
+    "metadata",
+    "naming",
+    "peer",
+    "resolver",
+    "resolver/dns",
+    "resolver/passthrough",
+    "stats",
+    "status",
+    "tap",
+  ]
+  pruneopts = "UT"
+  revision = "2e463a05d100327ca47ac218281906921038fd95"
+  version = "v1.16.0"
 
 [[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
@@ -648,7 +823,7 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:25b7bec4db0b6f08cd5680047a9c756746af93bf8024b7e69e75613adfff09af"
+  digest = "1:4db4c9969c2c4492d64f8a8fd4a5899b06a65a1131a670158218759bdf8f5b68"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/api",
@@ -672,9 +847,12 @@
     "pkg/runtime/serializer/versioning",
     "pkg/selection",
     "pkg/types",
+    "pkg/util/dbus",
     "pkg/util/errors",
+    "pkg/util/exec",
     "pkg/util/framer",
     "pkg/util/intstr",
+    "pkg/util/iptables",
     "pkg/util/json",
     "pkg/util/labels",
     "pkg/util/logs",
@@ -697,8 +875,20 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/coredns/coredns/coremain",
+    "github.com/coredns/coredns/plugin/bind",
+    "github.com/coredns/coredns/plugin/cache",
+    "github.com/coredns/coredns/plugin/errors",
+    "github.com/coredns/coredns/plugin/forward",
+    "github.com/coredns/coredns/plugin/health",
+    "github.com/coredns/coredns/plugin/log",
+    "github.com/coredns/coredns/plugin/loop",
+    "github.com/coredns/coredns/plugin/metrics",
+    "github.com/coredns/coredns/plugin/pkg/log",
+    "github.com/coredns/coredns/plugin/reload",
     "github.com/coreos/etcd/client",
     "github.com/golang/glog",
+    "github.com/mholt/caddy",
     "github.com/miekg/dns",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
@@ -709,6 +899,7 @@
     "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
+    "github.com/vishvananda/netlink",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/fields",
     "k8s.io/apimachinery/pkg/util/sets",
@@ -724,6 +915,9 @@
     "k8s.io/client-go/util/clock",
     "k8s.io/kubernetes/pkg/api",
     "k8s.io/kubernetes/pkg/client/metrics/prometheus",
+    "k8s.io/kubernetes/pkg/util/dbus",
+    "k8s.io/kubernetes/pkg/util/exec",
+    "k8s.io/kubernetes/pkg/util/iptables",
     "k8s.io/kubernetes/pkg/util/logs",
     "k8s.io/kubernetes/pkg/version/prometheus",
   ]
