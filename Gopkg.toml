@@ -77,6 +77,10 @@
   name = "k8s.io/apimachinery"
   revision = "85ace5365f33b16fc735c866a12e3c765b9700f2"
 
+[[constraint]]
+  name = "github.com/coredns/coredns"
+  version = "v1.2.5"
+
 [[override]]
   name = "github.com/ugorji/go"
   revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
@@ -87,6 +91,4 @@
   # Do not prune unused files in ginkgo. Those are needed to build ginkgo
   [[prune.project]]
     name = "github.com/onsi/ginkgo"
-    go-tests = true
     unused-packages = false
-    non-go = false
