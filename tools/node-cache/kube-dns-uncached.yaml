@@ -1,0 +1,19 @@
+# This service is used to expose the kube-dns pods,
+# for use by the node-local-cache on cache-misses.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-dns-uncached
+  namespace: kube-system
+spec:
+  ports:
+  - name: dns
+    port: 53
+    protocol: UDP
+    targetPort: 53
+  - name: dns-tcp
+    port: 53
+    protocol: TCP
+    targetPort: 53
+  selector:
+    k8s-app: kube-dns
