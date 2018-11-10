@@ -147,13 +147,12 @@ func (kd *KubeDNS) loadDefaultNameserver() []string {
 	if c, err := dns.ClientConfigFromFile(defaultResolvFile); err != nil {
 		glog.Errorf("Load nameserver from resolv.conf failed: %v", err)
 		return []string{}
-	} else {
-		nameservers := []string{}
-		for _, s := range c.Servers {
-			nameservers = append(nameservers, net.JoinHostPort(s, c.Port))
-		}
-		return nameservers
 	}
+	nameservers := []string{}
+        for _, s := range c.Servers {
+		nameservers = append(nameservers, net.JoinHostPort(s, c.Port))        
+	}
+	return nameservers
 }
 
 func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
@@ -170,9 +169,8 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 					kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
 				}
 				return
-			} else {
-				nameServers = append(nameServers, net.JoinHostPort(ip, port))
 			}
+			nameServers = append(nameServers, net.JoinHostPort(ip, port))
 		}
 		if len(nameServers) == 0 {
 			kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
@@ -293,10 +291,9 @@ func (kd *KubeDNS) setEndpointsStore() {
 func assertIsService(obj interface{}) (*v1.Service, bool) {
 	if service, ok := obj.(*v1.Service); ok {
 		return service, ok
-	} else {
-		glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
-		return nil, ok
 	}
+	glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
+	return nil, ok
 }
 
 func (kd *KubeDNS) newService(obj interface{}) {
