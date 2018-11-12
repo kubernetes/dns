@@ -34,7 +34,7 @@
   version = "v3.5.1"
 
 [[projects]]
-  digest = "1:8f229e2b9f51a5f982f4a8cc500919cf5642eb69f5f06a36f172ff9cb7f2572d"
+  digest = "1:d6ee4ffea98d55414c11dacba60253cc81bd537c51f3972a7d5417124ce8d5af"
   name = "github.com/coredns/coredns"
   packages = [
     "core/dnsserver",
@@ -76,18 +76,18 @@
     "request",
   ]
   pruneopts = "UT"
-  revision = "204537b3245bee2ed248ad587c83ba2cc4c129e9"
-  version = "v1.2.5"
+  revision = "756749c5cad4cd40453b82f70592bc19bb9ccb15"
+  version = "v1.2.6"
 
 [[projects]]
-  digest = "1:d46c6f1d6f4b07c6ef2bfe89a5ac9cda3f1772204d6a5ffb16dbd99c02d19ea1"
+  digest = "1:d2bf3686993c6674049180c5b3c608ceeae8fe99df6b9675594306fba9373b77"
   name = "github.com/coreos/etcd"
   packages = [
     "client",
     "pkg/pathutil",
     "pkg/types",
   ]
-  pruneopts = "T"
+  pruneopts = "UT"
   revision = "61064a7be383053811e1535829a7b500feb7ef8f"
   version = "v3.1.0-rc.1-217-g61064a7be"
 
