@@ -40,7 +40,7 @@ _hostname_
 _ready_
   - An endpoint is considered _ready_ if its address is in the `addresses` field of the EndpointSubset object, or the corresponding service has the `service.alpha.kubernetes.io/tolerate-unready-endpoints` annotation set to `true`.
 
-All comparisons between query data and data in Kubernetes is **case-insensitive**.
+All comparisons between query data and data in Kubernetes are **case-insensitive**.
 
 ### 2.2 - Record for Schema Version
 
