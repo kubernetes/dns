@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"strings"
 
@@ -69,6 +70,11 @@ func (n *Nanny) Configure(args []string, config *config.Config) {
 
 	for domain, serverList := range config.StubDomains {
 		for _, server := range serverList {
+			if isIP := (net.ParseIP(server) != nil); !isIP {
+				if IPs, err := net.LookupIP(server); err == nil && len(IPs) > 0 {
+					server = IPs[0].String()
+				}
+			}
 			// dnsmasq port separator is '#' for some reason.
 			server = munge(server)
 			n.args = append(

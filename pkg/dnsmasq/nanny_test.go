@@ -68,13 +68,16 @@ func TestNannyConfig(t *testing.T) {
 				StubDomains: map[string][]string{
 					"acme.local":   []string{"1.1.1.1"},
 					"widget.local": []string{"2.2.2.2:10053", "3.3.3.3"},
+					"google.local": []string{"google-public-dns-a.google.com"},
 				}},
 			e: []string{
 				"--abc",
 				"--server",
 				"--server",
 				"--server",
+				"--server",
 				"/acme.local/1.1.1.1",
+				"/google.local/8.8.8.8",
 				"/widget.local/2.2.2.2#10053",
 				"/widget.local/3.3.3.3",
 			},
