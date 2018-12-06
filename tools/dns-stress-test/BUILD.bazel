@@ -1,0 +1,6 @@
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix k8s.io/dns/tools/dns-stress-test/
+gazelle(
+    name = "gazelle",
+)

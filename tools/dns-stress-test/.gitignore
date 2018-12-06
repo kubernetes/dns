@@ -1,0 +1,9 @@
+# emacs backup files
+*~
+
+# bazel links
+bazel-bin
+bazel-genfiles
+bazel-dns-stress-test
+bazel-out
+bazel-testlogs
