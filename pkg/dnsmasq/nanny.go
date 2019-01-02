@@ -18,6 +18,7 @@ package dnsmasq
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -53,7 +54,7 @@ func ExtractDnsmasqArgs(cmdlineArgs *[]string) []string {
 }
 
 // Configure the nanny. This must be called before Start().
-func (n *Nanny) Configure(args []string, config *config.Config) {
+func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer string) {
 	n.args = args
 
 	munge := func(s string) string {
@@ -69,10 +70,24 @@ func (n *Nanny) Configure(args []string, config *config.Config) {
 	}
 
 	for domain, serverList := range config.StubDomains {
+		resolver := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{}
+				return d.DialContext(ctx, "udp", kubednsServer)
+			},
+		}
 		for _, server := range serverList {
 			if isIP := (net.ParseIP(server) != nil); !isIP {
-				if IPs, err := net.LookupIP(server); err == nil && len(IPs) > 0 {
-					server = IPs[0].String()
+				switch {
+				case strings.HasSuffix(server, "cluster.local"):
+					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err == nil && len(IPs) > 0 {
+						server = IPs[0].String()
+					}
+				default:
+					if IPs, err := net.LookupIP(server); err == nil && len(IPs) > 0 {
+						server = IPs[0].String()
+					}
 				}
 			}
 			// dnsmasq port separator is '#' for some reason.
@@ -172,7 +187,7 @@ type RunNannyOpts struct {
 }
 
 // RunNanny runs the nanny and handles configuration updates.
-func RunNanny(sync config.Sync, opts RunNannyOpts) {
+func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 	defer glog.Flush()
 
 	currentConfig, err := sync.Once()
@@ -182,7 +197,7 @@ func RunNanny(sync config.Sync, opts RunNannyOpts) {
 	}
 
 	nanny := &Nanny{Exec: opts.DnsmasqExec}
-	nanny.Configure(opts.DnsmasqArgs, currentConfig)
+	nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 	if err := nanny.Start(); err != nil {
 		glog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
 	}
@@ -200,7 +215,7 @@ func RunNanny(sync config.Sync, opts RunNannyOpts) {
 				glog.V(0).Infof("Restarting dnsmasq with new configuration")
 				nanny.Kill()
 				nanny = &Nanny{Exec: opts.DnsmasqExec}
-				nanny.Configure(opts.DnsmasqArgs, currentConfig)
+				nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 				nanny.Start()
 			} else {
 				glog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")

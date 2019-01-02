@@ -111,7 +111,7 @@ func TestNannyConfig(t *testing.T) {
 		},
 	} {
 		nanny := &Nanny{Exec: "dnsmasq"}
-		nanny.Configure([]string{"--abc"}, testCase.c)
+		nanny.Configure([]string{"--abc"}, testCase.c, "127.0.0.1:10053")
 		if testCase.sort {
 			sort.Sort(sort.StringSlice(nanny.args))
 		}
@@ -124,12 +124,14 @@ func TestNannyLifecycle(t *testing.T) {
 
 	const mockDnsmasq = "../../test/fixtures/mock-dnsmasq.sh"
 	var nanny *Nanny
+	kubednsServer := "127.0.0.1:10053"
 
 	// Exit with success.
 	nanny = &Nanny{Exec: mockDnsmasq}
 	nanny.Configure(
 		[]string{"--exitWithSuccess"},
-		&config.Config{})
+		&config.Config{},
+		kubednsServer)
 	gomega.Expect(nanny.Start()).To(gomega.Succeed())
 	gomega.Expect(<-nanny.ExitChannel).To(gomega.Succeed())
 
@@ -137,7 +139,8 @@ func TestNannyLifecycle(t *testing.T) {
 	nanny = &Nanny{Exec: mockDnsmasq}
 	nanny.Configure(
 		[]string{"--exitWithError"},
-		&config.Config{})
+		&config.Config{},
+		kubednsServer)
 	gomega.Expect(nanny.Start()).To(gomega.Succeed())
 	gomega.Expect(<-nanny.ExitChannel).NotTo(gomega.Succeed())
 
@@ -145,7 +148,8 @@ func TestNannyLifecycle(t *testing.T) {
 	nanny = &Nanny{Exec: mockDnsmasq}
 	nanny.Configure(
 		[]string{"--sleepThenError"},
-		&config.Config{})
+		&config.Config{},
+		kubednsServer)
 	gomega.Expect(nanny.Start()).To(gomega.Succeed())
 	gomega.Expect(<-nanny.ExitChannel).NotTo(gomega.Succeed())
 
@@ -153,7 +157,8 @@ func TestNannyLifecycle(t *testing.T) {
 	nanny = &Nanny{Exec: mockDnsmasq}
 	nanny.Configure(
 		[]string{"--runForever"},
-		&config.Config{})
+		&config.Config{},
+		kubednsServer)
 	gomega.Expect(nanny.Start()).To(gomega.Succeed())
 	time.Sleep(250 * time.Millisecond)
 	gomega.Expect(nanny.Kill()).To(gomega.Succeed())
