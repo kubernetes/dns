@@ -81,11 +81,15 @@ func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer st
 			if isIP := (net.ParseIP(server) != nil); !isIP {
 				switch {
 				case strings.HasSuffix(server, "cluster.local"):
-					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err == nil && len(IPs) > 0 {
+					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err != nil {
+						glog.Errorf("Error looking up IP for %s: %v", server, err)
+					} else if len(IPs) > 0 {
 						server = IPs[0].String()
 					}
 				default:
-					if IPs, err := net.LookupIP(server); err == nil && len(IPs) > 0 {
+					if IPs, err := net.LookupIP(server); err != nil {
+						glog.Errorf("Error looking up IP for %s: %v", server, err)
+					} else if len(IPs) > 0 {
 						server = IPs[0].String()
 					}
 				}
