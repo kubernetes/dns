@@ -18,8 +18,10 @@ package dnsmasq
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"strings"
 
@@ -52,7 +54,8 @@ func ExtractDnsmasqArgs(cmdlineArgs *[]string) []string {
 }
 
 // Configure the nanny. This must be called before Start().
-func (n *Nanny) Configure(args []string, config *config.Config) {
+// kubednsServer is the address of the local kubedns instance used to do name resolution for non-IP names.
+func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer string) {
 	n.args = args
 
 	munge := func(s string) string {
@@ -68,7 +71,34 @@ func (n *Nanny) Configure(args []string, config *config.Config) {
 	}
 
 	for domain, serverList := range config.StubDomains {
+		resolver := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{}
+				return d.DialContext(ctx, "udp", kubednsServer)
+			},
+		}
 		for _, server := range serverList {
+			if isIP := (net.ParseIP(server) != nil); !isIP {
+				switch {
+				case strings.HasSuffix(server, "cluster.local"):
+					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err != nil {
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
+					} else if len(IPs) > 0 {
+						server = IPs[0].String()
+					} else {
+						glog.Errorf("Name %q does not resolve to any IPs", server)
+					}
+				default:
+					if IPs, err := net.LookupIP(server); err != nil {
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
+					} else if len(IPs) > 0 {
+						server = IPs[0].String()
+					} else {
+						glog.Errorf("Name %q does not resolve to any IPs", server)
+					}
+				}
+			}
 			// dnsmasq port separator is '#' for some reason.
 			server = munge(server)
 			n.args = append(
@@ -166,7 +196,7 @@ type RunNannyOpts struct {
 }
 
 // RunNanny runs the nanny and handles configuration updates.
-func RunNanny(sync config.Sync, opts RunNannyOpts) {
+func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 	defer glog.Flush()
 
 	currentConfig, err := sync.Once()
@@ -176,7 +206,7 @@ func RunNanny(sync config.Sync, opts RunNannyOpts) {
 	}
 
 	nanny := &Nanny{Exec: opts.DnsmasqExec}
-	nanny.Configure(opts.DnsmasqArgs, currentConfig)
+	nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 	if err := nanny.Start(); err != nil {
 		glog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
 	}
@@ -194,7 +224,7 @@ func RunNanny(sync config.Sync, opts RunNannyOpts) {
 				glog.V(0).Infof("Restarting dnsmasq with new configuration")
 				nanny.Kill()
 				nanny = &Nanny{Exec: opts.DnsmasqExec}
-				nanny.Configure(opts.DnsmasqArgs, currentConfig)
+				nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 				nanny.Start()
 			} else {
 				glog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
