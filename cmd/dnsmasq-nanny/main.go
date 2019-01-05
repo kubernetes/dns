@@ -69,7 +69,7 @@ Any arguments given after "--" will be passed directly to dnsmasq itself.
 		opts.syncInterval,
 		"interval to check for configuration updates")
 	flag.StringVar(&opts.kubednsServer, "kubednsServer", opts.kubednsServer,
-		"kubedns server url for cluster.local dns records")
+		"local kubedns instance address for non-IP name resolution")
 	flag.Parse()
 }
 

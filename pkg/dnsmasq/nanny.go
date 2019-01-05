@@ -54,6 +54,7 @@ func ExtractDnsmasqArgs(cmdlineArgs *[]string) []string {
 }
 
 // Configure the nanny. This must be called before Start().
+// kubednsServer is the address of the local kubedns instance used to do name resolution for non-IP names.
 func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer string) {
 	n.args = args
 
@@ -82,15 +83,19 @@ func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer st
 				switch {
 				case strings.HasSuffix(server, "cluster.local"):
 					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err != nil {
-						glog.Errorf("Error looking up IP for %s: %v", server, err)
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
 					} else if len(IPs) > 0 {
 						server = IPs[0].String()
+					} else {
+						glog.Errorf("Name %q does not resolve to any IPs", server)
 					}
 				default:
 					if IPs, err := net.LookupIP(server); err != nil {
-						glog.Errorf("Error looking up IP for %s: %v", server, err)
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
 					} else if len(IPs) > 0 {
 						server = IPs[0].String()
+					} else {
+						glog.Errorf("Name %q does not resolve to any IPs", server)
 					}
 				}
 			}
