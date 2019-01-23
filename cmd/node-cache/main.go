@@ -173,37 +173,41 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	return nil
 }
 
+func (c *cacheApp) runChecks() {
+	for _, rule := range c.iptablesRules {
+		exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+		if !exists {
+			if err != nil {
+				cache.teardownNetworking()
+				clog.Fatalf("Failed to add back non-existent rule %v", rule)
+			}
+			clog.Infof("Added back nonexistent rule - %v", rule)
+		}
+		if err != nil {
+			clog.Errorf("Failed to check rule %v - %s", rule, err)
+		}
+	}
+
+	exists, err := c.netifHandle.EnsureDummyDevice(c.params.intfName)
+	if !exists {
+		if err != nil {
+			cache.teardownNetworking()
+			clog.Fatalf("Failed to add back non-existent interface %s", c.params.intfName)
+		}
+		clog.Infof("Added back nonexistent interface - %s", c.params.intfName)
+	}
+	if err != nil {
+		clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
+	}
+}
+
 func (c *cacheApp) run() {
 	c.params.exitChan = make(chan bool, 1)
 	tick := time.NewTicker(c.params.interval * time.Second)
 	for {
 		select {
 		case <-tick.C:
-			for _, rule := range c.iptablesRules {
-				exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-				if !exists {
-					if err != nil {
-						cache.teardownNetworking()
-						clog.Fatalf("Failed to add back non-existent rule %v", rule)
-					}
-					clog.Infof("Added back nonexistent rule - %v", rule)
-				}
-				if err != nil {
-					clog.Errorf("Failed to check rule %v - %s", rule, err)
-				}
-			}
-
-			exists, err := c.netifHandle.EnsureDummyDevice(c.params.intfName)
-			if !exists {
-				if err != nil {
-					cache.teardownNetworking()
-					clog.Fatalf("Failed to add back non-existent interface %s", c.params.intfName)
-				}
-				clog.Infof("Added back nonexistent interface - %s", c.params.intfName)
-			}
-			if err != nil {
-				clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
-			}
+			c.runChecks()
 		case <-c.params.exitChan:
 			clog.Warningf("Exiting iptables check goroutine")
 			return
@@ -212,6 +216,9 @@ func (c *cacheApp) run() {
 }
 
 func main() {
+	// Ensure that the required setup is ready
+	// https://github.com/kubernetes/dns/issues/282 sometimes the interface gets the ip and then loses it, if added too soon.
+	cache.runChecks()
 	go cache.run()
 	coremain.Run()
 	// Unlikely to reach here, if we did it is because coremain exited and the signal was not trapped.
