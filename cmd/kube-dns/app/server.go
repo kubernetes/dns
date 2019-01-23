@@ -171,7 +171,9 @@ func (d *KubeDNSServer) startSkyDNSServer() {
 		Domain:  d.domain,
 		DnsAddr: fmt.Sprintf("%s:%d", d.dnsBindAddress, d.dnsPort),
 	}
-	server.SetDefaults(skydnsConfig)
+	if err := server.SetDefaults(skydnsConfig); err != nil {
+		glog.Fatalf("Failed to set defaults for Skydns server: %s", err)
+	}
 	s := server.New(d.kd, skydnsConfig)
 	if err := metrics.Metrics(); err != nil {
 		glog.Fatalf("Skydns metrics error: %s", err)

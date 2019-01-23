@@ -31,15 +31,17 @@ import (
 var (
 	opts = struct {
 		dnsmasq.RunNannyOpts
-		configDir    string
-		syncInterval time.Duration
+		configDir     string
+		syncInterval  time.Duration
+		kubednsServer string
 	}{
 		RunNannyOpts: dnsmasq.RunNannyOpts{
 			DnsmasqExec:     "/usr/sbin/dnsmasq",
 			RestartOnChange: false,
 		},
-		configDir:    "/etc/k8s/dns/dnsmasq-nanny",
-		syncInterval: 10 * time.Second,
+		configDir:     "/etc/k8s/dns/dnsmasq-nanny",
+		syncInterval:  10 * time.Second,
+		kubednsServer: "127.0.0.1:10053",
 	}
 )
 
@@ -66,6 +68,8 @@ Any arguments given after "--" will be passed directly to dnsmasq itself.
 	flag.DurationVar(&opts.syncInterval, "syncInterval",
 		opts.syncInterval,
 		"interval to check for configuration updates")
+	flag.StringVar(&opts.kubednsServer, "kubednsServer", opts.kubednsServer,
+		"local kubedns instance address for non-IP name resolution")
 	flag.Parse()
 }
 
@@ -75,5 +79,5 @@ func main() {
 
 	sync := config.NewFileSync(opts.configDir, opts.syncInterval)
 
-	dnsmasq.RunNanny(sync, opts.RunNannyOpts)
+	dnsmasq.RunNanny(sync, opts.RunNannyOpts, opts.kubednsServer)
 }
