@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coredns/coredns/coremain"
@@ -29,11 +30,12 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP   string        // ip address for the local cache agent to listen for dns requests
-	localPort string        // port to listen for dns requests
-	intfName  string        // Name of the interface to be created
-	interval  time.Duration // specifies how often to run iptables rules check
-	exitChan  chan bool     // Channel to terminate background goroutines
+	localIP            string        // ip address for the local cache agent to listen for dns requests
+	localPort          string        // port to listen for dns requests
+	intfName           string        // Name of the interface to be created
+	interval           time.Duration // specifies how often to run iptables rules check
+	maxIptablesLockErr int           // Max consecutive iptables lock errors to ignore before restarting
+	exitChan           chan bool     // Channel to terminate background goroutines
 }
 
 type iptablesRule struct {
@@ -50,6 +52,10 @@ type cacheApp struct {
 }
 
 var cache = cacheApp{params: configParams{localPort: "53"}}
+
+func IsIPTablesLocked(err error) bool {
+	return strings.Contains(err.Error(), "holding the xtables lock")
+}
 
 func (c *cacheApp) Init() {
 	err := c.parseAndValidateFlags()
@@ -156,6 +162,7 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
 	flag.StringVar(&c.params.intfName, "intfname", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
+	flag.IntVar(&c.params.maxIptablesLockErr, "maxiptableslockerr", 10, "Max consecutive iptables lock errors to ignore before restarting")
 	flag.Parse()
 
 	if net.ParseIP(c.params.localIP) == nil {
@@ -170,21 +177,30 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	if _, err := strconv.Atoi(c.params.localPort); err != nil {
 		return fmt.Errorf("Invalid port specified - %q", c.params.localPort)
 	}
+	if c.params.maxIptablesLockErr < 0 {
+		return fmt.Errorf("Invalid value for maxIptablesLockErr - %d", c.params.maxIptablesLockErr)
+	}
 	return nil
 }
 
-func (c *cacheApp) runChecks() {
+// returns true if checks failed due to iptables lock issue
+func (c *cacheApp) runChecks() bool {
+	iptablesLocked := false
 	for _, rule := range c.iptablesRules {
 		exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-		if !exists {
-			if err != nil {
-				cache.teardownNetworking()
-				clog.Fatalf("Failed to add back non-existent rule %v", rule)
-			}
+		if exists {
+			continue
+		} else if err == nil {
 			clog.Infof("Added back nonexistent rule - %v", rule)
+			continue
 		}
-		if err != nil {
-			clog.Errorf("Failed to check rule %v - %s", rule, err)
+		// if we got here, either iptables check failed or adding rule back failed.
+		if IsIPTablesLocked(err) {
+			clog.Infof("Failed to check/add back rule %v, due to xtables lock in use, retrying in %v seconds", rule, c.params.interval)
+			iptablesLocked = true
+		} else {
+			cache.teardownNetworking()
+			clog.Fatalf("Failed to add back non-existent rule %v - %s", rule, err)
 		}
 	}
 
@@ -199,15 +215,27 @@ func (c *cacheApp) runChecks() {
 	if err != nil {
 		clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
 	}
+	return iptablesLocked
 }
 
 func (c *cacheApp) run() {
 	c.params.exitChan = make(chan bool, 1)
 	tick := time.NewTicker(c.params.interval * time.Second)
+	numLockErr := 0
+	iptablesLocked := false
 	for {
 		select {
 		case <-tick.C:
-			c.runChecks()
+			iptablesLocked = c.runChecks()
+			if iptablesLocked {
+				numLockErr++
+			} else {
+				numLockErr = 0
+			}
+			if numLockErr > c.params.maxIptablesLockErr {
+				cache.teardownNetworking()
+				clog.Fatalf("Too many consecutive failures when running iptables checks")
+			}
 		case <-c.params.exitChan:
 			clog.Warningf("Exiting iptables check goroutine")
 			return
