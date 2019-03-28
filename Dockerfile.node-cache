@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM debian:stable-slim
+FROM k8s.gcr.io/debian-base:v1.0.0
 RUN apt-get update && apt-get install -y \
     iproute2 \
     iptables \
