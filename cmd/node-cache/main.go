@@ -30,12 +30,12 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP            string        // ip address for the local cache agent to listen for dns requests
-	localPort          string        // port to listen for dns requests
-	intfName           string        // Name of the interface to be created
-	interval           time.Duration // specifies how often to run iptables rules check
-	maxIptablesLockErr int           // Max consecutive iptables lock errors to ignore before restarting
-	exitChan           chan bool     // Channel to terminate background goroutines
+	localIP     string        // ip address for the local cache agent to listen for dns requests
+	localPort   string        // port to listen for dns requests
+	metricsPort int           // port to serve node-cache metrics
+	intfName    string        // Name of the interface to be created
+	interval    time.Duration // specifies how often to run iptables rules check
+	exitChan    chan bool     // Channel to terminate background goroutines
 }
 
 type iptablesRule struct {
@@ -53,7 +53,7 @@ type cacheApp struct {
 
 var cache = cacheApp{params: configParams{localPort: "53"}}
 
-func IsIPTablesLocked(err error) bool {
+func isLockedErr(err error) bool {
 	return strings.Contains(err.Error(), "holding the xtables lock")
 }
 
@@ -75,6 +75,7 @@ func (c *cacheApp) Init() {
 		cache.teardownNetworking()
 		clog.Fatalf("Failed to setup - %s, Exiting", err)
 	}
+	initMetrics(net.JoinHostPort(c.params.localIP, strconv.Itoa(c.params.metricsPort)))
 }
 
 func init() {
@@ -162,12 +163,13 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
 	flag.StringVar(&c.params.intfName, "intfname", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
-	flag.IntVar(&c.params.maxIptablesLockErr, "maxiptableslockerr", 10, "Max consecutive iptables lock errors to ignore before restarting")
+	flag.IntVar(&c.params.metricsPort, "metricsport", 9353, "port to serve nodecache setup metrics")
 	flag.Parse()
 
 	if net.ParseIP(c.params.localIP) == nil {
 		return fmt.Errorf("Invalid localip specified - %q", c.params.localIP)
 	}
+
 	// lookup specified dns port
 	if f := flag.Lookup("dns.port"); f == nil {
 		return fmt.Errorf("Failed to lookup \"dns.port\" parameter")
@@ -177,65 +179,51 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	if _, err := strconv.Atoi(c.params.localPort); err != nil {
 		return fmt.Errorf("Invalid port specified - %q", c.params.localPort)
 	}
-	if c.params.maxIptablesLockErr < 0 {
-		return fmt.Errorf("Invalid value for maxIptablesLockErr - %d", c.params.maxIptablesLockErr)
-	}
 	return nil
 }
 
-// returns true if checks failed due to iptables lock issue
-func (c *cacheApp) runChecks() bool {
-	iptablesLocked := false
+func (c *cacheApp) runChecks() {
 	for _, rule := range c.iptablesRules {
 		exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
 		if exists {
+			// debug messages can be printed by including "debug" plugin in coreFile.
+			clog.Debugf("IP table rule (table %q, chain %q) already exists", rule.table, rule.chain)
 			continue
 		} else if err == nil {
 			clog.Infof("Added back nonexistent rule - %v", rule)
 			continue
 		}
 		// if we got here, either iptables check failed or adding rule back failed.
-		if IsIPTablesLocked(err) {
+		if isLockedErr(err) {
 			clog.Infof("Failed to check/add back rule %v, due to xtables lock in use, retrying in %v seconds", rule, c.params.interval)
-			iptablesLocked = true
+			setupErrCount.WithLabelValues("iptables_lock_error").Inc()
 		} else {
-			cache.teardownNetworking()
-			clog.Fatalf("Failed to add back non-existent rule %v - %s", rule, err)
+			clog.Errorf("Failed to add back non-existent rule %v - %s", rule, err)
+			setupErrCount.WithLabelValues("iptables_err").Inc()
 		}
 	}
 
 	exists, err := c.netifHandle.EnsureDummyDevice(c.params.intfName)
 	if !exists {
 		if err != nil {
-			cache.teardownNetworking()
-			clog.Fatalf("Failed to add back non-existent interface %s", c.params.intfName)
+			clog.Errorf("Failed to add back non-existent interface %s: %s", c.params.intfName, err)
+			setupErrCount.WithLabelValues("intf_add_err").Inc()
 		}
 		clog.Infof("Added back nonexistent interface - %s", c.params.intfName)
 	}
 	if err != nil {
 		clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
+		setupErrCount.WithLabelValues("intf_check_err").Inc()
 	}
-	return iptablesLocked
 }
 
 func (c *cacheApp) run() {
 	c.params.exitChan = make(chan bool, 1)
 	tick := time.NewTicker(c.params.interval * time.Second)
-	numLockErr := 0
-	iptablesLocked := false
 	for {
 		select {
 		case <-tick.C:
-			iptablesLocked = c.runChecks()
-			if iptablesLocked {
-				numLockErr++
-			} else {
-				numLockErr = 0
-			}
-			if numLockErr > c.params.maxIptablesLockErr {
-				cache.teardownNetworking()
-				clog.Fatalf("Too many consecutive failures when running iptables checks")
-			}
+			c.runChecks()
 		case <-c.params.exitChan:
 			clog.Warningf("Exiting iptables check goroutine")
 			return
