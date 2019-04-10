@@ -31,19 +31,19 @@ SRC_DIRS := cmd pkg
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Set default base image dynamically for each arch
 ifeq ($(ARCH),amd64)
-    BASEIMAGE?=alpine:3.8
+	BASEIMAGE?=k8s.gcr.io/debian-base:v1.0.0
 endif
 ifeq ($(ARCH),arm)
-    BASEIMAGE?=arm32v6/alpine:3.8
+	BASEIMAGE?=k8s.gcr.io/debian-base-arm:v1.0.0
 endif
 ifeq ($(ARCH),arm64)
-    BASEIMAGE?=arm64v8/alpine:3.8
+	BASEIMAGE?=k8s.gcr.io/debian-base-arm64:v1.0.0
 endif
 ifeq ($(ARCH),ppc64le)
-    BASEIMAGE?=ppc64le/alpine:3.8
+	BASEIMAGE?=k8s.gcr.io/debian-base-ppc64le:v1.0.0
 endif
 ifeq ($(ARCH),s390x)
-    BASEIMAGE?=s390x/alpine:3.8
+	BASEIMAGE?=k8s.gcr.io/debian-base-s390x:v1.0.0
 endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
