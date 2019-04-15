@@ -28,22 +28,22 @@ OUTPUT_DIR := _output/$(ARCH)
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= alpine:3.8
-	COMPILE_IMAGE := alpine:3.8
+	BASEIMAGE ?= k8s.gcr.io/debian-base:v1.0.0
+	COMPILE_IMAGE := k8s.gcr.io/debian-base:v1.0.0
 else ifeq ($(ARCH),arm)
-	BASEIMAGE ?= armhf/busybox:glibc
+	BASEIMAGE ?= k8s.gcr.io/debian-base-arm:v1.0.0
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
 else ifeq ($(ARCH),arm64)
-	BASEIMAGE ?= aarch64/busybox:glibc
+	BASEIMAGE ?= k8s.gcr.io/debian-base-arm64:v1.0.0
 	TRIPLE    ?= aarch64-linux-gnu
 	QEMUARCH  := aarch64
 else ifeq ($(ARCH),ppc64le)
-	BASEIMAGE ?= ppc64le/busybox:glibc
+	BASEIMAGE ?= k8s.gcr.io/debian-base-ppc64le:v1.0.0
 	TRIPLE    ?= powerpc64le-linux-gnu
 	QEMUARCH  := ppc64le
 else ifeq ($(ARCH),s390x)
-        BASEIMAGE ?=s390x/busybox:glibc
+        BASEIMAGE ?=k8s.gcr.io/debian-base-s390x:v1.0.0
         TRIPLE    ?=s390x-linux-gnu
         QEMUARCH  :=s390x
 else
