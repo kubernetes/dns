@@ -20,8 +20,7 @@ var (
 )
 
 func initMetrics(ipport string) {
-	err := serveMetrics(ipport)
-	if err != nil {
+	if err := serveMetrics(ipport); err != nil {
 		clog.Errorf("Failed to start metrics handler: %s", err)
 		return
 	}

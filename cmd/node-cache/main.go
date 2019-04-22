@@ -191,15 +191,15 @@ func (c *cacheApp) runChecks() {
 			clog.Debugf("IP table rule (table %q, chain %q) already exists", rule.table, rule.chain)
 			continue
 		case err == nil:
-			clog.Infof("Added back nonexistent rule - %v", rule)
+			clog.Infof("Added back nodelocaldns rule - %v", rule)
 			continue
 		// if we got here, either iptables check failed or adding rule back failed.
 		case isLockedErr(err):
-			clog.Infof("Failed to check/add back rule %v, due to xtables lock in use, retrying in %v", rule, c.params.interval)
-			setupErrCount.WithLabelValues("iptables_lock_error").Inc()
+			clog.Infof("Error checking/adding iptables rule %v, due to xtables lock in use, retrying in %v", rule, c.params.interval)
+			setupErrCount.WithLabelValues("iptables_lock").Inc()
 		default:
-			clog.Errorf("Failed to add back non-existent rule %v - %s", rule, err)
-			setupErrCount.WithLabelValues("iptables_err").Inc()
+			clog.Errorf("Error adding iptables rule %v - %s", rule, err)
+			setupErrCount.WithLabelValues("iptables").Inc()
 		}
 	}
 
@@ -207,13 +207,13 @@ func (c *cacheApp) runChecks() {
 	if !exists {
 		if err != nil {
 			clog.Errorf("Failed to add back non-existent interface %s: %s", c.params.interfaceName, err)
-			setupErrCount.WithLabelValues("interface_add_err").Inc()
+			setupErrCount.WithLabelValues("interface_add").Inc()
 		}
 		clog.Infof("Added back nonexistent interface - %s", c.params.interfaceName)
 	}
 	if err != nil {
 		clog.Errorf("Failed to check dummy device %s - %s", c.params.interfaceName, err)
-		setupErrCount.WithLabelValues("interface_check_err").Inc()
+		setupErrCount.WithLabelValues("interface_check").Inc()
 	}
 }
 
