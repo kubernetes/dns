@@ -188,7 +188,7 @@ func (c *cacheApp) runChecks() {
 		switch {
 		case exists:
 			// debug messages can be printed by including "debug" plugin in coreFile.
-			clog.Debugf("IP table rule (table %q, chain %q) already exists", rule.table, rule.chain)
+			clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
 			continue
 		case err == nil:
 			clog.Infof("Added back nodelocaldns rule - %v", rule)
@@ -206,13 +206,13 @@ func (c *cacheApp) runChecks() {
 	exists, err := c.netifHandle.EnsureDummyDevice(c.params.interfaceName)
 	if !exists {
 		if err != nil {
-			clog.Errorf("Failed to add back non-existent interface %s: %s", c.params.interfaceName, err)
+			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.interfaceName, err)
 			setupErrCount.WithLabelValues("interface_add").Inc()
 		}
-		clog.Infof("Added back nonexistent interface - %s", c.params.interfaceName)
+		clog.Infof("Added back interface - %s", c.params.interfaceName)
 	}
 	if err != nil {
-		clog.Errorf("Failed to check dummy device %s - %s", c.params.interfaceName, err)
+		clog.Errorf("Error checking dummy device %s - %s", c.params.interfaceName, err)
 		setupErrCount.WithLabelValues("interface_check").Inc()
 	}
 }
