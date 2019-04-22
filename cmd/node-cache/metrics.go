@@ -20,7 +20,11 @@ var (
 )
 
 func initMetrics(ipport string) {
-	serveMetrics(ipport)
+	err := serveMetrics(ipport)
+	if err != nil {
+		clog.Errorf("Failed to start metrics handler: %s", err)
+		return
+	}
 	registerMetrics()
 }
 
@@ -31,7 +35,6 @@ func registerMetrics() {
 func serveMetrics(ipport string) error {
 	ln, err := net.Listen("tcp", ipport)
 	if err != nil {
-		clog.Errorf("Failed to start metrics handler: %s", err)
 		return err
 	}
 

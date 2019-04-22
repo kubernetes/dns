@@ -30,12 +30,12 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP     string        // ip address for the local cache agent to listen for dns requests
-	localPort   string        // port to listen for dns requests
-	metricsPort int           // port to serve node-cache metrics
-	intfName    string        // Name of the interface to be created
-	interval    time.Duration // specifies how often to run iptables rules check
-	exitChan    chan bool     // Channel to terminate background goroutines
+	localIP       string        // ip address for the local cache agent to listen for dns requests
+	localPort     string        // port to listen for dns requests
+	metricsPort   int           // port to serve node-cache metrics
+	interfaceName string        // Name of the interface to be created
+	interval      time.Duration // specifies how often to run iptables rules check
+	exitChan      chan bool     // Channel to terminate background goroutines
 }
 
 type iptablesRule struct {
@@ -120,7 +120,7 @@ func newIPTables() utiliptables.Interface {
 func (c *cacheApp) setupNetworking() error {
 	var err error
 	clog.Infof("Setting up networking for node cache")
-	err = c.netifHandle.AddDummyDevice(c.params.intfName)
+	err = c.netifHandle.AddDummyDevice(c.params.interfaceName)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func (c *cacheApp) teardownNetworking() error {
 		// exitChan is a buffered channel of size 1, so this will not block
 		c.params.exitChan <- true
 	}
-	err := c.netifHandle.RemoveDummyDevice(c.params.intfName)
+	err := c.netifHandle.RemoveDummyDevice(c.params.interfaceName)
 	for _, rule := range c.iptablesRules {
 		exists := true
 		for exists == true {
@@ -161,7 +161,7 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	}
 
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
-	flag.StringVar(&c.params.intfName, "intfname", "nodelocaldns", "name of the interface to be created")
+	flag.StringVar(&c.params.interfaceName, "intfname", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
 	flag.IntVar(&c.params.metricsPort, "metricsport", 9353, "port to serve nodecache setup metrics")
 	flag.Parse()
@@ -185,35 +185,35 @@ func (c *cacheApp) parseAndValidateFlags() error {
 func (c *cacheApp) runChecks() {
 	for _, rule := range c.iptablesRules {
 		exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-		if exists {
+		switch {
+		case exists:
 			// debug messages can be printed by including "debug" plugin in coreFile.
 			clog.Debugf("IP table rule (table %q, chain %q) already exists", rule.table, rule.chain)
 			continue
-		} else if err == nil {
+		case err == nil:
 			clog.Infof("Added back nonexistent rule - %v", rule)
 			continue
-		}
 		// if we got here, either iptables check failed or adding rule back failed.
-		if isLockedErr(err) {
-			clog.Infof("Failed to check/add back rule %v, due to xtables lock in use, retrying in %v seconds", rule, c.params.interval)
+		case isLockedErr(err):
+			clog.Infof("Failed to check/add back rule %v, due to xtables lock in use, retrying in %v", rule, c.params.interval)
 			setupErrCount.WithLabelValues("iptables_lock_error").Inc()
-		} else {
+		default:
 			clog.Errorf("Failed to add back non-existent rule %v - %s", rule, err)
 			setupErrCount.WithLabelValues("iptables_err").Inc()
 		}
 	}
 
-	exists, err := c.netifHandle.EnsureDummyDevice(c.params.intfName)
+	exists, err := c.netifHandle.EnsureDummyDevice(c.params.interfaceName)
 	if !exists {
 		if err != nil {
-			clog.Errorf("Failed to add back non-existent interface %s: %s", c.params.intfName, err)
-			setupErrCount.WithLabelValues("intf_add_err").Inc()
+			clog.Errorf("Failed to add back non-existent interface %s: %s", c.params.interfaceName, err)
+			setupErrCount.WithLabelValues("interface_add_err").Inc()
 		}
-		clog.Infof("Added back nonexistent interface - %s", c.params.intfName)
+		clog.Infof("Added back nonexistent interface - %s", c.params.interfaceName)
 	}
 	if err != nil {
-		clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
-		setupErrCount.WithLabelValues("intf_check_err").Inc()
+		clog.Errorf("Failed to check dummy device %s - %s", c.params.interfaceName, err)
+		setupErrCount.WithLabelValues("interface_check_err").Inc()
 	}
 }
 
