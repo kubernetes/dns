@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coredns/coredns/coremain"
@@ -29,11 +30,12 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP   string        // ip address for the local cache agent to listen for dns requests
-	localPort string        // port to listen for dns requests
-	intfName  string        // Name of the interface to be created
-	interval  time.Duration // specifies how often to run iptables rules check
-	exitChan  chan bool     // Channel to terminate background goroutines
+	localIP       string        // ip address for the local cache agent to listen for dns requests
+	localPort     string        // port to listen for dns requests
+	metricsPort   int           // port to serve node-cache metrics
+	interfaceName string        // Name of the interface to be created
+	interval      time.Duration // specifies how often to run iptables rules check
+	exitChan      chan bool     // Channel to terminate background goroutines
 }
 
 type iptablesRule struct {
@@ -50,6 +52,10 @@ type cacheApp struct {
 }
 
 var cache = cacheApp{params: configParams{localPort: "53"}}
+
+func isLockedErr(err error) bool {
+	return strings.Contains(err.Error(), "holding the xtables lock")
+}
 
 func (c *cacheApp) Init() {
 	err := c.parseAndValidateFlags()
@@ -69,6 +75,7 @@ func (c *cacheApp) Init() {
 		cache.teardownNetworking()
 		clog.Fatalf("Failed to setup - %s, Exiting", err)
 	}
+	initMetrics(net.JoinHostPort(c.params.localIP, strconv.Itoa(c.params.metricsPort)))
 }
 
 func init() {
@@ -113,7 +120,7 @@ func newIPTables() utiliptables.Interface {
 func (c *cacheApp) setupNetworking() error {
 	var err error
 	clog.Infof("Setting up networking for node cache")
-	err = c.netifHandle.AddDummyDevice(c.params.intfName)
+	err = c.netifHandle.AddDummyDevice(c.params.interfaceName)
 	if err != nil {
 		return err
 	}
@@ -133,7 +140,7 @@ func (c *cacheApp) teardownNetworking() error {
 		// exitChan is a buffered channel of size 1, so this will not block
 		c.params.exitChan <- true
 	}
-	err := c.netifHandle.RemoveDummyDevice(c.params.intfName)
+	err := c.netifHandle.RemoveDummyDevice(c.params.interfaceName)
 	for _, rule := range c.iptablesRules {
 		exists := true
 		for exists == true {
@@ -154,13 +161,15 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	}
 
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
-	flag.StringVar(&c.params.intfName, "intfname", "nodelocaldns", "name of the interface to be created")
+	flag.StringVar(&c.params.interfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
+	flag.IntVar(&c.params.metricsPort, "metricsport", 9353, "port to serve nodecache setup metrics")
 	flag.Parse()
 
 	if net.ParseIP(c.params.localIP) == nil {
 		return fmt.Errorf("Invalid localip specified - %q", c.params.localIP)
 	}
+
 	// lookup specified dns port
 	if f := flag.Lookup("dns.port"); f == nil {
 		return fmt.Errorf("Failed to lookup \"dns.port\" parameter")
@@ -176,28 +185,35 @@ func (c *cacheApp) parseAndValidateFlags() error {
 func (c *cacheApp) runChecks() {
 	for _, rule := range c.iptablesRules {
 		exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-		if !exists {
-			if err != nil {
-				cache.teardownNetworking()
-				clog.Fatalf("Failed to add back non-existent rule %v", rule)
-			}
-			clog.Infof("Added back nonexistent rule - %v", rule)
-		}
-		if err != nil {
-			clog.Errorf("Failed to check rule %v - %s", rule, err)
+		switch {
+		case exists:
+			// debug messages can be printed by including "debug" plugin in coreFile.
+			clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
+			continue
+		case err == nil:
+			clog.Infof("Added back nodelocaldns rule - %v", rule)
+			continue
+		// if we got here, either iptables check failed or adding rule back failed.
+		case isLockedErr(err):
+			clog.Infof("Error checking/adding iptables rule %v, due to xtables lock in use, retrying in %v", rule, c.params.interval)
+			setupErrCount.WithLabelValues("iptables_lock").Inc()
+		default:
+			clog.Errorf("Error adding iptables rule %v - %s", rule, err)
+			setupErrCount.WithLabelValues("iptables").Inc()
 		}
 	}
 
-	exists, err := c.netifHandle.EnsureDummyDevice(c.params.intfName)
+	exists, err := c.netifHandle.EnsureDummyDevice(c.params.interfaceName)
 	if !exists {
 		if err != nil {
-			cache.teardownNetworking()
-			clog.Fatalf("Failed to add back non-existent interface %s", c.params.intfName)
+			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.interfaceName, err)
+			setupErrCount.WithLabelValues("interface_add").Inc()
 		}
-		clog.Infof("Added back nonexistent interface - %s", c.params.intfName)
+		clog.Infof("Added back interface - %s", c.params.interfaceName)
 	}
 	if err != nil {
-		clog.Errorf("Failed to check dummy device %s - %s", c.params.intfName, err)
+		clog.Errorf("Error checking dummy device %s - %s", c.params.interfaceName, err)
+		setupErrCount.WithLabelValues("interface_check").Inc()
 	}
 }
 

@@ -876,8 +876,10 @@
   analyzer-version = 1
   input-imports = [
     "github.com/coredns/coredns/coremain",
+    "github.com/coredns/coredns/plugin",
     "github.com/coredns/coredns/plugin/bind",
     "github.com/coredns/coredns/plugin/cache",
+    "github.com/coredns/coredns/plugin/debug",
     "github.com/coredns/coredns/plugin/errors",
     "github.com/coredns/coredns/plugin/forward",
     "github.com/coredns/coredns/plugin/health",
@@ -893,6 +895,7 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_golang/prometheus/promhttp",
     "github.com/skynetservices/skydns/metrics",
     "github.com/skynetservices/skydns/msg",
     "github.com/skynetservices/skydns/server",
