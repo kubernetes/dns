@@ -161,7 +161,7 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	}
 
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
-	flag.StringVar(&c.params.interfaceName, "intfname", "nodelocaldns", "name of the interface to be created")
+	flag.StringVar(&c.params.interfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
 	flag.IntVar(&c.params.metricsPort, "metricsport", 9353, "port to serve nodecache setup metrics")
 	flag.Parse()
