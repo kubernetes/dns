@@ -29,7 +29,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifeq ($(ARCH),amd64)
 	BASEIMAGE ?= k8s.gcr.io/debian-base:v1.0.0
-	COMPILE_IMAGE := k8s.gcr.io/debian-base:v1.0.0
+	COMPILE_IMAGE := alpine:3.8
 else ifeq ($(ARCH),arm)
 	BASEIMAGE ?= k8s.gcr.io/debian-base-arm:v1.0.0
 	TRIPLE    ?= arm-linux-gnueabihf
