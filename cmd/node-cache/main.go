@@ -30,12 +30,12 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP       string        // ip address for the local cache agent to listen for dns requests
-	localPort     string        // port to listen for dns requests
-	metricsPort   int           // port to serve node-cache metrics
-	interfaceName string        // Name of the interface to be created
-	interval      time.Duration // specifies how often to run iptables rules check
-	exitChan      chan bool     // Channel to terminate background goroutines
+	localIP              string        // ip address for the local cache agent to listen for dns requests
+	localPort            string        // port to listen for dns requests
+	metricsListenAddress string        // address to serve metrics on
+	interfaceName        string        // Name of the interface to be created
+	interval             time.Duration // specifies how often to run iptables rules check
+	exitChan             chan bool     // Channel to terminate background goroutines
 }
 
 type iptablesRule struct {
@@ -75,7 +75,7 @@ func (c *cacheApp) Init() {
 		cache.teardownNetworking()
 		clog.Fatalf("Failed to setup - %s, Exiting", err)
 	}
-	initMetrics(net.JoinHostPort(c.params.localIP, strconv.Itoa(c.params.metricsPort)))
+	initMetrics(c.params.metricsListenAddress)
 }
 
 func init() {
@@ -163,7 +163,7 @@ func (c *cacheApp) parseAndValidateFlags() error {
 	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
 	flag.StringVar(&c.params.interfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
-	flag.IntVar(&c.params.metricsPort, "metricsport", 9353, "port to serve nodecache setup metrics")
+	flag.StringVar(&c.params.metricsListenAddress, "metrics-listen-address", "0.0.0.0:9353", "address to serve metrics on")
 	flag.Parse()
 
 	if net.ParseIP(c.params.localIP) == nil {
