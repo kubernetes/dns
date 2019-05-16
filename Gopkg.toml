@@ -47,7 +47,7 @@
 
 [[constraint]]
   name = "github.com/prometheus/client_golang"
-  version = "0.8.0"
+  version = "0.9.2"
 
 [[constraint]]
   branch = "master"
@@ -84,6 +84,14 @@
 [[override]]
   name = "github.com/ugorji/go"
   revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
+
+[[override]]
+  name = "github.com/dnstap/golang-dnstap"
+  revision = "6b9665e675009e360f1c34b4526c2b215bc2ff68"
+
+[[override]]
+  name = "github.com/farsightsec/golang-framestream"
+  revision = "fa4b164d59b87c744f49643b5d435effba516c4e"
 
 [prune]
   go-tests = true
