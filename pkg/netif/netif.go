@@ -8,13 +8,17 @@ import (
 
 type NetifManager struct {
 	netlink.Handle
-	*netlink.Addr
+	Addrs []*netlink.Addr
 }
 
-// NewNetifManager returns a new instance of NetifManager with the ip address set to the provided value
-// This ip address will be bound to any devices created by this instance.
-func NewNetifManager(ip net.IP) *NetifManager {
-	return &NetifManager{netlink.Handle{}, &netlink.Addr{IPNet: netlink.NewIPNet(ip)}}
+// NewNetifManager returns a new instance of NetifManager with the ip address set to the provided values
+// These ip addresses will be bound to any devices created by this instance.
+func NewNetifManager(ips []net.IP) *NetifManager {
+	nm := &NetifManager{netlink.Handle{}, nil}
+	for _, ip := range ips {
+		nm.Addrs = append(nm.Addrs, &netlink.Addr{IPNet: netlink.NewIPNet(ip)})
+	}
+	return nm
 }
 
 // EnsureDummyDevice checks for the presence of the given dummy device and creates one if it does not exist.
@@ -23,7 +27,9 @@ func (m *NetifManager) EnsureDummyDevice(name string) (bool, error) {
 	l, err := m.LinkByName(name)
 	if err == nil {
 		// found dummy device, make sure ip matches. AddrAdd will return error if address exists, will add it otherwise
-		m.AddrAdd(l, m.Addr)
+		for _, addr := range m.Addrs {
+			m.AddrAdd(l, addr)
+		}
 		return true, nil
 	}
 	return false, m.AddDummyDevice(name)
@@ -44,7 +50,13 @@ func (m *NetifManager) AddDummyDevice(name string) error {
 		return err
 	}
 	l, _ := m.LinkByName(name)
-	return m.AddrAdd(l, m.Addr)
+	for _, addr := range m.Addrs {
+		err = m.AddrAdd(l, addr)
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
 
 // RemoveDummyDevice deletes the dummy device with the given name.
