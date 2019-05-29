@@ -30,7 +30,8 @@ import (
 
 // configParams lists the configuration options that can be provided to dns-cache
 type configParams struct {
-	localIP              string        // ip address for the local cache agent to listen for dns requests
+	localIPStr           string        // comma separated listen ips for the local cache agent
+	localIPs             []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
 	localPort            string        // port to listen for dns requests
 	metricsListenAddress string        // address to serve metrics on
 	interfaceName        string        // Name of the interface to be created
@@ -63,7 +64,7 @@ func (c *cacheApp) Init() {
 	if err != nil {
 		clog.Fatalf("Error parsing flags - %s, Exiting", err)
 	}
-	c.netifHandle = netif.NewNetifManager(net.ParseIP(c.params.localIP))
+	c.netifHandle = netif.NewNetifManager(c.params.localIPs)
 	if c.setupIptables {
 		c.initIptables()
 	}
@@ -87,29 +88,31 @@ func init() {
 }
 
 func (c *cacheApp) initIptables() {
-
-	c.iptablesRules = []iptablesRule{
-		// Match traffic destined for localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
-		{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "tcp", "-d", c.params.localIP,
-			"--dport", c.params.localPort, "-j", "NOTRACK"}},
-		{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "udp", "-d", c.params.localIP,
-			"--dport", c.params.localPort, "-j", "NOTRACK"}},
-		// There are rules in filter table to allow tracked connections to be accepted. Since we skipped connection tracking,
-		// need these additional filter table rules.
-		{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "tcp", "-d", c.params.localIP,
-			"--dport", c.params.localPort, "-j", "ACCEPT"}},
-		{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "udp", "-d", c.params.localIP,
-			"--dport", c.params.localPort, "-j", "ACCEPT"}},
-		// Match traffic from localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
-		{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-s", c.params.localIP,
-			"--sport", c.params.localPort, "-j", "NOTRACK"}},
-		{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "udp", "-s", c.params.localIP,
-			"--sport", c.params.localPort, "-j", "NOTRACK"}},
-		// Additional filter table rules for traffic frpm localIp:localPort
-		{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "tcp", "-s", c.params.localIP,
-			"--sport", c.params.localPort, "-j", "ACCEPT"}},
-		{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "udp", "-s", c.params.localIP,
-			"--sport", c.params.localPort, "-j", "ACCEPT"}},
+	// using the localIPStr param since we need ip strings here
+	for _, localIP := range strings.Split(c.params.localIPStr, ",") {
+		c.iptablesRules = append(c.iptablesRules, []iptablesRule{
+			// Match traffic destined for localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
+			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "NOTRACK"}},
+			// There are rules in filter table to allow tracked connections to be accepted. Since we skipped connection tracking,
+			// need these additional filter table rules.
+			{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "ACCEPT"}},
+			{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "ACCEPT"}},
+			// Match traffic from localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-s", localIP,
+				"--sport", c.params.localPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "udp", "-s", localIP,
+				"--sport", c.params.localPort, "-j", "NOTRACK"}},
+			// Additional filter table rules for traffic frpm localIp:localPort
+			{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "tcp", "-s", localIP,
+				"--sport", c.params.localPort, "-j", "ACCEPT"}},
+			{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "udp", "-s", localIP,
+				"--sport", c.params.localPort, "-j", "ACCEPT"}},
+		}...)
 	}
 	c.iptables = newIPTables()
 }
@@ -134,6 +137,8 @@ func (c *cacheApp) setupNetworking() error {
 				return err
 			}
 		}
+	} else {
+		clog.Infof("Skipping iptables setup for node cache")
 	}
 	return err
 }
@@ -167,15 +172,19 @@ func (c *cacheApp) parseAndValidateFlags() error {
 		flag.PrintDefaults()
 	}
 
-	flag.StringVar(&c.params.localIP, "localip", "", "ip address to bind dnscache to")
+	flag.StringVar(&c.params.localIPStr, "localip", "", "comma-separated string of ip addresses to bind dnscache to")
 	flag.StringVar(&c.params.interfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&c.params.interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
 	flag.StringVar(&c.params.metricsListenAddress, "metrics-listen-address", "0.0.0.0:9353", "address to serve metrics on")
 	flag.BoolVar(&c.setupIptables, "setupiptables", true, "indicates whether iptables rules should be setup")
 	flag.Parse()
 
-	if net.ParseIP(c.params.localIP) == nil {
-		return fmt.Errorf("Invalid localip specified - %q", c.params.localIP)
+	for _, ipstr := range strings.Split(c.params.localIPStr, ",") {
+		newIP := net.ParseIP(ipstr)
+		if newIP == nil {
+			return fmt.Errorf("Invalid localip specified - %q", ipstr)
+		}
+		c.params.localIPs = append(c.params.localIPs, newIP)
 	}
 
 	// lookup specified dns port
