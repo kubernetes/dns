@@ -69,6 +69,14 @@ func (t *Transport) Dial(proto string) (*dns.Conn, bool, error) {
 	return conn, false, err
 }
 
+func (p *Proxy) readTimeout() time.Duration {
+	return limitTimeout(&p.avgRtt, minTimeout, maxTimeout)
+}
+
+func (p *Proxy) updateRtt(newRtt time.Duration) {
+	averageTimeout(&p.avgRtt, newRtt, cumulativeAvgWeight)
+}
+
 // Connect selects an upstream, sends the request and waits for a response.
 func (p *Proxy) Connect(ctx context.Context, state request.Request, opts options) (*dns.Msg, error) {
 	start := time.Now()
@@ -95,6 +103,7 @@ func (p *Proxy) Connect(ctx context.Context, state request.Request, opts options
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(maxTimeout))
+	reqTime := time.Now()
 	if err := conn.WriteMsg(state.Req); err != nil {
 		conn.Close() // not giving it back
 		if err == io.EOF && cached {
@@ -103,22 +112,18 @@ func (p *Proxy) Connect(ctx context.Context, state request.Request, opts options
 		return nil, err
 	}
 
-	var ret *dns.Msg
-	conn.SetReadDeadline(time.Now().Add(readTimeout))
-	for {
-		ret, err = conn.ReadMsg()
-		if err != nil {
-			conn.Close() // not giving it back
-			if err == io.EOF && cached {
-				return nil, ErrCachedClosed
-			}
-			return ret, err
+	conn.SetReadDeadline(time.Now().Add(p.readTimeout()))
+	ret, err := conn.ReadMsg()
+	if err != nil {
+		p.updateRtt(maxTimeout)
+		conn.Close() // not giving it back
+		if err == io.EOF && cached {
+			return nil, ErrCachedClosed
 		}
-		// drop out-of-order responses
-		if state.Req.Id == ret.Id {
-			break
-		}
+		return ret, err
 	}
+
+	p.updateRtt(time.Since(reqTime))
 
 	p.transport.Yield(conn)
 
