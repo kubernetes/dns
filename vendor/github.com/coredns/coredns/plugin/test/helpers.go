@@ -2,8 +2,8 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"sort"
+	"testing"
 
 	"github.com/miekg/dns"
 )
@@ -113,25 +113,29 @@ func OPT(bufsize int, do bool) *dns.OPT {
 }
 
 // Header test if the header in resp matches the header as defined in tc.
-func Header(tc Case, resp *dns.Msg) error {
+func Header(t *testing.T, tc Case, resp *dns.Msg) bool {
 	if resp.Rcode != tc.Rcode {
-		return fmt.Errorf("rcode is %q, expected %q", dns.RcodeToString[resp.Rcode], dns.RcodeToString[tc.Rcode])
+		t.Errorf("Rcode is %q, expected %q", dns.RcodeToString[resp.Rcode], dns.RcodeToString[tc.Rcode])
+		return false
 	}
 
 	if len(resp.Answer) != len(tc.Answer) {
-		return fmt.Errorf("answer for %q contained %d results, %d expected", tc.Qname, len(resp.Answer), len(tc.Answer))
+		t.Errorf("Answer for %q contained %d results, %d expected", tc.Qname, len(resp.Answer), len(tc.Answer))
+		return false
 	}
 	if len(resp.Ns) != len(tc.Ns) {
-		return fmt.Errorf("authority for %q contained %d results, %d expected", tc.Qname, len(resp.Ns), len(tc.Ns))
+		t.Errorf("Authority for %q contained %d results, %d expected", tc.Qname, len(resp.Ns), len(tc.Ns))
+		return false
 	}
 	if len(resp.Extra) != len(tc.Extra) {
-		return fmt.Errorf("additional for %q contained %d results, %d expected", tc.Qname, len(resp.Extra), len(tc.Extra))
+		t.Errorf("Additional for %q contained %d results, %d expected", tc.Qname, len(resp.Extra), len(tc.Extra))
+		return false
 	}
-	return nil
+	return true
 }
 
-// Section tests if the section in tc matches rr.
-func Section(tc Case, sec sect, rr []dns.RR) error {
+// Section tests if the the section in tc matches rr.
+func Section(t *testing.T, tc Case, sec sect, rr []dns.RR) bool {
 	section := []dns.RR{}
 	switch sec {
 	case 0:
@@ -144,112 +148,134 @@ func Section(tc Case, sec sect, rr []dns.RR) error {
 
 	for i, a := range rr {
 		if a.Header().Name != section[i].Header().Name {
-			return fmt.Errorf("RR %d should have a Header Name of %q, but has %q", i, section[i].Header().Name, a.Header().Name)
+			t.Errorf("RR %d should have a Header Name of %q, but has %q", i, section[i].Header().Name, a.Header().Name)
+			return false
 		}
 		// 303 signals: don't care what the ttl is.
 		if section[i].Header().Ttl != 303 && a.Header().Ttl != section[i].Header().Ttl {
 			if _, ok := section[i].(*dns.OPT); !ok {
 				// we check edns0 bufize on this one
-				return fmt.Errorf("RR %d should have a Header TTL of %d, but has %d", i, section[i].Header().Ttl, a.Header().Ttl)
+				t.Errorf("RR %d should have a Header TTL of %d, but has %d", i, section[i].Header().Ttl, a.Header().Ttl)
+				return false
 			}
 		}
 		if a.Header().Rrtype != section[i].Header().Rrtype {
-			return fmt.Errorf("RR %d should have a header rr type of %d, but has %d", i, section[i].Header().Rrtype, a.Header().Rrtype)
+			t.Errorf("RR %d should have a header rr type of %d, but has %d", i, section[i].Header().Rrtype, a.Header().Rrtype)
+			return false
 		}
 
 		switch x := a.(type) {
 		case *dns.SRV:
 			if x.Priority != section[i].(*dns.SRV).Priority {
-				return fmt.Errorf("RR %d should have a Priority of %d, but has %d", i, section[i].(*dns.SRV).Priority, x.Priority)
+				t.Errorf("RR %d should have a Priority of %d, but has %d", i, section[i].(*dns.SRV).Priority, x.Priority)
+				return false
 			}
 			if x.Weight != section[i].(*dns.SRV).Weight {
-				return fmt.Errorf("RR %d should have a Weight of %d, but has %d", i, section[i].(*dns.SRV).Weight, x.Weight)
+				t.Errorf("RR %d should have a Weight of %d, but has %d", i, section[i].(*dns.SRV).Weight, x.Weight)
+				return false
 			}
 			if x.Port != section[i].(*dns.SRV).Port {
-				return fmt.Errorf("RR %d should have a Port of %d, but has %d", i, section[i].(*dns.SRV).Port, x.Port)
+				t.Errorf("RR %d should have a Port of %d, but has %d", i, section[i].(*dns.SRV).Port, x.Port)
+				return false
 			}
 			if x.Target != section[i].(*dns.SRV).Target {
-				return fmt.Errorf("RR %d should have a Target of %q, but has %q", i, section[i].(*dns.SRV).Target, x.Target)
+				t.Errorf("RR %d should have a Target of %q, but has %q", i, section[i].(*dns.SRV).Target, x.Target)
+				return false
 			}
 		case *dns.RRSIG:
 			if x.TypeCovered != section[i].(*dns.RRSIG).TypeCovered {
-				return fmt.Errorf("RR %d should have a TypeCovered of %d, but has %d", i, section[i].(*dns.RRSIG).TypeCovered, x.TypeCovered)
+				t.Errorf("RR %d should have a TypeCovered of %d, but has %d", i, section[i].(*dns.RRSIG).TypeCovered, x.TypeCovered)
+				return false
 			}
 			if x.Labels != section[i].(*dns.RRSIG).Labels {
-				return fmt.Errorf("RR %d should have a Labels of %d, but has %d", i, section[i].(*dns.RRSIG).Labels, x.Labels)
+				t.Errorf("RR %d should have a Labels of %d, but has %d", i, section[i].(*dns.RRSIG).Labels, x.Labels)
+				return false
 			}
 			if x.SignerName != section[i].(*dns.RRSIG).SignerName {
-				return fmt.Errorf("RR %d should have a SignerName of %s, but has %s", i, section[i].(*dns.RRSIG).SignerName, x.SignerName)
+				t.Errorf("RR %d should have a SignerName of %s, but has %s", i, section[i].(*dns.RRSIG).SignerName, x.SignerName)
+				return false
 			}
 		case *dns.NSEC:
 			if x.NextDomain != section[i].(*dns.NSEC).NextDomain {
-				return fmt.Errorf("RR %d should have a NextDomain of %s, but has %s", i, section[i].(*dns.NSEC).NextDomain, x.NextDomain)
+				t.Errorf("RR %d should have a NextDomain of %s, but has %s", i, section[i].(*dns.NSEC).NextDomain, x.NextDomain)
+				return false
 			}
 			// TypeBitMap
 		case *dns.A:
 			if x.A.String() != section[i].(*dns.A).A.String() {
-				return fmt.Errorf("RR %d should have a Address of %q, but has %q", i, section[i].(*dns.A).A.String(), x.A.String())
+				t.Errorf("RR %d should have a Address of %q, but has %q", i, section[i].(*dns.A).A.String(), x.A.String())
+				return false
 			}
 		case *dns.AAAA:
 			if x.AAAA.String() != section[i].(*dns.AAAA).AAAA.String() {
-				return fmt.Errorf("RR %d should have a Address of %q, but has %q", i, section[i].(*dns.AAAA).AAAA.String(), x.AAAA.String())
+				t.Errorf("RR %d should have a Address of %q, but has %q", i, section[i].(*dns.AAAA).AAAA.String(), x.AAAA.String())
+				return false
 			}
 		case *dns.TXT:
 			for j, txt := range x.Txt {
 				if txt != section[i].(*dns.TXT).Txt[j] {
-					return fmt.Errorf("RR %d should have a Txt of %q, but has %q", i, section[i].(*dns.TXT).Txt[j], txt)
+					t.Errorf("RR %d should have a Txt of %q, but has %q", i, section[i].(*dns.TXT).Txt[j], txt)
+					return false
 				}
 			}
 		case *dns.HINFO:
 			if x.Cpu != section[i].(*dns.HINFO).Cpu {
-				return fmt.Errorf("RR %d should have a Cpu of %s, but has %s", i, section[i].(*dns.HINFO).Cpu, x.Cpu)
+				t.Errorf("RR %d should have a Cpu of %s, but has %s", i, section[i].(*dns.HINFO).Cpu, x.Cpu)
 			}
 			if x.Os != section[i].(*dns.HINFO).Os {
-				return fmt.Errorf("RR %d should have a Os of %s, but has %s", i, section[i].(*dns.HINFO).Os, x.Os)
+				t.Errorf("RR %d should have a Os of %s, but has %s", i, section[i].(*dns.HINFO).Os, x.Os)
 			}
 		case *dns.SOA:
 			tt := section[i].(*dns.SOA)
 			if x.Ns != tt.Ns {
-				return fmt.Errorf("SOA nameserver should be %q, but is %q", tt.Ns, x.Ns)
+				t.Errorf("SOA nameserver should be %q, but is %q", tt.Ns, x.Ns)
+				return false
 			}
 		case *dns.PTR:
 			tt := section[i].(*dns.PTR)
 			if x.Ptr != tt.Ptr {
-				return fmt.Errorf("PTR ptr should be %q, but is %q", tt.Ptr, x.Ptr)
+				t.Errorf("PTR ptr should be %q, but is %q", tt.Ptr, x.Ptr)
+				return false
 			}
 		case *dns.CNAME:
 			tt := section[i].(*dns.CNAME)
 			if x.Target != tt.Target {
-				return fmt.Errorf("CNAME target should be %q, but is %q", tt.Target, x.Target)
+				t.Errorf("CNAME target should be %q, but is %q", tt.Target, x.Target)
+				return false
 			}
 		case *dns.MX:
 			tt := section[i].(*dns.MX)
 			if x.Mx != tt.Mx {
-				return fmt.Errorf("MX Mx should be %q, but is %q", tt.Mx, x.Mx)
+				t.Errorf("MX Mx should be %q, but is %q", tt.Mx, x.Mx)
+				return false
 			}
 			if x.Preference != tt.Preference {
-				return fmt.Errorf("MX Preference should be %q, but is %q", tt.Preference, x.Preference)
+				t.Errorf("MX Preference should be %q, but is %q", tt.Preference, x.Preference)
+				return false
 			}
 		case *dns.NS:
 			tt := section[i].(*dns.NS)
 			if x.Ns != tt.Ns {
-				return fmt.Errorf("NS nameserver should be %q, but is %q", tt.Ns, x.Ns)
+				t.Errorf("NS nameserver should be %q, but is %q", tt.Ns, x.Ns)
+				return false
 			}
 		case *dns.OPT:
 			tt := section[i].(*dns.OPT)
 			if x.UDPSize() != tt.UDPSize() {
-				return fmt.Errorf("OPT UDPSize should be %d, but is %d", tt.UDPSize(), x.UDPSize())
+				t.Errorf("OPT UDPSize should be %d, but is %d", tt.UDPSize(), x.UDPSize())
+				return false
 			}
 			if x.Do() != tt.Do() {
-				return fmt.Errorf("OPT DO should be %t, but is %t", tt.Do(), x.Do())
+				t.Errorf("OPT DO should be %t, but is %t", tt.Do(), x.Do())
+				return false
 			}
 		}
 	}
-	return nil
+	return true
 }
 
 // CNAMEOrder makes sure that CNAMES do not appear after their target records
-func CNAMEOrder(res *dns.Msg) error {
+func CNAMEOrder(t *testing.T, res *dns.Msg) {
 	for i, c := range res.Answer {
 		if c.Header().Rrtype != dns.TypeCNAME {
 			continue
@@ -258,29 +284,38 @@ func CNAMEOrder(res *dns.Msg) error {
 			if a.Header().Name != c.(*dns.CNAME).Target {
 				continue
 			}
-			return fmt.Errorf("CNAME found after target record")
+			t.Errorf("CNAME found after target record\n")
+			t.Logf("%v\n", res)
+
 		}
 	}
-	return nil
 }
 
 // SortAndCheck sorts resp and the checks the header and three sections against the testcase in tc.
-func SortAndCheck(resp *dns.Msg, tc Case) error {
+func SortAndCheck(t *testing.T, resp *dns.Msg, tc Case) {
 	sort.Sort(RRSet(resp.Answer))
 	sort.Sort(RRSet(resp.Ns))
 	sort.Sort(RRSet(resp.Extra))
 
-	if err := Header(tc, resp); err != nil {
-		return err
+	if !Header(t, tc, resp) {
+		t.Logf("%v\n", resp)
+		return
 	}
-	if err := Section(tc, Answer, resp.Answer); err != nil {
-		return err
+
+	if !Section(t, tc, Answer, resp.Answer) {
+		t.Logf("%v\n", resp)
+		return
 	}
-	if err := Section(tc, Ns, resp.Ns); err != nil {
-		return err
+	if !Section(t, tc, Ns, resp.Ns) {
+		t.Logf("%v\n", resp)
+		return
 
 	}
-	return Section(tc, Extra, resp.Extra)
+	if !Section(t, tc, Extra, resp.Extra) {
+		t.Logf("%v\n", resp)
+		return
+	}
+	return
 }
 
 // ErrorHandler returns a Handler that returns ServerFailure error when called.
