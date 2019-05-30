@@ -3,7 +3,7 @@ package metrics
 import (
 	"context"
 
-	"github.com/coredns/coredns/core/dnsserver"
+	"github.com/coredns/coredns/plugin/metrics/vars"
 )
 
 // WithServer returns the current server handling the request. It returns the
@@ -15,10 +15,4 @@ import (
 // Basic usage with a metric:
 //
 // <metric>.WithLabelValues(metrics.WithServer(ctx), labels..).Add(1)
-func WithServer(ctx context.Context) string {
-	srv := ctx.Value(dnsserver.Key{})
-	if srv == nil {
-		return ""
-	}
-	return srv.(*dnsserver.Server).Addr
-}
+func WithServer(ctx context.Context) string { return vars.WithServer(ctx) }

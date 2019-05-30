@@ -2,6 +2,7 @@
 package request
 
 import (
+	"context"
 	"net"
 	"strings"
 
@@ -18,9 +19,12 @@ type Request struct {
 	// Optional lowercased zone of this query.
 	Zone string
 
+	Context context.Context
+
 	// Cache size after first call to Size or Do.
 	size int
 	do   *bool // nil: nothing, otherwise *do value
+	// TODO(miek): opt record itself as well?
 
 	// Caches
 	name      string // lowercase qname.
@@ -188,12 +192,14 @@ func (r *Request) Size() int {
 }
 
 // SizeAndDo adds an OPT record that the reflects the intent from request.
-// The returned bool indicates if an record was found and normalised.
+// The returned bool indicated if an record was found and normalised.
 func (r *Request) SizeAndDo(m *dns.Msg) bool {
-	o := r.Req.IsEdns0()
+	o := r.Req.IsEdns0() // TODO(miek): speed this up
 	if o == nil {
 		return false
 	}
+
+	odo := o.Do()
 
 	if mo := m.IsEdns0(); mo != nil {
 		mo.Hdr.Name = "."
@@ -202,24 +208,20 @@ func (r *Request) SizeAndDo(m *dns.Msg) bool {
 		mo.SetUDPSize(o.UDPSize())
 		mo.Hdr.Ttl &= 0xff00 // clear flags
 
-		// Assume if the message m has options set, they are OK and represent what an upstream can do.
-
-		if o.Do() {
+		if odo {
 			mo.SetDo()
 		}
 		return true
 	}
 
-	// Reuse the request's OPT record and tack it to m.
 	o.Hdr.Name = "."
 	o.Hdr.Rrtype = dns.TypeOPT
 	o.SetVersion(0)
 	o.Hdr.Ttl &= 0xff00 // clear flags
 
-	if len(o.Option) > 0 {
-		o.Option = supportedOptions(o.Option)
+	if odo {
+		o.SetDo()
 	}
-
 	m.Extra = append(m.Extra, o)
 	return true
 }
@@ -238,23 +240,6 @@ func (r *Request) Scrub(reply *dns.Msg) *dns.Msg {
 	reply.Compress = false
 	rl := reply.Len()
 	if size >= rl {
-		if r.Proto() != "udp" {
-			return reply
-		}
-
-		// Last ditch attempt to avoid fragmentation, if the size is bigger than the v4/v6 UDP fragmentation
-		// limit and sent via UDP compress it (in the hope we go under that limit). Limits taken from NSD:
-		//
-		//    .., 1480 (EDNS/IPv4), 1220 (EDNS/IPv6), or the advertized EDNS buffer size if that is
-		//    smaller than the EDNS default.
-		// See: https://open.nlnetlabs.nl/pipermail/nsd-users/2011-November/001278.html
-		if rl > 1480 && r.Family() == 1 {
-			reply.Compress = true
-		}
-		if rl > 1220 && r.Family() == 2 {
-			reply.Compress = true
-		}
-
 		return reply
 	}
 
@@ -295,14 +280,15 @@ func (r *Request) Scrub(reply *dns.Msg) *dns.Msg {
 	// pretty rare. Normally, the loop will exit when l > re, meaning that
 	// in the previous iteration either:
 	// rl < size: no need to do anything.
-	// rl > size: the final size is too large, and if m > 0, the preceding
-	// iteration the size was too small. Select that preceding size.
+	// rl > size: the final size is too large, and if m > 0, the preceeding
+	// iteration the size was too small. Select that preceeding size.
 	if rl > size && m > 0 {
 		reply.Extra = origExtra[:m-1]
 		rl = reply.Len()
 	}
 
 	if rl <= size {
+		r.SizeAndDo(reply)
 		return reply
 	}
 
@@ -330,14 +316,15 @@ func (r *Request) Scrub(reply *dns.Msg) *dns.Msg {
 	// pretty rare. Normally, the loop will exit when l > ra, meaning that
 	// in the previous iteration either:
 	// rl < size: no need to do anything.
-	// rl > size: the final size is too large, and if m > 0, the preceding
-	// iteration the size was too small. Select that preceding size.
+	// rl > size: the final size is too large, and if m > 0, the preceeding
+	// iteration the size was too small. Select that preceeding size.
 	if rl > size && m > 0 {
 		reply.Answer = origAnswer[:m-1]
 		// No need to recalc length, as we don't use it. We set truncated anyway. Doing
 		// this extra m-1 step does make it fit in the client's buffer however.
 	}
 
+	r.SizeAndDo(reply)
 	reply.Truncated = true
 	return reply
 }
@@ -427,6 +414,14 @@ func (r *Request) QClass() uint16 {
 
 	return r.Req.Question[0].Qclass
 
+}
+
+// ErrorMessage returns an error message suitable for sending
+// back to the client.
+func (r *Request) ErrorMessage(rcode int) *dns.Msg {
+	m := new(dns.Msg)
+	m.SetRcode(r.Req, rcode)
+	return m
 }
 
 // Clear clears all caching from Request s.

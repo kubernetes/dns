@@ -20,7 +20,7 @@ type zoneAddr struct {
 	Address   string     // used for bound zoneAddr - validation of overlapping
 }
 
-// String returns the string representation of z.
+// String return the string representation of z.
 func (z zoneAddr) String() string {
 	s := z.Transport + "://" + z.Zone + ":" + z.Port
 	if z.Address != "" {
@@ -29,10 +29,13 @@ func (z zoneAddr) String() string {
 	return s
 }
 
-// normalizeZone parses a zone string into a structured format with separate
+// normalizeZone parses an zone string into a structured format with separate
 // host, and port portions, as well as the original input string.
 func normalizeZone(str string) (zoneAddr, error) {
-	trans, str := parse.Transport(str)
+	var err error
+
+	var trans string
+	trans, str = parse.Transport(str)
 
 	host, port, ipnet, err := plugin.SplitHostPort(str)
 	if err != nil {
@@ -72,7 +75,7 @@ func SplitProtocolHostPort(address string) (protocol string, ip string, port str
 
 type zoneOverlap struct {
 	registeredAddr map[zoneAddr]zoneAddr // each zoneAddr is registered once by its key
-	unboundOverlap map[zoneAddr]zoneAddr // the "no bind" equiv ZoneAddr is registered by its original key
+	unboundOverlap map[zoneAddr]zoneAddr // the "no bind" equiv ZoneAdddr is registered by its original key
 }
 
 func newOverlapZone() *zoneOverlap {

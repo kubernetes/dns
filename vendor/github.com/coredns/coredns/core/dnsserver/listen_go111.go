@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"github.com/coredns/coredns/plugin/pkg/log"
-
 	"golang.org/x/sys/unix"
 )
 

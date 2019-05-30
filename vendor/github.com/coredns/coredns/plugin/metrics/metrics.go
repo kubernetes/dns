@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type Metrics struct {
 	srv     *http.Server
 
 	zoneNames []string
-	zoneMap   map[string]struct{}
+	zoneMap   map[string]bool
 	zoneMu    sync.RWMutex
 }
 
@@ -35,11 +36,11 @@ func New(addr string) *Metrics {
 	met := &Metrics{
 		Addr:    addr,
 		Reg:     prometheus.NewRegistry(),
-		zoneMap: make(map[string]struct{}),
+		zoneMap: make(map[string]bool),
 	}
 	// Add the default collectors
 	met.MustRegister(prometheus.NewGoCollector())
-	met.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	met.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
 
 	// Add all of our collectors
 	met.MustRegister(buildInfo)
@@ -51,7 +52,6 @@ func New(addr string) *Metrics {
 	met.MustRegister(vars.RequestType)
 	met.MustRegister(vars.ResponseSize)
 	met.MustRegister(vars.ResponseRcode)
-	met.MustRegister(vars.PluginEnabled)
 
 	return met
 }
@@ -70,7 +70,7 @@ func (m *Metrics) MustRegister(c prometheus.Collector) {
 // AddZone adds zone z to m.
 func (m *Metrics) AddZone(z string) {
 	m.zoneMu.Lock()
-	m.zoneMap[z] = struct{}{}
+	m.zoneMap[z] = true
 	m.zoneNames = keys(m.zoneMap)
 	m.zoneMu.Unlock()
 }
@@ -141,7 +141,7 @@ func (m *Metrics) OnFinalShutdown() error {
 	return m.stopServer()
 }
 
-func keys(m map[string]struct{}) []string {
+func keys(m map[string]bool) []string {
 	sx := []string{}
 	for k := range m {
 		sx = append(sx, k)

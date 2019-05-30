@@ -25,10 +25,9 @@ func init() {
 // it is used to transmit data between Setup and start of the hook called 'onInstanceStartup'
 // channel for QUIT is never changed in purpose.
 // WARNING: this data may be unsync after an invalid attempt of reload Corefile.
-var (
-	r              = reload{dur: defaultInterval, u: unused, quit: make(chan bool)}
-	once, shutOnce sync.Once
-)
+var r = reload{interval: defaultInterval, usage: unused, quit: make(chan bool)}
+var once sync.Once
+var shutOnce sync.Once
 
 func setup(c *caddy.Controller) error {
 	c.Next() // 'reload'
@@ -70,8 +69,8 @@ func setup(c *caddy.Controller) error {
 	i = i + jitter
 
 	// prepare info for next onInstanceStartup event
-	r.setInterval(i)
-	r.setUsage(used)
+	r.interval = i
+	r.usage = used
 
 	once.Do(func() {
 		caddy.RegisterEventHook("reload", hook)
