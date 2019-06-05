@@ -29,7 +29,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 
 ifeq ($(ARCH),amd64)
 	BASEIMAGE ?= k8s.gcr.io/debian-base:v1.0.0
-	COMPILE_IMAGE := alpine:3.8
+	COMPILE_IMAGE := k8s.gcr.io/debian-base:v1.0.0
 else ifeq ($(ARCH),arm)
 	BASEIMAGE ?= k8s.gcr.io/debian-base-arm:v1.0.0
 	TRIPLE    ?= arm-linux-gnueabihf
@@ -136,8 +136,8 @@ ifeq ($(ARCH),amd64)
 		-v `pwd`:/src                 \
 		$(COMPILE_IMAGE)              \
 		/bin/sh -c                    \
-		"apk update                           \
-			&& apk add alpine-sdk xz libcap-dev \
+		"apt-get update                           \
+			&& apt-get -y install build-essential libcap-dev \
 			&& cd /build/$(DNSMASQ_VERSION)     \
 			&& make -j                          \
 			&& cp src/dnsmasq /build/docker/dnsmasq" $(VERBOSE_OUTPUT)
