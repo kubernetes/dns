@@ -112,6 +112,11 @@ func (c *cacheApp) initIptables() {
 				"--sport", c.params.localPort, "-j", "ACCEPT"}},
 			{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "udp", "-s", localIP,
 				"--sport", c.params.localPort, "-j", "ACCEPT"}},
+			// Skip connection tracking for requests to nodelocalDNS that are locally generated, example - by hostNetwork pods
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.localPort, "-j", "NOTRACK"}},
 		}...)
 	}
 	c.iptables = newIPTables()
