@@ -1,0 +1,242 @@
+package app
+
+import (
+	"fmt"
+	"os"
+
+	"k8s.io/dns/cmd/kube-dns/app/options"
+	"k8s.io/dns/pkg/dns/config"
+
+	"net"
+	"strings"
+	"time"
+
+	"github.com/coredns/coredns/coremain"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"k8s.io/dns/pkg/netif"
+	"k8s.io/kubernetes/pkg/util/dbus"
+	utilexec "k8s.io/kubernetes/pkg/util/exec"
+	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
+)
+
+// ConfigParams lists the configuration options that can be provided to node-cache
+type ConfigParams struct {
+	LocalIPStr           string        // comma separated listen ips for the local cache agent
+	LocalIPs             []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
+	LocalPort            string        // port to listen for dns requests
+	MetricsListenAddress string        // address to serve metrics on
+	InterfaceName        string        // Name of the interface to be created
+	Interval             time.Duration // specifies how often to run iptables rules check
+	BaseCoreFile         string        // Path to the template config file for node-cache
+	CoreFile             string        // Path to config file used by node-cache
+	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
+	UpstreamSvcName      string        // Name of the service whose clusterIP is the upstream for node-cache for cluster domain
+	SetupIptables        bool
+}
+
+type iptablesRule struct {
+	table utiliptables.Table
+	chain utiliptables.Chain
+	args  []string
+}
+
+// CacheApp contains all the config required to run node-cache.
+type CacheApp struct {
+	iptables      utiliptables.Interface
+	iptablesRules []iptablesRule
+	params        *ConfigParams
+	netifHandle   *netif.NetifManager
+	kubednsConfig *options.KubeDNSConfig
+	exitChan      chan bool // Channel to terminate background goroutines
+	clusterDNSIP  net.IP
+}
+
+func isLockedErr(err error) bool {
+	return strings.Contains(err.Error(), "holding the xtables lock")
+}
+
+// Init initializes the parameters and networking setup necessary to run node-cache
+func (c *CacheApp) Init() {
+	c.netifHandle = netif.NewNetifManager(c.params.LocalIPs)
+	if c.params.SetupIptables {
+		c.initIptables()
+	}
+	err := c.TeardownNetworking()
+	if err != nil {
+		// It is likely to hit errors here if previous shutdown cleaned up all iptables rules and interface.
+		// Logging error at info level
+		clog.Infof("Hit error during teardown - %s", err)
+	}
+	err = c.setupNetworking()
+	if err != nil {
+		c.TeardownNetworking()
+		clog.Fatalf("Failed to setup - %s, Exiting", err)
+	}
+	initMetrics(c.params.MetricsListenAddress)
+	c.updateCorefile(&config.Config{})
+	c.initKubeDNSConfigSync()
+}
+
+func (c *CacheApp) initIptables() {
+	// using the localIPStr param since we need ip strings here
+	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
+		c.iptablesRules = append(c.iptablesRules, []iptablesRule{
+			// Match traffic destined for localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
+			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "NOTRACK"}},
+			// There are rules in filter table to allow tracked connections to be accepted. Since we skipped connection tracking,
+			// need these additional filter table rules.
+			{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "ACCEPT"}},
+			{utiliptables.TableFilter, utiliptables.ChainInput, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "ACCEPT"}},
+			// Match traffic from localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-s", localIP,
+				"--sport", c.params.LocalPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "udp", "-s", localIP,
+				"--sport", c.params.LocalPort, "-j", "NOTRACK"}},
+			// Additional filter table rules for traffic frpm localIp:localPort
+			{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "tcp", "-s", localIP,
+				"--sport", c.params.LocalPort, "-j", "ACCEPT"}},
+			{utiliptables.TableFilter, utiliptables.ChainOutput, []string{"-p", "udp", "-s", localIP,
+				"--sport", c.params.LocalPort, "-j", "ACCEPT"}},
+			// Skip connection tracking for requests to nodelocalDNS that are locally generated, example - by hostNetwork pods
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "NOTRACK"}},
+			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "udp", "-d", localIP,
+				"--dport", c.params.LocalPort, "-j", "NOTRACK"}},
+		}...)
+	}
+	c.iptables = newIPTables()
+}
+
+func newIPTables() utiliptables.Interface {
+	execer := utilexec.New()
+	dbus := dbus.New()
+	return utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
+}
+
+func (c *CacheApp) setupNetworking() error {
+	var err error
+	clog.Infof("Setting up networking for node cache")
+	err = c.netifHandle.AddDummyDevice(c.params.InterfaceName)
+	if err != nil {
+		return err
+	}
+	if c.params.SetupIptables {
+		for _, rule := range c.iptablesRules {
+			_, err = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		clog.Infof("Skipping iptables setup for node cache")
+	}
+	return err
+}
+
+// TeardownNetworking removes all custom iptables rules and network interface added by node-cache
+func (c *CacheApp) TeardownNetworking() error {
+	clog.Infof("Tearing down")
+	if c.exitChan != nil {
+		// Stop the goroutine that periodically checks for iptables rules/dummy interface
+		// exitChan is a buffered channel of size 1, so this will not block
+		c.exitChan <- true
+	}
+	err := c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
+	if c.params.SetupIptables {
+		for _, rule := range c.iptablesRules {
+			exists := true
+			for exists == true {
+				c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
+				exists, _ = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+			}
+			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
+			c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
+		}
+	}
+	return err
+}
+
+func (c *CacheApp) runChecks() {
+	if c.params.SetupIptables {
+		for _, rule := range c.iptablesRules {
+			exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+			switch {
+			case exists:
+				// debug messages can be printed by including "debug" plugin in coreFile.
+				clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
+				continue
+			case err == nil:
+				clog.Infof("Added back nodelocaldns rule - %v", rule)
+				continue
+				// if we got here, either iptables check failed or adding rule back failed.
+			case isLockedErr(err):
+				clog.Infof("Error checking/adding iptables rule %v, due to xtables lock in use, retrying in %v", rule, c.params.Interval)
+				setupErrCount.WithLabelValues("iptables_lock").Inc()
+			default:
+				clog.Errorf("Error adding iptables rule %v - %s", rule, err)
+				setupErrCount.WithLabelValues("iptables").Inc()
+			}
+		}
+	}
+
+	exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
+	if !exists {
+		if err != nil {
+			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
+			setupErrCount.WithLabelValues("interface_add").Inc()
+		}
+		clog.Infof("Added back interface - %s", c.params.InterfaceName)
+	}
+	if err != nil {
+		clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
+		setupErrCount.WithLabelValues("interface_check").Inc()
+	}
+}
+
+func (c *CacheApp) runPeriodic() {
+	c.exitChan = make(chan bool, 1)
+	tick := time.NewTicker(c.params.Interval * time.Second)
+	for {
+		select {
+		case <-tick.C:
+			c.runChecks()
+		case <-c.exitChan:
+			clog.Warningf("Exiting iptables/interface check goroutine")
+			return
+		}
+	}
+}
+
+// RunApp invokes the background checks and runs coreDNS as a cache
+func (c *CacheApp) RunApp() {
+	// Ensure that the required setup is ready
+	// https://github.com/kubernetes/dns/issues/282 sometimes the interface gets the ip and then loses it, if added too soon.
+	c.runChecks()
+	go c.runPeriodic()
+	coremain.Run()
+	// Unlikely to reach here, if we did it is because coremain exited and the signal was not trapped.
+	clog.Errorf("Untrapped signal, tearing down")
+	c.TeardownNetworking()
+}
+
+// NewCacheApp returns a new instance of CacheApp by applying the specified config params.
+func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
+	c := &CacheApp{params: params, kubednsConfig: options.NewKubeDNSConfig()}
+	c.clusterDNSIP = net.ParseIP(os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
+	if c.clusterDNSIP == nil {
+		return nil, fmt.Errorf("Unable to lookup IP address of Upstream service %s, env %s `%s`", params.UpstreamSvcName, toSvcEnv(params.UpstreamSvcName), os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
+	}
+	return c, nil
+}
+
+// toSvcEnv converts service name to the corresponding ENV variable. This is exposed in every pod and its value is the clusterIP.
+// https://kubernetes.io/docs/concepts/services-networking/service/#environment-variables
+func toSvcEnv(svcName string) string {
+	envName := strings.Replace(svcName, "-", "_", -1)
+	return "$" + strings.ToUpper(envName) + "_SERVICE_HOST"
+}
