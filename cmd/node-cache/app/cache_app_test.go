@@ -54,8 +54,7 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 	if stubDomainBlob, err := json.Marshal(c.StubDomains); err != nil {
 		t.Errorf("Failed to marshal stubdomains info, err %v", err)
 	} else {
-		err = ioutil.WriteFile(filepath.Join(p.KubednsCMPath, stubDomainFileName), stubDomainBlob, os.ModePerm)
-		if err != nil {
+		if err := ioutil.WriteFile(filepath.Join(p.KubednsCMPath, stubDomainFileName), stubDomainBlob, os.ModePerm); err != nil {
 			t.Errorf("Failed to write stubDomains file - %s, err %v", stubDomainFileName, err)
 		}
 	}
@@ -63,8 +62,7 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 	if upstreamBlob, err := json.Marshal(c.UpstreamNameservers); err != nil {
 		t.Errorf("Failed to marshal upstream nameservers info, err %v", err)
 	} else {
-		err = ioutil.WriteFile(filepath.Join(p.KubednsCMPath, upstreamServerFileName), upstreamBlob, os.ModePerm)
-		if err != nil {
+		if err = ioutil.WriteFile(filepath.Join(p.KubednsCMPath, upstreamServerFileName), upstreamBlob, os.ModePerm); err != nil {
 			t.Errorf("Failed to write stubDomains file - %s, err %v", upstreamServerFileName, err)
 		}
 	}
@@ -72,11 +70,10 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 }
 
 func createBaseFiles(t *testing.T, p *ConfigParams) {
-	err := ioutil.WriteFile(p.BaseCoreFile, []byte(templateCoreFileContents), os.ModePerm)
-	if err != nil {
+	if err := ioutil.WriteFile(p.BaseCoreFile, []byte(templateCoreFileContents), os.ModePerm); err != nil {
 		t.Fatalf("Failed to write template config file - %v", err)
 	}
-	if err = os.Mkdir(p.KubednsCMPath, os.ModePerm); err != nil {
+	if err := os.Mkdir(p.KubednsCMPath, os.ModePerm); err != nil {
 		t.Fatalf("Failed to create KubeDNS configmap dir - %v", err)
 	}
 }

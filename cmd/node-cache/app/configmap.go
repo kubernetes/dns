@@ -70,13 +70,12 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	newConfig := bytes.Buffer{}
 	newConfig.WriteString(string(baseConfig))
 	newConfig.WriteString(stubDomainStr)
-	err = ioutil.WriteFile(c.params.CoreFile, newConfig.Bytes(), 0666)
-	if err != nil {
+	if err := ioutil.WriteFile(c.params.CoreFile, newConfig.Bytes(), 0666); err != nil {
 		clog.Errorf("Failed to write config file %s - err %v", c.params.CoreFile, err)
 		return
 	}
 	clog.Infof("Updated Corefile with %d custom stubdomains and upstream servers %s", len(dnsConfig.StubDomains), upstreamServers)
-	clog.Debugf("Using config file:\n%s", newConfig.String())
+	clog.Infof("Using config file:\n%s", newConfig.String())
 }
 
 func (c *CacheApp) syncKubeDNSConfig(syncChan <-chan *config.Config) {

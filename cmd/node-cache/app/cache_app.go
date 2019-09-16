@@ -73,6 +73,8 @@ func (c *CacheApp) Init() {
 		clog.Fatalf("Failed to setup - %s, Exiting", err)
 	}
 	initMetrics(c.params.MetricsListenAddress)
+	// Write the config file from template.
+	// this is required in case there is no kube-dns configmap specified.
 	c.updateCorefile(&config.Config{})
 	c.initKubeDNSConfigSync()
 }
