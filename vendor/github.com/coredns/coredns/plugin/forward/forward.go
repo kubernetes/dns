@@ -74,7 +74,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	i := 0
 	list := f.List()
 	deadline := time.Now().Add(defaultTimeout)
-
+	start := time.Now()
 	for time.Now().Before(deadline) {
 		if i >= len(list) {
 			// reached the end of list, reset to begin
@@ -89,7 +89,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			if fails < len(f.proxies) {
 				continue
 			}
-			// All upstream proxies are dead, assume healtcheck is completely broken and randomly
+			// All upstream proxies are dead, assume healthcheck is completely broken and randomly
 			// select an upstream to connect to.
 			r := new(random)
 			proxy = r.List(f.proxies)[0]
@@ -109,14 +109,11 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		opts := f.opts
 		for {
 			ret, err = proxy.Connect(ctx, state, opts)
-			if err == nil {
-				break
-			}
 			if err == ErrCachedClosed { // Remote side closed conn, can only happen with TCP.
 				continue
 			}
 			// Retry with TCP if truncated and prefer_udp configured.
-			if err == dns.ErrTruncated && !opts.forceTCP && f.opts.preferUDP {
+			if ret != nil && ret.Truncated && !opts.forceTCP && opts.preferUDP {
 				opts.forceTCP = true
 				continue
 			}
@@ -126,8 +123,8 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		if child != nil {
 			child.Finish()
 		}
+		taperr := toDnstap(ctx, proxy.addr, f, state, ret, start)
 
-		ret, err = truncated(state, ret, err)
 		upstreamErr = err
 
 		if err != nil {
@@ -144,15 +141,16 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 
 		// Check if the reply is correct; if not return FormErr.
 		if !state.Match(ret) {
-			debug.Hexdumpf(ret, "Wrong reply for id: %d, %s/%d", state.QName(), state.QType())
+			debug.Hexdumpf(ret, "Wrong reply for id: %d, %s %d", ret.Id, state.QName(), state.QType())
 
-			formerr := state.ErrorMessage(dns.RcodeFormatError)
+			formerr := new(dns.Msg)
+			formerr.SetRcode(state.Req, dns.RcodeFormatError)
 			w.WriteMsg(formerr)
-			return 0, nil
+			return 0, taperr
 		}
 
 		w.WriteMsg(ret)
-		return 0, nil
+		return 0, taperr
 	}
 
 	if upstreamErr != nil {
@@ -199,15 +197,6 @@ var (
 	ErrNoForward = errors.New("no forwarder defined")
 	// ErrCachedClosed means cached connection was closed by peer.
 	ErrCachedClosed = errors.New("cached connection was closed by peer")
-)
-
-// policy tells forward what policy for selecting upstream it uses.
-type policy int
-
-const (
-	randomPolicy policy = iota
-	roundRobinPolicy
-	sequentialPolicy
 )
 
 // options holds various options that can be set.

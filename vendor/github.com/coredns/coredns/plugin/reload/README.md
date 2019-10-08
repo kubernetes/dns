@@ -38,11 +38,12 @@ This plugin can only be used once per Server Block.
 reload [INTERVAL] [JITTER]
 ~~~
 
-* The plugin will check for changes every **INTERVAL**, subject to +/- the **JITTER** duration
-* **INTERVAL** and **JITTER** are Golang (durations)[https://golang.org/pkg/time/#ParseDuration]
-* Default **INTERVAL** is 30s, default **JITTER** is 15s
-* Minimal value for **INTERVAL** is 2s, and for **JITTER** is 1s
-* If **JITTER** is more than half of **INTERVAL**, it will be set to half of **INTERVAL**
+The plugin will check for changes every **INTERVAL**, subject to +/- the **JITTER** duration.
+
+*  **INTERVAL** and **JITTER** are Golang (durations)[[https://golang.org/pkg/time/#ParseDuration](https://golang.org/pkg/time/#ParseDuration)].
+   The default **INTERVAL** is 30s, default **JITTER** is 15s, the minimal value for **INTERVAL**
+   is 2s, and for **JITTER** it is 1s. If **JITTER** is more than half of **INTERVAL**, it will be
+   set to half of **INTERVAL**
 
 ## Examples
 
@@ -85,6 +86,20 @@ is already listening on that port. The process reloads and performs the followin
 4. fail loading the new Corefile, abort and keep using the old process
 
 After the aborted attempt to reload we are left with the old processes running, but the listener is
-closed in step 1; so the health endpoint is broken. The same can hopen in the prometheus metrics plugin.
+closed in step 1; so the health endpoint is broken. The same can happen in the prometheus metrics plugin.
 
 In general be careful with assigning new port and expecting reload to work fully.
+
+In CoreDNS v1.6.0 and earlier any `import` statements are not discovered by this plugin.
+This means if any of these imported files changes the *reload* plugin is ignorant of that fact.
+CoreDNS v1.7.0 and later does parse the Corefile and supports detecting changes in imported files.
+
+## Metrics
+
+ If monitoring is enabled (via the *prometheus* directive) then the following metric is exported:
+
+* `coredns_reload_failed_count_total{}` - counts the number of failed reload attempts.
+
+## Also See
+
+See coredns-import(7) and corefile(5).

@@ -19,7 +19,7 @@ cache [TTL] [ZONES...]
 ~~~
 
 * **TTL** max TTL in seconds. If not specified, the maximum TTL will be used, which is 3600 for
-    noerror responses and 1800 for denial of existence ones.
+    NOERROR responses and 1800 for denial of existence ones.
     Setting a TTL of 300: `cache 300` would cache records up to 300 seconds.
 * **ZONES** zones it should cache for. If empty, the zones from the configuration block are used.
 
@@ -88,17 +88,18 @@ Proxy to Google Public DNS and only cache responses for example.org (or below).
 
 ~~~ corefile
 . {
-    proxy . 8.8.8.8:53
+    forward . 8.8.8.8:53
     cache example.org
 }
 ~~~
 
-Enable caching for all zones, keep a positive cache size of 5000 and a negative cache size of 2500:
- ~~~ corefile
- . {
-     cache {
-         success 5000
-         denial 2500
+Enable caching for `example.org`, keep a positive cache size of 5000 and a negative cache size of 2500:
+
+~~~ corefile
+example.org {
+    cache {
+        success 5000
+        denial 2500
     }
- }
- ~~~
+}
+~~~
