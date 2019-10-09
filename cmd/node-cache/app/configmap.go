@@ -56,7 +56,8 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 		clog.Errorf("Failed to read node-cache coreFile %s - %v", c.params.BaseCoreFile, err)
 		return
 	}
-	stubDomainStr := getStubDomainStr(dnsConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL, LocalIP: c.params.LocalIPStr})
+	stubDomainStr := getStubDomainStr(dnsConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
+		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
 	upstreamServers := strings.Join(dnsConfig.UpstreamNameservers, " ")
 	if upstreamServers == "" {
 		// forward plugin supports both nameservers as well as resolv.conf

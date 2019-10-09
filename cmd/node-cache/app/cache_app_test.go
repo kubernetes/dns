@@ -28,7 +28,6 @@ const (
                 force_tcp
         }
         prometheus :9253
-        health __PILLAR__LOCAL__DNS__:8080
         }
     .:53 {
         errors
@@ -114,7 +113,7 @@ func TestUpdateCoreFile(t *testing.T) {
 	envName := strings.ToUpper(strings.Replace(UpstreamClusterDNS, "-", "_", -1)) + "_SERVICE_HOST"
 	os.Setenv(envName, "9.10.11.12")
 	defer func() { os.RemoveAll(baseDir) }()
-	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "169.254.20.10",
+	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "169.254.20.10,10.0.0.10",
 		LocalPort:       "53",
 		BaseCoreFile:    filepath.Join(baseDir, templateCoreFileName),
 		CoreFile:        filepath.Join(baseDir, coreFileName),
@@ -142,7 +141,8 @@ func TestUpdateCoreFile(t *testing.T) {
 	}
 	updateStubDomainsAndUpstreamServers(t, c.params, customConfig)
 	expectedContents = strings.Replace(expectedContents, "/etc/resolv.conf", strings.Join(customConfig.UpstreamNameservers, " "), -1)
-	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL, LocalIP: c.params.LocalIPStr})
+	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
+		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
 
 	time.Sleep(10 * time.Second)
 	out, _ := compareFileContents(c.params.CoreFile, expectedContents, t)
