@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	corednsmain "github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
 	_ "github.com/coredns/coredns/plugin/bind"
@@ -44,7 +45,7 @@ func init() {
 func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Runs coreDNS v1.2.5 as a nodelocal cache listening on the specified ip:port")
+		fmt.Fprintf(os.Stderr, "Runs CoreDNS v%s as a nodelocal cache listening on the specified ip:port\n\n", corednsmain.CoreVersion)
 		flag.PrintDefaults()
 	}
 
