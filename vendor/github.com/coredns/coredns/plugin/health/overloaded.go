@@ -2,7 +2,6 @@ package health
 
 import (
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
@@ -18,6 +17,7 @@ func (h *health) overloaded() {
 	}
 	url := "http://" + h.Addr
 	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
 
 	for {
 		select {
@@ -32,7 +32,6 @@ func (h *health) overloaded() {
 			HealthDuration.Observe(time.Since(start).Seconds())
 
 		case <-h.stop:
-			tick.Stop()
 			return
 		}
 	}
@@ -48,5 +47,3 @@ var (
 		Help:      "Histogram of the time (in seconds) each request took.",
 	})
 )
-
-var once sync.Once

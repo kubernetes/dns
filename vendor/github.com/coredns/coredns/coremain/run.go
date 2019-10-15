@@ -2,20 +2,17 @@
 package coremain
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/coredns/coredns/core/dnsserver"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func init() {
@@ -24,7 +21,6 @@ func init() {
 	setVersion()
 
 	flag.StringVar(&conf, "conf", "", "Corefile to load (default \""+caddy.DefaultConfigFile+"\")")
-	flag.StringVar(&cpu, "cpu", "100%", "CPU cap")
 	flag.BoolVar(&plugins, "plugins", false, "List installed plugins")
 	flag.StringVar(&caddy.PidFile, "pidfile", "", "Path to write pid file")
 	flag.BoolVar(&version, "version", false, "Show version")
@@ -73,11 +69,6 @@ func Run() {
 		os.Exit(0)
 	}
 
-	// Set CPU cap
-	if err := setCPU(cpu); err != nil {
-		mustLogFatal(err)
-	}
-
 	// Get Corefile input
 	corefile, err := caddy.LoadCaddyfile(serverType)
 	if err != nil {
@@ -90,13 +81,9 @@ func Run() {
 		mustLogFatal(err)
 	}
 
-	logVersion()
 	if !dnsserver.Quiet {
 		showVersion()
 	}
-
-	// Execute instantiation events
-	caddy.EmitEvent(caddy.InstanceStartupEvent, instance)
 
 	// Twiddle your thumbs
 	instance.Wait()
@@ -152,24 +139,21 @@ func defaultLoader(serverType string) (caddy.Input, error) {
 	}, nil
 }
 
-// logVersion logs the version that is starting.
-func logVersion() {
-	clog.Info(versionString())
-	clog.Info(releaseString())
-}
-
-// showVersion prints the version that is starting.
+// showVersion prints the version that is starting. We print our logo on the left.
 func showVersion() {
+	fmt.Println(logo[0])
 	fmt.Print(versionString())
 	fmt.Print(releaseString())
 	if devBuild && gitShortStat != "" {
 		fmt.Printf("%s\n%s\n", gitShortStat, gitFilesModified)
 	}
+	fmt.Println(logo[3])
+	fmt.Println(logo[4])
 }
 
 // versionString returns the CoreDNS version as a string.
 func versionString() string {
-	return fmt.Sprintf("%s-%s\n", caddy.AppName, caddy.AppVersion)
+	return fmt.Sprintf("%s\t%s%s-%s\n", logo[1], marker, caddy.AppName, caddy.AppVersion)
 }
 
 // releaseString returns the release information related to CoreDNS version:
@@ -177,7 +161,7 @@ func versionString() string {
 // e.g.,
 // linux/amd64, go1.8.3, a6d2d7b5
 func releaseString() string {
-	return fmt.Sprintf("%s/%s, %s, %s\n", runtime.GOOS, runtime.GOARCH, runtime.Version(), GitCommit)
+	return fmt.Sprintf("%s\t%s%s/%s, %s, %s\n", logo[2], marker, runtime.GOOS, runtime.GOARCH, runtime.Version(), GitCommit)
 }
 
 // setVersion figures out the version information
@@ -197,46 +181,9 @@ func setVersion() {
 	}
 }
 
-// setCPU parses string cpu and sets GOMAXPROCS
-// according to its value. It accepts either
-// a number (e.g. 3) or a percent (e.g. 50%).
-func setCPU(cpu string) error {
-	var numCPU int
-
-	availCPU := runtime.NumCPU()
-
-	if strings.HasSuffix(cpu, "%") {
-		// Percent
-		var percent float32
-		pctStr := cpu[:len(cpu)-1]
-		pctInt, err := strconv.Atoi(pctStr)
-		if err != nil || pctInt < 1 || pctInt > 100 {
-			return errors.New("invalid CPU value: percentage must be between 1-100")
-		}
-		percent = float32(pctInt) / 100
-		numCPU = int(float32(availCPU) * percent)
-	} else {
-		// Number
-		num, err := strconv.Atoi(cpu)
-		if err != nil || num < 1 {
-			return errors.New("invalid CPU value: provide a number or percent greater than 0")
-		}
-		numCPU = num
-	}
-
-	if numCPU > availCPU {
-		numCPU = availCPU
-	}
-
-	runtime.GOMAXPROCS(numCPU)
-	return nil
-}
-
 // Flags that control program flow or startup
 var (
 	conf    string
-	cpu     string
-	logfile bool
 	version bool
 	plugins bool
 )
@@ -257,14 +204,14 @@ var (
 )
 
 // flagsBlacklist removes flags with these names from our flagset.
-var flagsBlacklist = map[string]bool{
-	"logtostderr":      true,
-	"alsologtostderr":  true,
-	"v":                true,
-	"stderrthreshold":  true,
-	"vmodule":          true,
-	"log_backtrace_at": true,
-	"log_dir":          true,
+var flagsBlacklist = map[string]struct{}{
+	"logtostderr":      {},
+	"alsologtostderr":  {},
+	"v":                {},
+	"stderrthreshold":  {},
+	"vmodule":          {},
+	"log_backtrace_at": {},
+	"log_dir":          {},
 }
 
 var flagsToKeep []*flag.Flag

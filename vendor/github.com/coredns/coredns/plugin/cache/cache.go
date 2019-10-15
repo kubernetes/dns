@@ -15,7 +15,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-// Cache is plugin that looks up responses in a cache and caches replies.
+// Cache is a plugin that looks up responses in a cache and caches replies.
 // It has a success and a denial of existence cache.
 type Cache struct {
 	Next  plugin.Handler
@@ -118,7 +118,7 @@ type ResponseWriter struct {
 
 // newPrefetchResponseWriter returns a Cache ResponseWriter to be used in
 // prefetch requests. It ensures RemoteAddr() can be called even after the
-// original connetion has already been closed.
+// original connection has already been closed.
 func newPrefetchResponseWriter(server string, state request.Request, c *Cache) *ResponseWriter {
 	// Resolve the address now, the connection might be already closed when the
 	// actual prefetch request is made.
@@ -163,6 +163,9 @@ func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
 	var duration time.Duration
 	if mt == response.NameError || mt == response.NoData {
 		duration = computeTTL(msgTTL, w.minnttl, w.nttl)
+	} else if mt == response.ServerError {
+		// use default ttl which is 5s
+		duration = minTTL
 	} else {
 		duration = computeTTL(msgTTL, w.minpttl, w.pttl)
 	}
@@ -206,7 +209,7 @@ func (w *ResponseWriter) set(m *dns.Msg, key uint64, mt response.Type, duration 
 		i := newItem(m, w.now(), duration)
 		w.pcache.Add(key, i)
 
-	case response.NameError, response.NoData:
+	case response.NameError, response.NoData, response.ServerError:
 		i := newItem(m, w.now(), duration)
 		w.ncache.Add(key, i)
 

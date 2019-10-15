@@ -13,6 +13,7 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -116,7 +117,7 @@ func Metrics() error {
 	prometheus.MustRegister(errorCount)
 	prometheus.MustRegister(cacheMiss)
 
-	http.Handle(Path, prometheus.Handler())
+	http.Handle(Path, promhttp.Handler())
 	go func() {
 		fmt.Errorf("%s", http.ListenAndServe(":"+Port, nil))
 	}()
