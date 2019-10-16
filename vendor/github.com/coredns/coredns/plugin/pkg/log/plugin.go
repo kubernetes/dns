@@ -2,7 +2,6 @@ package log
 
 import (
 	"fmt"
-	golog "log"
 	"os"
 )
 
@@ -13,21 +12,19 @@ type P struct {
 
 // NewWithPlugin returns a logger that includes "plugin/name: " in the log message.
 // I.e [INFO] plugin/<name>: message.
-func NewWithPlugin(name string) P { return P{name} }
+func NewWithPlugin(name string) P { return P{"plugin/" + name + ": "} }
 
 func (p P) logf(level, format string, v ...interface{}) {
-	s := level + pFormat(p.plugin) + fmt.Sprintf(format, v...)
-	golog.Print(s)
+	log(level, p.plugin, fmt.Sprintf(format, v...))
 }
 
 func (p P) log(level string, v ...interface{}) {
-	s := level + pFormat(p.plugin) + fmt.Sprint(v...)
-	golog.Print(s)
+	log(level+p.plugin, v...)
 }
 
 // Debug logs as log.Debug.
 func (p P) Debug(v ...interface{}) {
-	if !D {
+	if !D.Value() {
 		return
 	}
 	p.log(debug, v...)
@@ -35,7 +32,7 @@ func (p P) Debug(v ...interface{}) {
 
 // Debugf logs as log.Debugf.
 func (p P) Debugf(format string, v ...interface{}) {
-	if !D {
+	if !D.Value() {
 		return
 	}
 	p.logf(debug, format, v...)
@@ -64,5 +61,3 @@ func (p P) Fatal(v ...interface{}) { p.log(fatal, v...); os.Exit(1) }
 
 // Fatalf logs as log.Fatalf and calls os.Exit(1).
 func (p P) Fatalf(format string, v ...interface{}) { p.logf(fatal, format, v...); os.Exit(1) }
-
-func pFormat(s string) string { return "plugin/" + s + ": " }

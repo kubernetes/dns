@@ -11,8 +11,7 @@ import (
 
 // Proxy defines an upstream host.
 type Proxy struct {
-	avgRtt int64
-	fails  uint32
+	fails uint32
 
 	addr string
 
@@ -32,7 +31,6 @@ func NewProxy(addr, trans string) *Proxy {
 		fails:     0,
 		probe:     up.New(),
 		transport: newTransport(addr),
-		avgRtt:    int64(maxTimeout / 2),
 	}
 	p.health = NewHealthChecker(trans)
 	runtime.SetFinalizer(p, (*Proxy).finalizer)
@@ -82,6 +80,5 @@ func (p *Proxy) start(duration time.Duration) {
 
 const (
 	maxTimeout = 2 * time.Second
-	minTimeout = 200 * time.Millisecond
 	hcInterval = 500 * time.Millisecond
 )

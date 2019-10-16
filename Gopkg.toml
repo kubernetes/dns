@@ -35,7 +35,7 @@
 
 [[constraint]]
   name = "github.com/miekg/dns"
-  version = "1.0.14"
+  version = "v1.1.22"
 
 [[constraint]]
   name = "github.com/onsi/ginkgo"
@@ -47,7 +47,7 @@
 
 [[constraint]]
   name = "github.com/prometheus/client_golang"
-  version = "0.8.0"
+  version = "1.1.0"
 
 [[constraint]]
   branch = "master"
@@ -79,11 +79,24 @@
 
 [[constraint]]
   name = "github.com/coredns/coredns"
-  version = "v1.2.6"
+  version = "v1.6.4"
 
 [[override]]
   name = "github.com/ugorji/go"
   revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
+
+[[override]]
+  name = "github.com/emicklei/go-restful"
+  revision = "ad3e7d5a0a11fbbead57cc9353720a60a0a2793f"
+
+[[override]]
+  name = "github.com/prometheus/procfs"
+  version = "v0.0.5"
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "https://github.com/fsnotify/fsnotify.git"
+
 
 [prune]
   go-tests = true

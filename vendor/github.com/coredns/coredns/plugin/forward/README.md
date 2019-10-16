@@ -21,10 +21,6 @@ connect to a random upstream (which may or may not work).
 
 This plugin can only be used once per Server Block.
 
-How does *forward* relate to *proxy*? This plugin is the "new" version of *proxy* and is faster
-because it re-uses connections to the upstreams. It also does in-band health checks - using DNS
-instead of HTTP. Since it is newer it has a little less (production) mileage on it.
-
 ## Syntax
 
 In its most basic form, a simple forwarder uses this syntax:
@@ -79,8 +75,13 @@ forward FROM TO... {
     The server certificate is verified using the specified CA file
 
 * `tls_servername` **NAME** allows you to set a server name in the TLS configuration; for instance 9.9.9.9
-  needs this to be set to `dns.quad9.net`.
+  needs this to be set to `dns.quad9.net`. Multiple upstreams are still allowed in this scenario,
+  but they have to use the same `tls_servername`. E.g. mixing 9.9.9.9 (QuadDNS) with 1.1.1.1
+  (Cloudflare) will not work.
 * `policy` specifies the policy to use for selecting upstream servers. The default is `random`.
+  * `random` is a policy that implements random upstream selection.
+  * `round_robin` is a policy that selects hosts based on round robin ordering.
+  * `sequential` is a policy that selects hosts based on sequential ordering.
 * `health_check`, use a different **DURATION** for health checking, the default duration is 0.5s.
 
 Also note the TLS config is "global" for the whole forwarding proxy if you need a different
@@ -97,15 +98,14 @@ If monitoring is enabled (via the *prometheus* directive) then the following met
 
 * `coredns_forward_request_duration_seconds{to}` - duration per upstream interaction.
 * `coredns_forward_request_count_total{to}` - query count per upstream.
-* `coredns_forward_response_rcode_total{to, rcode}` - count of RCODEs per upstream.
+* `coredns_forward_response_rcode_count_total{to, rcode}` - count of RCODEs per upstream.
 * `coredns_forward_healthcheck_failure_count_total{to}` - number of failed health checks per upstream.
 * `coredns_forward_healthcheck_broken_count_total{}` - counter of when all upstreams are unhealthy,
   and we are randomly (this always uses the `random` policy) spraying to an upstream.
 * `coredns_forward_socket_count_total{to}` - number of cached sockets per upstream.
 
-Where `to` is one of the upstream servers (**TO** from the config), `proto` is the protocol used by
-the incoming query ("tcp" or "udp"), and family the transport family ("1" for IPv4, and "2" for
-IPv6).
+Where `to` is one of the upstream servers (**TO** from the config), `rcode` is the returned RCODE
+from the upstream.
 
 ## Examples
 
@@ -154,6 +154,18 @@ service with health checks.
 . {
     forward . tls://9.9.9.9 {
        tls_servername dns.quad9.net
+       health_check 5s
+    }
+    cache 30
+}
+~~~
+
+Or with multiple upstreams from the same provider
+
+~~~ corefile
+. {
+    forward . tls://1.1.1.1 tls://1.0.0.1 {
+       tls_servername cloudflare-dns.com
        health_check 5s
     }
     cache 30

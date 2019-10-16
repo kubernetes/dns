@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/dns/pkg/dnsmasq"
 )
 
@@ -91,7 +92,7 @@ func defineDnsmasqMetrics(options *Options) {
 func InitializeMetrics(options *Options) {
 	defineDnsmasqMetrics(options)
 
-	http.Handle(options.PrometheusPath, prometheus.Handler())
+	http.Handle(options.PrometheusPath, promhttp.Handler())
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, "ok (%v)\n", time.Now())
 	})

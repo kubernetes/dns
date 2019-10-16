@@ -82,7 +82,6 @@ func (s *ServerHTTPS) OnStartupComplete() {
 	if out != "" {
 		fmt.Print(out)
 	}
-	return
 }
 
 // Stop stops the server. It blocks until the server is totally stopped.
@@ -117,7 +116,16 @@ func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// We just call the normal chain handler - all error handling is done there.
 	// We should expect a packet to be returned that we can send to the client.
-	s.ServeDNS(context.Background(), dw, msg)
+	ctx := context.WithValue(context.Background(), Key{}, s.Server)
+	s.ServeDNS(ctx, dw, msg)
+
+	// See section 4.2.1 of RFC 8484.
+	// We are using code 500 to indicate an unexpected situation when the chain
+	// handler has not provided any response message.
+	if dw.Msg == nil {
+		http.Error(w, "No response", http.StatusInternalServerError)
+		return
+	}
 
 	buf, _ := dw.Msg.Pack()
 
