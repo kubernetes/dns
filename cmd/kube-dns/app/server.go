@@ -34,11 +34,15 @@ import (
 	"k8s.io/dns/pkg/dns"
 	dnsconfig "k8s.io/dns/pkg/dns/config"
 
+	_ "net/http/pprof"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/dns/pkg/version"
 )
+
+const profilingPort = "6060"
 
 type KubeDNSServer struct {
 	// DNS domain name.
@@ -48,6 +52,7 @@ type KubeDNSServer struct {
 	dnsPort        int
 	nameServers    string
 	kd             *dns.KubeDNS
+	profiling      bool
 }
 
 func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
@@ -85,6 +90,7 @@ func NewKubeDNSServerDefault(config *options.KubeDNSConfig) *KubeDNSServer {
 		dnsPort:        config.DNSPort,
 		nameServers:    config.NameServers,
 		kd:             dns.NewKubeDNS(kubeClient, config.ClusterDomain, config.InitialSyncTimeout, configSync),
+		profiling:      config.Profiling,
 	}
 }
 
@@ -124,12 +130,20 @@ func (server *KubeDNSServer) Run() {
 	server.startSkyDNSServer()
 	server.kd.Start()
 	server.setupHandlers()
+	if server.profiling {
+		go server.setupProfiling()
+	}
 
 	glog.V(0).Infof("Status HTTP port %v", server.healthzPort)
 	if server.nameServers != "" {
 		glog.V(0).Infof("Upstream nameservers: %s", server.nameServers)
 	}
 	glog.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", server.healthzPort), nil))
+}
+
+func (server *KubeDNSServer) setupProfiling() {
+	glog.Infof("Starting profiling server on port %s", profilingPort)
+	glog.Info(http.ListenAndServe("localhost:"+profilingPort, nil))
 }
 
 // setupHandlers sets up a readiness and liveness endpoint for kube-dns.
