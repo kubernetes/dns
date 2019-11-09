@@ -13,6 +13,7 @@ import (
 
 	corednsmain "github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
 	"github.com/caddyserver/caddy"
 	_ "github.com/coredns/coredns/plugin/bind"
@@ -24,6 +25,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/loop"
 	_ "github.com/coredns/coredns/plugin/metrics"
+	_ "github.com/coredns/coredns/plugin/pprof"
 	_ "github.com/coredns/coredns/plugin/reload"
 )
 

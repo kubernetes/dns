@@ -51,6 +51,7 @@ type KubeDNSConfig struct {
 	ConfigPeriod time.Duration
 
 	NameServers string
+	Profiling   bool
 }
 
 func NewKubeDNSConfig() *KubeDNSConfig {
@@ -187,4 +188,5 @@ func (s *KubeDNSConfig) AddFlags(fs *pflag.FlagSet) {
 			"used in conjunction with federations or config-map flag.")
 	fs.DurationVar(&s.ConfigPeriod, "config-period", s.ConfigPeriod,
 		"period at which to check for updates in config-dir.")
+	fs.BoolVar(&s.Profiling, "profiling", s.Profiling, "specifies whether to enable profiling")
 }
