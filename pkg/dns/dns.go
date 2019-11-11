@@ -144,16 +144,17 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 }
 
 func (kd *KubeDNS) loadDefaultNameserver() []string {
-	if c, err := dns.ClientConfigFromFile(defaultResolvFile); err != nil {
+	c, err := dns.ClientConfigFromFile(defaultResolvFile)
+	if err != nil {
 		glog.Errorf("Load nameserver from resolv.conf failed: %v", err)
 		return []string{}
-	} else {
-		nameservers := []string{}
-		for _, s := range c.Servers {
-			nameservers = append(nameservers, net.JoinHostPort(s, c.Port))
-		}
-		return nameservers
 	}
+
+	nameservers := []string{}
+	for _, s := range c.Servers {
+		nameservers = append(nameservers, net.JoinHostPort(s, c.Port))
+	}
+	return nameservers
 }
 
 func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
@@ -163,16 +164,16 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 	if kd.SkyDNSConfig != nil {
 		var nameServers []string
 		for _, nameServer := range nextConfig.UpstreamNameservers {
-			if ip, port, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
+			ip, port, err := util.ValidateNameserverIpAndPort(nameServer)
+			if err != nil {
 				glog.Errorf("Invalid nameserver %q: %v", nameServer, err)
 				if len(kd.SkyDNSConfig.Nameservers) == 0 {
 					// Fall back to resolv.conf on initialization failure.
 					kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
 				}
 				return
-			} else {
-				nameServers = append(nameServers, net.JoinHostPort(ip, port))
 			}
+			nameServers = append(nameServers, net.JoinHostPort(ip, port))
 		}
 		if len(nameServers) == 0 {
 			kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
@@ -291,12 +292,12 @@ func (kd *KubeDNS) setEndpointsStore() {
 }
 
 func assertIsService(obj interface{}) (*v1.Service, bool) {
-	if service, ok := obj.(*v1.Service); ok {
+	service, ok := obj.(*v1.Service)
+	if ok {
 		return service, ok
-	} else {
-		glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
-		return nil, ok
 	}
+	glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
+	return nil, ok
 }
 
 func (kd *KubeDNS) newService(obj interface{}) {
