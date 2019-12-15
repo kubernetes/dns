@@ -170,6 +170,17 @@ Given a _ready_ endpoint with _hostname_ of `<hostname>` and IP address
 - Answer Example:
   - `100.0.3.10.in-addr.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
 
+Given a _ready_ endpoint with _hostname_ of `<hostname>` and IPv6 address
+`<a>:<b>:<c>:<d>:<e>:<f>:<g>:<h>`, a `PTR` record of the following form must exist.
+
+- Record Format:
+  - `<d>.<c>.<b>.<a>.in-addr.arpa. <ttl> IN PTR <hostname>.<service>.<ns>.svc.<zone>.`
+- Question Example:
+  - `100.0.3.10.in-addr.arpa. IN PTR`
+- Answer Example:
+  - `100.0.3.10.in-addr.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
+
+
 ### 2.5 - Records for External Name Services
 
 Given a Service named `<service>` in Namespace `<ns>` with ExternalName `<extname>`,
@@ -183,15 +194,6 @@ exist.
 - Answer Example:
   - `foo.default.svc.cluster.local. 10 IN CNAME www.example.com.`
   - `www.example.com. 28715 IN A 192.0.2.53`
-
-### 2.6 - Deprecated Records
-Kube-DNS versions prior to implementation of this specification also replied
-with an `A` record of the form below for any values of `<a>`, `<b>`, `<c>`, and `<d>` between 0 and 255:
-- Record Format:
-  - `<a>-<b>-<c>-<d>.<ns>.pod.<zone>. <ttl> IN A <a>.<b>.<c>.<d>`
-
-This behavior is deprecated but is required to satisfy this specification. It
-will be removed from a future version of the specification.
 
 ## 3 - Schema Extensions
 Specific implementations may choose to extend this schema, but the RRs in this
