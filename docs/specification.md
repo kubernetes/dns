@@ -11,7 +11,7 @@ is intended to provide a baseline for commonality between implementations.
 
 ## 1 - Schema Version
 
-This document describes version 1.0.1 of the schema.
+This document describes version 1.1.0 of the schema.
 
 ## 2 - Resource Records
 
@@ -52,14 +52,18 @@ There must be a `TXT` record named `dns-version.<zone>.` that contains the
 - Question Example:
   - `dns-version.cluster.local. IN TXT`
 - Answer Example:
-  - `dns-version.cluster.local. 28800 IN TXT "1.0.0"`
+  - `dns-version.cluster.local. 28800 IN TXT "1.1.0"`
 
 ### 2.3 - Records for a Service with ClusterIP
 
 Given a Service named `<service>` in Namespace `<ns>` with ClusterIP
 `<cluster-ip>`, the following records must exist.
 
-#### 2.3.1 - `A` Record
+#### 2.3.1 - `A`/`AAAA` Record
+
+If the `<cluster-ip>` is an IPv4 address, an `A` record of the following
+form must exist.
+
 - Record Format:
   - `<service>.<ns>.svc.<zone>. <ttl> IN A <cluster-ip>`
 - Question Example:
@@ -67,10 +71,22 @@ Given a Service named `<service>` in Namespace `<ns>` with ClusterIP
 - Answer Example:
   - `kubernetes.default.svc.cluster.local. 4 IN A 10.3.0.1`
 
+If the `<cluster-ip>` is an IPv6 address, an `AAAA` record of the following
+form must exist.
+
+- Record Format:
+  - `<service>.<ns>.svc.<zone>. <ttl> IN AAAA <cluster-ip>`
+- Question Example:
+  - `kubernetes.default.svc.cluster.local. IN AAAA`
+- Answer Example:
+  - `kubernetes.default.svc.cluster.local. 4 IN AAAA 2001:db8::1`
+
 #### 2.3.2 - `SRV` Records
+
 For each port in the Service with name `<port>` and number
 `<port-number>` using protocol `<proto>`, an `SRV` record of the following
 form must exist.
+
 - Record Format:
    - `_<port>._<proto>.<service>.<ns>.svc.<zone>. <ttl> IN SRV <weight> <priority> <port-number> <service>.<ns>.svc.<zone>.`
 
@@ -85,12 +101,14 @@ Unnamed ports do not have an `SRV` record.
 - Answer Example:
   - `_https._tcp.kubernetes.default.svc.cluster.local. 30 IN SRV 10 100 443 kubernetes.default.svc.cluster.local.`
 
-The Additional section of the response may include the Service `A` record
+The Additional section of the response may include the Service `A`/`AAAA` record
 referred to in the `SRV` record.
 
 #### 2.3.3 - `PTR` Record
-Given Service ClusterIP `<a>.<b>.<c>.<d>`, a `PTR` record of the following
+
+Given an IPv4 Service ClusterIP `<a>.<b>.<c>.<d>`, a `PTR` record of the following
 form must exist.
+
 - Record Format:
   - `<d>.<c>.<b>.<a>.in-addr.arpa. <ttl> IN PTR <service>.<ns>.svc.<zone>.`
 - Question Example:
@@ -98,14 +116,24 @@ form must exist.
 - Answer Example:
   - `1.0.3.10.in-addr.arpa. 14 IN PTR kubernetes.default.svc.cluster.local.`
 
+Given an IPv6 Service ClusterIP represented in hexadecimal format without any simplification `<a1a2a3a4:b1b2b3b4:c1c2c3c4:d1d2d3d4:e1e2e3e4:f1f2f3f4:g1g2g3g4:h1h2h3h4>`, a `PTR` record as a sequence of nibbles in reverse order of the following form must exist.
+
+- Record Format:
+  - `h4.h3.h2.h1.g4.g3.g2.g1.f4.f3.f2.f1.e4.e3.e2.e1.d4.d3.d2.d1.c4.c3.c2.c1.b4.b3.b2.b1.a4.a3.a2.a1.ip6.arpa <ttl> IN PTR <service>.<ns>.svc.<zone>.`
+- Question Example:
+  - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa. IN PTR`
+- Answer Example:
+  - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa. 14 IN PTR kubernetes.default.svc.cluster.local.`
+
 ### 2.4 - Records for a Headless Service
 
 Given a headless Service `<service>` in Namespace `<ns>` (i.e., a Service with
 no ClusterIP), the following records must exist.
 
-#### 2.4.1 - `A` Records
+#### 2.4.1 - `A`/`AAAA` Records
+
 There must be an `A` record for each _ready_ endpoint of the headless Service
-with IP address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints
+with IPv4 address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints
 for the headless Service, the answer should be `NXDOMAIN`.
 
 - Record Format:
@@ -120,9 +148,10 @@ for the headless Service, the answer should be `NXDOMAIN`.
 ```
 
 There must also be an `A` record of the following form for each _ready_
-endpoint with _hostname_ of `<hostname>` and IP address `<endpoint-ip>`.
-If there are multiple IP addresses for a given _hostname_, then there
+endpoint with _hostname_ of `<hostname>` and IPv4 address `<endpoint-ip>`.
+If there are multiple IPv4 addresses for a given _hostname_, then there
 must be one such `A` record returned for each IP.
+
 - Record Format:
   - `<hostname>.<service>.<ns>.svc.<zone>. <ttl> IN A <endpoint-ip>`
 - Question Example:
@@ -130,7 +159,35 @@ must be one such `A` record returned for each IP.
 - Answer Example:
   - `my-pet.headless.default.svc.cluster.local. 4 IN A 10.3.0.100`
 
+  There must be an `AAAA` record for each _ready_ endpoint of the headless Service
+with IPv6 address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints
+for the headless Service, the answer should be `NXDOMAIN`.
+
+- Record Format:
+  - `<service>.<ns>.svc.<zone>. <ttl> IN AAAA <endpoint-ip>`
+- Question Example:
+  - `headless.default.svc.cluster.local. IN AAAA`
+- Answer Example:
+```
+    headless.default.svc.cluster.local. 4 IN AAAA 2001:db8::1
+    headless.default.svc.cluster.local. 4 IN AAAA 2001:db8::2
+    headless.default.svc.cluster.local. 4 IN AAAA 2001:db8::3
+```
+
+There must also be an `AAAA` record of the following form for each _ready_
+endpoint with _hostname_ of `<hostname>` and IPv6 address `<endpoint-ip>`.
+If there are multiple IPv6 addresses for a given _hostname_, then there
+must be one such `AAAA` record returned for each IP.
+
+- Record Format:
+  - `<hostname>.<service>.<ns>.svc.<zone>. <ttl> IN AAAA <endpoint-ip>`
+- Question Example:
+  - `my-pet.headless.default.svc.cluster.local. IN AAAA`
+- Answer Example:
+  - `my-pet.headless.default.svc.cluster.local. 4 IN AAAA 2001:db8::1`
+
 #### 2.4.2 - `SRV` Records
+
 For each combination of _ready_ endpoint with _hostname_ of `<hostname>`, and
 port in the Service with name `<port>` and number `<port-number>` using
 protocol `<proto>`, an `SRV` record of the following form must exist.
@@ -156,12 +213,12 @@ Unnamed ports do not have an `SRV` record.
         _https._tcp.headless.default.svc.cluster.local. 4 IN SRV 10 100 443 438934893.headless.default.svc.cluster.local.
 ```
 
-The Additional section of the response may include the `A` records
+The Additional section of the response may include the `A`/`AAAA` records
 referred to in the `SRV` records.
 
 #### 2.4.3 - `PTR` Records
 
-Given a _ready_ endpoint with _hostname_ of `<hostname>` and IP address
+Given a _ready_ endpoint with _hostname_ of `<hostname>` and IPv4 address
 `<a>.<b>.<c>.<d>`, a `PTR` record of the following form must exist.
 - Record Format:
   - `<d>.<c>.<b>.<a>.in-addr.arpa. <ttl> IN PTR <hostname>.<service>.<ns>.svc.<zone>.`
@@ -171,21 +228,22 @@ Given a _ready_ endpoint with _hostname_ of `<hostname>` and IP address
   - `100.0.3.10.in-addr.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
 
 Given a _ready_ endpoint with _hostname_ of `<hostname>` and IPv6 address
-`<a>:<b>:<c>:<d>:<e>:<f>:<g>:<h>`, a `PTR` record of the following form must exist.
+in hexadecimal format without any simplification `<a1a2a3a4:b1b2b3b4:c1c2c3c4:d1d2d3d4:e1e2e3e4:f1f2f3f4:g1g2g3g4:h1h2h3h4>`, a `PTR` record as a sequence of nibbles in reverse order of the following form must exist.
 
 - Record Format:
-  - `<d>.<c>.<b>.<a>.in-addr.arpa. <ttl> IN PTR <hostname>.<service>.<ns>.svc.<zone>.`
+  - `h4.h3.h2.h1.g4.g3.g2.g1.f4.f3.f2.f1.e4.e3.e2.e1.d4.d3.d2.d1.c4.c3.c2.c1.b4.b3.b2.b1.a4.a3.a2.a1.ip6.arpa <ttl> IN PTR <hostname>.<service>.<ns>.svc.<zone>.`
 - Question Example:
-  - `100.0.3.10.in-addr.arpa. IN PTR`
+  - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa. IN PTR`
 - Answer Example:
-  - `100.0.3.10.in-addr.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
-
+  - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa. 14 IN PTR my-pet.headless.default.svc.cluster.local.`
 
 ### 2.5 - Records for External Name Services
 
 Given a Service named `<service>` in Namespace `<ns>` with ExternalName `<extname>`,
 a `CNAME` record named `<service>.<ns>.svc.<zone>` pointing to `<extname>` must
 exist.
+
+If the IP family of the service is IPv4:
 
 - Record Format:
   - `<service>.<ns>.svc.<zone>. <ttl> IN CNAME <extname>.`
@@ -194,6 +252,17 @@ exist.
 - Answer Example:
   - `foo.default.svc.cluster.local. 10 IN CNAME www.example.com.`
   - `www.example.com. 28715 IN A 192.0.2.53`
+
+If the IP family of the service is IPv6:
+
+- Record Format:
+  - `<service>.<ns>.svc.<zone>. <ttl> IN CNAME <extname>.`
+- Question Example:
+  - `foo.default.svc.cluster.local. IN AAAA`
+- Answer Example:
+  - `foo.default.svc.cluster.local. 10 IN CNAME www.example.com.`
+  - `www.example.com. 28715 IN AAAA 2001:db8::1`
+
 
 ## 3 - Schema Extensions
 Specific implementations may choose to extend this schema, but the RRs in this
