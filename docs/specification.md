@@ -265,5 +265,6 @@ If the IP family of the service is IPv6:
 
 
 ## 3 - Schema Extensions
+
 Specific implementations may choose to extend this schema, but the RRs in this
 document must be a subset of the RRs produced by the implementation.
