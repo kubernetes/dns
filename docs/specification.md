@@ -159,7 +159,7 @@ must be one such `A` record returned for each IP.
 - Answer Example:
   - `my-pet.headless.default.svc.cluster.local. 4 IN A 10.3.0.100`
 
-  There must be an `AAAA` record for each _ready_ endpoint of the headless Service
+There must be an `AAAA` record for each _ready_ endpoint of the headless Service
 with IPv6 address `<endpoint-ip>` as shown below. If there are no _ready_ endpoints
 for the headless Service, the answer should be `NXDOMAIN`.
 
