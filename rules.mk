@@ -166,11 +166,7 @@ push: $(PUSH_BUILDSTAMPS) images-push
 
 .%-push: .%-container
 	@echo "pushing  :" $$(head -n 1 $<)
-ifeq (,$(findstring gcr.io,$(REGISTRY)))
 	@docker push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
-else
-	@gcloud docker -- push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
-endif
 	@cat $< > $@
 
 define PUSH_RULE
