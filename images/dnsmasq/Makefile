@@ -67,11 +67,6 @@ DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
 MULTIARCH_CONTAINER := multiarch/qemu-user-static:register
 MULTIARCH_RELEASE := https://github.com/multiarch/qemu-user-static/releases/download/v2.5.0/x86_64_qemu-$(QEMUARCH)-static.tar.xz
 
-DOCKER := docker
-ifeq ($(findstring gcr.io/,$(REGISTRY)),gcr.io/)
-	DOCKER := gcloud docker --
-endif
-
 PATCHES := $(shell find patches/ -name *.patch)
 BINARY := $(OUTPUT_DIR)/docker/dnsmasq
 
@@ -185,7 +180,7 @@ push: $(PUSH_STAMP)
 
 $(PUSH_STAMP): $(CONTAINER_STAMP)
 	@echo "pushing  :" $(REGISTRY)/$(IMAGE):$(VERSION)
-	@$(DOCKER) push $(REGISTRY)/$(IMAGE):$(VERSION)
+	@docker push $(REGISTRY)/$(IMAGE):$(VERSION)
 	@cat $< > $@
 
 .PHONY: clean
