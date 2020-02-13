@@ -40,7 +40,7 @@ reload [INTERVAL] [JITTER]
 
 The plugin will check for changes every **INTERVAL**, subject to +/- the **JITTER** duration.
 
-*  **INTERVAL** and **JITTER** are Golang (durations)[[https://golang.org/pkg/time/#ParseDuration](https://golang.org/pkg/time/#ParseDuration)].
+*  **INTERVAL** and **JITTER** are Golang [durations](https://golang.org/pkg/time/#ParseDuration).
    The default **INTERVAL** is 30s, default **JITTER** is 15s, the minimal value for **INTERVAL**
    is 2s, and for **JITTER** it is 1s. If **JITTER** is more than half of **INTERVAL**, it will be
    set to half of **INTERVAL**
@@ -96,7 +96,7 @@ CoreDNS v1.7.0 and later does parse the Corefile and supports detecting changes 
 
 ## Metrics
 
- If monitoring is enabled (via the *prometheus* directive) then the following metric is exported:
+ If monitoring is enabled (via the *prometheus* plugin) then the following metric is exported:
 
 * `coredns_reload_failed_count_total{}` - counts the number of failed reload attempts.
 

@@ -7,7 +7,7 @@
 ## Description
 
 Enabled process wide health endpoint. When CoreDNS is up and running this returns a 200 OK HTTP
-status code. The health is exported, by default, on port 8080/health .
+status code. The health is exported, by default, on port 8080/health.
 
 ## Syntax
 
@@ -48,7 +48,7 @@ Doing this is supported but both endpoints ":8080" and ":8081" will export the e
 
 ## Metrics
 
-If monitoring is enabled (via the *prometheus* directive) then the following metric is exported:
+If monitoring is enabled (via the *prometheus* plugin) then the following metric is exported:
 
  *  `coredns_health_request_duration_seconds{}` - duration to process a HTTP query to the local
     `/health` endpoint. As this a local operation it should be fast. A (large) increase in this

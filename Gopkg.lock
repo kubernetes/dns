@@ -54,7 +54,7 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:6d687aa2a9ed978b16e808845b1c11b222b7c450d848ea45f1d1bd8dc5efe1c3"
+  digest = "1:7f9921e0956bf7a8a8fbf62e35758504dbfd6599bc402e996a0c9a5589ba3d0b"
   name = "github.com/coredns/coredns"
   packages = [
     "core/dnsserver",
@@ -87,9 +87,11 @@
     "plugin/pkg/log",
     "plugin/pkg/nonwriter",
     "plugin/pkg/parse",
+    "plugin/pkg/policy",
     "plugin/pkg/rcode",
     "plugin/pkg/replacer",
     "plugin/pkg/response",
+    "plugin/pkg/reuseport",
     "plugin/pkg/tls",
     "plugin/pkg/trace",
     "plugin/pkg/transport",
@@ -101,8 +103,8 @@
     "request",
   ]
   pruneopts = "UT"
-  revision = "b139ba34f370a4937bf76e7cc259a26f1394a91d"
-  version = "v1.6.4"
+  revision = "da7f65b3a8f1a092c0b7f2c84b7c1b215dfb94a0"
+  version = "v1.6.7"
 
 [[projects]]
   digest = "1:d2bf3686993c6674049180c5b3c608ceeae8fe99df6b9675594306fba9373b77"
