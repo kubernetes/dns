@@ -54,7 +54,7 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:7f9921e0956bf7a8a8fbf62e35758504dbfd6599bc402e996a0c9a5589ba3d0b"
+  digest = "1:667ed82ad1f40f34b6e1004f0c954f011e31bf1e07a6827ee4383d7f37c523f4"
   name = "github.com/coredns/coredns"
   packages = [
     "core/dnsserver",
@@ -73,6 +73,7 @@
     "plugin/etcd/msg",
     "plugin/forward",
     "plugin/health",
+    "plugin/loadbalance",
     "plugin/log",
     "plugin/loop",
     "plugin/metadata",
@@ -100,6 +101,7 @@
     "plugin/pprof",
     "plugin/reload",
     "plugin/test",
+    "plugin/whoami",
     "request",
   ]
   pruneopts = "UT"
@@ -970,12 +972,14 @@
     "github.com/coredns/coredns/plugin/errors",
     "github.com/coredns/coredns/plugin/forward",
     "github.com/coredns/coredns/plugin/health",
+    "github.com/coredns/coredns/plugin/loadbalance",
     "github.com/coredns/coredns/plugin/log",
     "github.com/coredns/coredns/plugin/loop",
     "github.com/coredns/coredns/plugin/metrics",
     "github.com/coredns/coredns/plugin/pkg/log",
     "github.com/coredns/coredns/plugin/pprof",
     "github.com/coredns/coredns/plugin/reload",
+    "github.com/coredns/coredns/plugin/whoami",
     "github.com/coreos/etcd/client",
     "github.com/golang/glog",
     "github.com/miekg/dns",
