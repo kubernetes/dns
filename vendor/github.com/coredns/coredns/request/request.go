@@ -18,15 +18,16 @@ type Request struct {
 	// Optional lowercased zone of this query.
 	Zone string
 
-	// Cache size after first call to Size or Do.
-	size int
-	do   *bool // nil: nothing, otherwise *do value
+	// Cache size after first call to Size or Do. If size is zero nothing has been cached yet.
+	// Both Size and Do set these values (and cache them).
+	size uint16 // UDP buffer size, or 64K in case of TCP.
+	do   bool   // DNSSEC OK value
 
 	// Caches
+	family    int8   // transport's family.
 	name      string // lowercase qname.
 	ip        string // client's ip.
 	port      string // client's port.
-	family    int    // transport's family.
 	localPort string // server's port.
 	localIP   string // server's ip.
 }
@@ -110,15 +111,11 @@ func (r *Request) RemoteAddr() string { return r.W.RemoteAddr().String() }
 func (r *Request) LocalAddr() string { return r.W.LocalAddr().String() }
 
 // Proto gets the protocol used as the transport. This will be udp or tcp.
-func (r *Request) Proto() string { return Proto(r.W) }
-
-// Proto gets the protocol used as the transport. This will be udp or tcp.
-func Proto(w dns.ResponseWriter) string {
-	// FIXME(miek): why not a method on Request
-	if _, ok := w.RemoteAddr().(*net.UDPAddr); ok {
+func (r *Request) Proto() string {
+	if _, ok := r.W.RemoteAddr().(*net.UDPAddr); ok {
 		return "udp"
 	}
-	if _, ok := w.RemoteAddr().(*net.TCPAddr); ok {
+	if _, ok := r.W.RemoteAddr().(*net.TCPAddr); ok {
 		return "tcp"
 	}
 	return "udp"
@@ -127,7 +124,7 @@ func Proto(w dns.ResponseWriter) string {
 // Family returns the family of the transport, 1 for IPv4 and 2 for IPv6.
 func (r *Request) Family() int {
 	if r.family != 0 {
-		return r.family
+		return int(r.family)
 	}
 
 	var a net.IP
@@ -141,26 +138,20 @@ func (r *Request) Family() int {
 
 	if a.To4() != nil {
 		r.family = 1
-		return r.family
+		return 1
 	}
 	r.family = 2
-	return r.family
+	return 2
 }
 
 // Do returns if the request has the DO (DNSSEC OK) bit set.
 func (r *Request) Do() bool {
-	if r.do != nil {
-		return *r.do
+	if r.size != 0 {
+		return r.do
 	}
 
-	r.do = new(bool)
-
-	if o := r.Req.IsEdns0(); o != nil {
-		*r.do = o.Do()
-		return *r.do
-	}
-	*r.do = false
-	return false
+	r.Size()
+	return r.do
 }
 
 // Len returns the length in bytes in the request.
@@ -170,21 +161,19 @@ func (r *Request) Len() int { return r.Req.Len() }
 // Or when the request was over TCP, we return the maximum allowed size of 64K.
 func (r *Request) Size() int {
 	if r.size != 0 {
-		return r.size
+		return int(r.size)
 	}
 
-	size := 0
+	size := uint16(0)
 	if o := r.Req.IsEdns0(); o != nil {
-		if r.do == nil {
-			r.do = new(bool)
-		}
-		*r.do = o.Do()
-		size = int(o.UDPSize())
+		r.do = o.Do()
+		size = o.UDPSize()
 	}
 
+	// normalize size
 	size = edns.Size(r.Proto(), size)
 	r.size = size
-	return size
+	return int(size)
 }
 
 // SizeAndDo adds an OPT record that the reflects the intent from request.
