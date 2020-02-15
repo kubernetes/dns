@@ -241,6 +241,7 @@ help:
 	@echo "  all, build    build all binaries"
 	@echo "  containers    build the containers"
 	@echo "  push          push containers to the registry"
+	@echo "  images-clean  clear image build artifacts from workdir"
 	@echo "  help          this help message"
 	@echo "  version       show package version"
 	@echo
