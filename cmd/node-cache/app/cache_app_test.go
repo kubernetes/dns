@@ -144,7 +144,7 @@ func TestUpdateCoreFile(t *testing.T) {
 	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
 		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 	out, _ := compareFileContents(c.params.CoreFile, expectedContents, t)
 	if !strings.Contains(out, expectedContents) {
 		t.Fatalf("Could not find contents '%s' in CoreFile '%s'", expectedContents, out)
