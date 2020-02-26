@@ -17,6 +17,7 @@ limitations under the License.
 package sidecar
 
 import (
+	"math"
 	"time"
 
 	"github.com/golang/glog"
@@ -79,10 +80,15 @@ func exportMetrics(metrics *dnsmasq.Metrics) {
 		// previous to get the proper value. This is needed because the
 		// Counter API does not allow us to set the counter to a value.
 		previousValue := countersCache[key]
-		delta := float64((*metrics)[key]) - previousValue
-		newValue := previousValue + delta
-		// Update cache to new value.
-		countersCache[key] = newValue
-		counters[key].Add(delta)
+		newValue := float64((*metrics)[key])
+		countersCache[key] = math.Max(newValue, 0)
+
+		// Ensure the newValue is a valid progression from the previous
+		// value. This will not be the case if for example the dnsmasq
+		// is experiencing connectivity issues. We can only call the
+		// counter Add(...) func with a positive delta between values.
+		if newValue > previousValue {
+			counters[key].Add(newValue - previousValue)
+		}
 	}
 }
