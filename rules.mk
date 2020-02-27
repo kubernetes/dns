@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#	 http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -70,16 +70,16 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
-    detected_OS := Windows
+	detected_OS := Windows
 else
-    detected_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+	detected_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
 endif
 
 # Mac and Windows builds will be running in a VM
 ifeq ($(detected_OS),Linux)
-    BUILD_USER := -u $$(id -u):$$(id -g)
+	BUILD_USER := -u $$(id -u):$$(id -g)
 else
-    BUILD_USER :=
+	BUILD_USER :=
 endif
 
 # This MUST appear as the first rule in a Makefile
@@ -103,13 +103,13 @@ all-containers: $(addprefix containers-, $(ALL_ARCH))
 
 .PHONY: all-push
 all-push: $(addprefix push-, $(ALL_ARCH))
-	@for binary in $(CONTAINER_BINARIES); do \
-		MANIFEST_IMAGE=$(REGISTRY)/$(CONTAINER_PREFIX)-$${binary} ; \
-		for arch in $(ALL_ARCH); do \
-			docker manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ; \
-			docker manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION}; \
-		done ; \
-		docker manifest push --purge $$MANIFEST_IMAGE:${VERSION} ; \
+	@for binary in $(CONTAINER_BINARIES); do  \
+		MANIFEST_IMAGE=$(REGISTRY)/$(CONTAINER_PREFIX)-$${binary} ;  \
+		for arch in $(ALL_ARCH); do  \
+			docker manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ;  \
+			docker manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION};  \
+		done ;  \
+		docker manifest push --purge $$MANIFEST_IMAGE:${VERSION} ;  \
 	done
 
 .PHONY: build
@@ -120,22 +120,22 @@ build: $(GO_BINARIES) images-build
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
 	@docker pull $(BUILD_IMAGE)
-	@docker run																\
-	    --rm																\
-	    --sig-proxy=true													\
-	    $(BUILD_USER)														\
-	    -v $$(pwd)/.go:/go													\
-	    -v $$(pwd):/go/src/$(PKG)											\
-	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)						\
-	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static	\
-	    -w /go/src/$(PKG)													\
-	    $(BUILD_IMAGE)														\
-	    /bin/sh -c "														\
-	        ARCH=$(ARCH)													\
-	        VERSION=$(VERSION)												\
-	        PKG=$(PKG)														\
-	        ./build/build.sh												\
-	    "
+	@docker run \
+		--rm \
+		--sig-proxy=true \
+		$(BUILD_USER) \
+		-v $$(pwd)/.go:/go \
+		-v $$(pwd):/go/src/$(PKG) \
+		-v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH) \
+		-v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static \
+		-w /go/src/$(PKG) \
+		$(BUILD_IMAGE) \
+		/bin/sh -c " \
+			ARCH=$(ARCH) \
+			VERSION=$(VERSION) \
+			PKG=$(PKG) \
+			./build/build.sh \
+		"
 
 
 # Rules for containers
@@ -143,15 +143,15 @@ define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
 	@docker pull $(BASEIMAGE)
-	@docker build							\
-		$(DOCKER_BUILD_FLAGS)				\
-		--build-arg base=$(BASEIMAGE)		\
-		--build-arg registry=$(REGISTRY)	\
-		--build-arg version=$(VERSION)		\
-		--build-arg arch=$(ARCH)			\
-		--build-arg bin=$(BINARY)			\
-		-t $(CONTAINER_NAME):$(VERSION)		\
-		-f Dockerfile.$(BINARY) .			\
+	@docker build \
+		$(DOCKER_BUILD_FLAGS) \
+		--build-arg base=$(BASEIMAGE) \
+		--build-arg registry=$(REGISTRY) \
+		--build-arg version=$(VERSION) \
+		--build-arg arch=$(ARCH) \
+		--build-arg bin=$(BINARY) \
+		-t $(CONTAINER_NAME):$(VERSION) \
+		-f Dockerfile.$(BINARY) . \
 		$(VERBOSE_OUTPUT)
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
 	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@
@@ -180,19 +180,19 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(PUSH_RULE)))
 # Rule for `test`
 .PHONY: test
 test: build-dirs images-test
-	@docker run                                                            \
-	    --rm                                                               \
-	    --sig-proxy=true                                                   \
-	    $(BUILD_USER)                                             		   \
-	    -v $$(pwd)/.go:/go                                                 \
-	    -v $$(pwd):/go/src/$(PKG)                                          \
-	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
-	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
-	    -w /go/src/$(PKG)                                                  \
-	    $(BUILD_IMAGE)                                                     \
-	    /bin/sh -c "                                                       \
-	        ./build/test.sh $(SRC_DIRS)                                    \
-	    "
+	@docker run  \
+		--rm  \
+		--sig-proxy=true  \
+		$(BUILD_USER)  \
+		-v $$(pwd)/.go:/go  \
+		-v $$(pwd):/go/src/$(PKG)  \
+		-v $$(pwd)/bin/$(ARCH):/go/bin  \
+		-v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
+		-w /go/src/$(PKG)  \
+		$(BUILD_IMAGE)  \
+		/bin/sh -c "  \
+			./build/test.sh $(SRC_DIRS)  \
+		"
 
 # Hook in images build
 .PHONY: images-build
