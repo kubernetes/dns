@@ -26,7 +26,6 @@ BINARIES := \
     sidecar-e2e
 
 # List of binaries to build that are containerized and pushed.
-# You must have a matching Dockerfile.BINARY for each BINARY.
 CONTAINER_BINARIES := \
     dnsmasq-nanny \
     kube-dns \

@@ -11,10 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM ARG_REGISTRY/k8s-dns-dnsmasq-ARG_ARCH:ARG_VERSION
+
+ARG registry=staging-k8s.gcr.io
+ARG arch=amd64
+ARG version
+
+FROM ${registry}/k8s-dns-dnsmasq-${arch}:${version}
+
+# Needs to be redefined in order to make this variable present during build
+ARG arch=amd64
+ARG bin=dnsmasq-nanny
 
 MAINTAINER Bowei Du <bowei@google.com>
 
 RUN mkdir -p /etc/k8s/dns/dnsmasq-nanny
-ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
-ENTRYPOINT ["/ARG_BIN"]
+ADD bin/${arch}/${bin} /${bin}
+ENTRYPOINT ["/dnsmasq-nanny"]

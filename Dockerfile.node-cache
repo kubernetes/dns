@@ -12,12 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ARG_FROM
-RUN apt-get update && apt-get install -y \
+ARG base
+
+FROM $base
+
+ARG bin=node-cache
+ARG arch=amd64
+ARG version
+
+RUN set -ex; \
+  apt-get update && apt-get install -y \
     iproute2 \
-    iptables \
-&& rm -rf /var/lib/apt/lists/*
-ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
+    iptables; \
+  rm -rf /var/lib/apt/lists/*
+
+ADD bin/${arch}/${bin} /node-cache
+
 EXPOSE 53 53/udp
 EXPOSE 53 53/tcp
-ENTRYPOINT ["/ARG_BIN"]
+
+ENTRYPOINT ["/node-cache"]

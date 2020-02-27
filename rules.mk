@@ -69,6 +69,19 @@ else
 	VERBOSE_OUTPUT := >/dev/null
 endif
 
+ifeq ($(OS),Windows_NT)
+    detected_OS := Windows
+else
+    detected_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+endif
+
+# Mac and Windows builds will be running in a VM
+ifeq ($(detected_OS),Linux)
+    BUILD_USER := -u $$(id -u):$$(id -g)
+else
+    BUILD_USER :=
+endif
+
 # This MUST appear as the first rule in a Makefile
 all: build
 
@@ -107,38 +120,22 @@ build: $(GO_BINARIES) images-build
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
 	@docker pull $(BUILD_IMAGE)
-	@docker run                                                            \
-	    --rm                                                               \
-	    --sig-proxy=true                                                   \
-	    -u $$(id -u):$$(id -g)                                             \
-	    -v $$(pwd)/.go:/go                                                 \
-	    -v $$(pwd):/go/src/$(PKG)                                          \
-	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)                       \
-	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
-	    -w /go/src/$(PKG)                                                  \
-	    $(BUILD_IMAGE)                                                     \
-	    /bin/sh -c "                                                       \
-	        ARCH=$(ARCH)                                                   \
-	        VERSION=$(VERSION)                                             \
-	        PKG=$(PKG)                                                     \
-	        ./build/build.sh                                               \
+	@docker run																\
+	    --rm																\
+	    --sig-proxy=true													\
+	    $(BUILD_USER)														\
+	    -v $$(pwd)/.go:/go													\
+	    -v $$(pwd):/go/src/$(PKG)											\
+	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)						\
+	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static	\
+	    -w /go/src/$(PKG)													\
+	    $(BUILD_IMAGE)														\
+	    /bin/sh -c "														\
+	        ARCH=$(ARCH)													\
+	        VERSION=$(VERSION)												\
+	        PKG=$(PKG)														\
+	        ./build/build.sh												\
 	    "
-
-
-# Rules for dockerfiles.
-define DOCKERFILE_RULE
-.$(BINARY)-$(ARCH)-dockerfile: Dockerfile.$(BINARY)
-	@echo generating Dockerfile $$@ from $$<
-	@sed					\
-	    -e 's|ARG_ARCH|$(ARCH)|g' \
-	    -e 's|ARG_BIN|$(BINARY)|g' \
-	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
-	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
-	    -e 's|ARG_VERSION|$(VERSION)|g' \
-	    $$< > $$@
-.$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
-endef
-$(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 
 
 # Rules for containers
@@ -146,10 +143,15 @@ define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
 	@docker pull $(BASEIMAGE)
-	@docker build					\
-		$(DOCKER_BUILD_FLAGS)			\
+	@docker build							\
+		$(DOCKER_BUILD_FLAGS)				\
+		--build-arg base=$(BASEIMAGE)		\
+		--build-arg registry=$(REGISTRY)	\
+		--build-arg version=$(VERSION)		\
+		--build-arg arch=$(ARCH)			\
+		--build-arg bin=$(BINARY)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
-		-f .$(BINARY)-$(ARCH)-dockerfile .	\
+		-f Dockerfile.$(BINARY) .			\
 		$(VERBOSE_OUTPUT)
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
 	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@
@@ -181,7 +183,7 @@ test: build-dirs images-test
 	@docker run                                                            \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
-	    -u $$(id -u):$$(id -g)                                             \
+	    $(BUILD_USER)                                             		   \
 	    -v $$(pwd)/.go:/go                                                 \
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
@@ -228,7 +230,7 @@ clean: container-clean bin-clean images-clean
 
 .PHONY: container-clean
 container-clean:
-	rm -f .*-container .*-dockerfile .*-push
+	rm -f .*-container .*-push
 
 .PHONY: bin-clean
 bin-clean:

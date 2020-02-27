@@ -12,9 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ARG_FROM
+ARG base
+
+FROM $base
+
+ARG bin=kube-dns
+ARG arch=amd64
+ARG version
 
 MAINTAINER Bowei Du <bowei@google.com>
 
-ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
-ENTRYPOINT ["/ARG_BIN"]
+ADD bin/${arch}/${bin} /kube-dns
+ENTRYPOINT [ "/kube-dns" ]
