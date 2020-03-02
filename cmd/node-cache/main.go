@@ -64,6 +64,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.StringVar(&params.CoreFile, "corefile", "/etc/Corefile", "Path to the Corefile to be used by node-cache")
 	flag.StringVar(&params.KubednsCMPath, "kubednscm", "/etc/kube-dns", "Path where the kube-dns configmap will be mounted")
 	flag.StringVar(&params.UpstreamSvcName, "upstreamsvc", "kube-dns", "Service name whose cluster IP is upstream for node-cache")
+	flag.StringVar(&params.HealthPort, "health-port", "8080", "port used by health plugin")
 	flag.Parse()
 
 	for _, ipstr := range strings.Split(params.LocalIPStr, ",") {
@@ -82,6 +83,9 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	params.LocalPort = f.Value.String()
 	if _, err := strconv.Atoi(params.LocalPort); err != nil {
 		return nil, fmt.Errorf("Invalid port specified - %q", params.LocalPort)
+	}
+	if _, err := strconv.Atoi(params.HealthPort); err != nil {
+		return nil, fmt.Errorf("Invalid healthcheck port specified - %q", params.HealthPort)
 	}
 	if f = flag.Lookup("conf"); f != nil {
 		params.CoreFile = f.Value.String()
