@@ -62,22 +62,18 @@ func (c *CacheApp) Init() {
 	if c.params.SetupIptables {
 		c.initIptables()
 	}
+	initMetrics(c.params.MetricsListenAddress)
+	// Write the config file from template.
+	// this is required in case there is no kube-dns configmap specified.
+	c.updateCorefile(&config.Config{})
+	c.initKubeDNSConfigSync()
 	err := c.TeardownNetworking()
 	if err != nil {
 		// It is likely to hit errors here if previous shutdown cleaned up all iptables rules and interface.
 		// Logging error at info level
 		clog.Infof("Hit error during teardown - %s", err)
 	}
-	err = c.setupNetworking()
-	if err != nil {
-		c.TeardownNetworking()
-		clog.Fatalf("Failed to setup - %s, Exiting", err)
-	}
-	initMetrics(c.params.MetricsListenAddress)
-	// Write the config file from template.
-	// this is required in case there is no kube-dns configmap specified.
-	c.updateCorefile(&config.Config{})
-	c.initKubeDNSConfigSync()
+	c.setupNetworking()
 }
 
 func (c *CacheApp) initIptables() {
@@ -126,26 +122,6 @@ func newIPTables() utiliptables.Interface {
 	return utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
 }
 
-func (c *CacheApp) setupNetworking() error {
-	var err error
-	clog.Infof("Setting up networking for node cache")
-	err = c.netifHandle.AddDummyDevice(c.params.InterfaceName)
-	if err != nil {
-		return err
-	}
-	if c.params.SetupIptables {
-		for _, rule := range c.iptablesRules {
-			_, err = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		clog.Infof("Skipping iptables setup for node cache")
-	}
-	return err
-}
-
 // TeardownNetworking removes all custom iptables rules and network interface added by node-cache
 func (c *CacheApp) TeardownNetworking() error {
 	clog.Infof("Tearing down")
@@ -169,7 +145,7 @@ func (c *CacheApp) TeardownNetworking() error {
 	return err
 }
 
-func (c *CacheApp) runChecks() {
+func (c *CacheApp) setupNetworking() {
 	if c.params.SetupIptables {
 		for _, rule := range c.iptablesRules {
 			exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
@@ -198,7 +174,7 @@ func (c *CacheApp) runChecks() {
 			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
 			setupErrCount.WithLabelValues("interface_add").Inc()
 		}
-		clog.Infof("Added back interface - %s", c.params.InterfaceName)
+		clog.Infof("Added interface - %s", c.params.InterfaceName)
 	}
 	if err != nil {
 		clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
@@ -212,7 +188,7 @@ func (c *CacheApp) runPeriodic() {
 	for {
 		select {
 		case <-tick.C:
-			c.runChecks()
+			c.setupNetworking()
 		case <-c.exitChan:
 			clog.Warningf("Exiting iptables/interface check goroutine")
 			return
@@ -222,9 +198,6 @@ func (c *CacheApp) runPeriodic() {
 
 // RunApp invokes the background checks and runs coreDNS as a cache
 func (c *CacheApp) RunApp() {
-	// Ensure that the required setup is ready
-	// https://github.com/kubernetes/dns/issues/282 sometimes the interface gets the ip and then loses it, if added too soon.
-	c.runChecks()
 	go c.runPeriodic()
 	coremain.Run()
 	// Unlikely to reach here, if we did it is because coremain exited and the signal was not trapped.
