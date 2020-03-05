@@ -33,6 +33,7 @@ type ConfigParams struct {
 	UpstreamSvcName      string        // Name of the service whose clusterIP is the upstream for node-cache for cluster domain
 	HealthPort           string        // port for the healthcheck
 	SetupIptables        bool
+	SkipTeardown         bool // Indicates whether the iptables rules and interface should be torn down
 }
 
 type iptablesRule struct {
