@@ -13,10 +13,6 @@
 # limitations under the License.
 
 FROM ARG_FROM
-RUN apt-get update && apt-get install -y \
-    iproute2 \
-    iptables \
-&& rm -rf /var/lib/apt/lists/*
 ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
 EXPOSE 53 53/udp
 EXPOSE 53 53/tcp
