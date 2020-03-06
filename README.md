@@ -11,6 +11,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 * [kube-dns](http://kubernetes.io/docs/admin/dns/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
+* [node-cache](http://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
 
 ## Building
 
@@ -44,3 +45,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 1. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
 1. Build and push for all architectures (`make all-push`)
+
+## Upgrading CoreDNS version in node-cache
+The coreDNS version used in node-cache image will be atmost 2 minor versions behind the latest CoreDNS image.
+Any vulnerability fixes will be picked up soon after a CoreDNS release is published.
