@@ -68,12 +68,6 @@ func (c *CacheApp) Init() {
 	// this is required in case there is no kube-dns configmap specified.
 	c.updateCorefile(&config.Config{})
 	c.initKubeDNSConfigSync()
-	err := c.TeardownNetworking()
-	if err != nil {
-		// It is likely to hit errors here if previous shutdown cleaned up all iptables rules and interface.
-		// Logging error at info level
-		clog.Infof("Hit error during teardown - %s", err)
-	}
 	c.setupNetworking()
 }
 
