@@ -10,14 +10,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-	setupErrCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: plugin.Namespace,
-		Subsystem: "nodecache",
-		Name:      "setup_errors",
-		Help:      "The number of errors during periodic network setup for node-cache",
-	}, []string{"errortype"})
-)
+var setupErrCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: plugin.Namespace,
+	Subsystem: "nodecache",
+	Name:      "setup_errors_total",
+	Help:      "The number of errors during periodic network setup for node-cache",
+}, []string{"errortype"})
 
 func initMetrics(ipport string) {
 	if err := serveMetrics(ipport); err != nil {
@@ -29,6 +27,10 @@ func initMetrics(ipport string) {
 
 func registerMetrics() {
 	prometheus.MustRegister(setupErrCount)
+	setupErrCount.WithLabelValues("iptables").Add(0)
+	setupErrCount.WithLabelValues("iptables_lock").Add(0)
+	setupErrCount.WithLabelValues("interface_add").Add(0)
+	setupErrCount.WithLabelValues("interface_check").Add(0)
 }
 
 func serveMetrics(ipport string) error {
@@ -44,5 +46,4 @@ func serveMetrics(ipport string) error {
 		srv.Serve(ln)
 	}()
 	return nil
-
 }
