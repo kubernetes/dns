@@ -37,10 +37,15 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 ## Release process
 
 1. Build and test (`make images-clean`; `make build`; `make containers`; `make test`)
-1. Update [go dependencies](docs/go-dependencies.md) if needed.
-1. Update the release tag. We use [semantic versioning](http://semver.org) to
+2. Update [go dependencies](docs/go-dependencies.md) if needed.
+3. Update the release tag. We use [semantic versioning](http://semver.org) to
    name releases.
-1. Push the containers (`make push`)
-1. Submit a PR for the kubernetes/kubernetes repository to switch to the new
+4. Wait for container images to be pushed via cloudbuild yaml. This will be done automatically by
+   `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
+   `gcloud builds submit --config cloudbuild.yaml`, but this requires owner permissions in k8s-staging-dns project.
+   The automated job pushes images for all architectures and makes them available in `gcr.io/k8s-staging-dns`.
+5. Promote the images to `gcr.io/k8s-artifacts-prod` using the process described
+   in [this](https://github.com/kubernetes/k8s.io/tree/master/k8s.gcr.io#image-promoter) link.
+   The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
+6. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
-1. Build and push for all architectures (`make all-push`)
