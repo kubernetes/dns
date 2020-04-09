@@ -29,10 +29,21 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
-ifeq ($(BINARY),node-cache)
-BASEIMAGE ?= k8s.gcr.io/debian-iptables-$(ARCH):v12.0.1
-else
-BASEIMAGE ?= k8s.gcr.io/debian-base-$(ARCH):v2.0.0
+# Set default base image dynamically for each arch
+ifeq ($(ARCH),amd64)
+	BASEIMAGE?=k8s.gcr.io/debian-base:v1.0.0
+endif
+ifeq ($(ARCH),arm)
+	BASEIMAGE?=k8s.gcr.io/debian-base-arm:v1.0.0
+endif
+ifeq ($(ARCH),arm64)
+	BASEIMAGE?=k8s.gcr.io/debian-base-arm64:v1.0.0
+endif
+ifeq ($(ARCH),ppc64le)
+	BASEIMAGE?=k8s.gcr.io/debian-base-ppc64le:v1.0.0
+endif
+ifeq ($(ARCH),s390x)
+	BASEIMAGE?=k8s.gcr.io/debian-base-s390x:v1.0.0
 endif
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
