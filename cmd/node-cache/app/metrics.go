@@ -31,6 +31,7 @@ func registerMetrics() {
 	setupErrCount.WithLabelValues("iptables_lock").Add(0)
 	setupErrCount.WithLabelValues("interface_add").Add(0)
 	setupErrCount.WithLabelValues("interface_check").Add(0)
+	setupErrCount.WithLabelValues("configmap").Add(0)
 }
 
 func serveMetrics(ipport string) error {
