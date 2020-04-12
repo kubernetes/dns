@@ -40,11 +40,15 @@ func getStubDomainStr(stubDomainMap map[string][]string, info *stubDomainInfo) s
 		tmpl, err := template.New("stubDomainBlock").Parse(stubDomainBlock)
 		if err != nil {
 			clog.Errorf("Failed to create stubDomain template, err : %v", err)
+			setupErrCount.WithLabelValues("configmap").Inc()
 			continue
 		}
 		info.DomainName = domainName
 		info.UpstreamServers = strings.Join(servers, " ")
-		tmpl.Execute(&tpl, *info)
+		if err := tmpl.Execute(&tpl, *info); err != nil {
+			clog.Errorf("Failed to parse stubDomain template, err : %v", err)
+			setupErrCount.WithLabelValues("configmap").Inc()
+		}
 	}
 	return tpl.String()
 }
@@ -54,6 +58,7 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	baseConfig, err := ioutil.ReadFile(c.params.BaseCoreFile)
 	if err != nil {
 		clog.Errorf("Failed to read node-cache coreFile %s - %v", c.params.BaseCoreFile, err)
+		setupErrCount.WithLabelValues("configmap").Inc()
 		return
 	}
 	stubDomainStr := getStubDomainStr(dnsConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
@@ -73,6 +78,7 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	newConfig.WriteString(stubDomainStr)
 	if err := ioutil.WriteFile(c.params.CoreFile, newConfig.Bytes(), 0666); err != nil {
 		clog.Errorf("Failed to write config file %s - err %v", c.params.CoreFile, err)
+		setupErrCount.WithLabelValues("configmap").Inc()
 		return
 	}
 	clog.Infof("Updated Corefile with %d custom stubdomains and upstream servers %s", len(dnsConfig.StubDomains), upstreamServers)
