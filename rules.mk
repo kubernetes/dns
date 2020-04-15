@@ -29,7 +29,8 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
-BASEIMAGE ?= us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.2
+BASEIMAGE ?= k8s.gcr.io/build-image/debian-base-$(ARCH):buster-v1.2.0
+IPTIMAGE ?= k8s.gcr.io/build-image/debian-iptables-$(ARCH):buster-v1.3.0
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
@@ -125,7 +126,8 @@ define DOCKERFILE_RULE
 	    -e 's|ARG_ARCH|$(ARCH)|g' \
 	    -e 's|ARG_BIN|$(BINARY)|g' \
 	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
-	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
+	    -e 's|ARG_FROM_BASE|$(BASEIMAGE)|g' \
+	    -e 's|ARG_FROM_IPT|$(IPTIMAGE)|g' \
 	    -e 's|ARG_VERSION|$(VERSION)|g' \
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
@@ -137,7 +139,6 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
-	@docker pull $(BASEIMAGE)
 	@docker build					\
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
