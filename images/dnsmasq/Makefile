@@ -27,25 +27,21 @@ OUTPUT_DIR := _output/$(ARCH)
 # Ensure that the docker command line supports the manifest images
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
+BASEIMAGE ?= k8s.gcr.io/debian-base-$(ARCH):v2.0.0
 ifeq ($(ARCH),amd64)
-	BASEIMAGE ?= k8s.gcr.io/debian-base:v1.0.0
-	COMPILE_IMAGE := k8s.gcr.io/debian-base:v1.0.0
+	COMPILE_IMAGE := k8s.gcr.io/debian-base-$(ARCH):v2.0.0
 else ifeq ($(ARCH),arm)
-	BASEIMAGE ?= k8s.gcr.io/debian-base-arm:v1.0.0
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
 else ifeq ($(ARCH),arm64)
-	BASEIMAGE ?= k8s.gcr.io/debian-base-arm64:v1.0.0
 	TRIPLE    ?= aarch64-linux-gnu
 	QEMUARCH  := aarch64
 else ifeq ($(ARCH),ppc64le)
-	BASEIMAGE ?= k8s.gcr.io/debian-base-ppc64le:v1.0.0
 	TRIPLE    ?= powerpc64le-linux-gnu
 	QEMUARCH  := ppc64le
 else ifeq ($(ARCH),s390x)
-        BASEIMAGE ?=k8s.gcr.io/debian-base-s390x:v1.0.0
-        TRIPLE    ?=s390x-linux-gnu
-        QEMUARCH  :=s390x
+	TRIPLE    ?= s390x-linux-gnu
+	QEMUARCH  := s390x
 else
 $(error Unsupported ARCH: $(ARCH))
 endif
