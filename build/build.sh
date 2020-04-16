@@ -26,8 +26,8 @@ if [ -z "${ARCH}" ]; then
     exit 1
 fi
 if [ -z "${VERSION}" ]; then
-    echo "VERSION must be set"
-    exit 1
+    VERSION=$(git describe --tags --always --dirty)
+    echo "VERSION must be set, overriding to $VERSION"
 fi
 
 export CGO_ENABLED=0
