@@ -8,6 +8,7 @@ steps:
     env:
     - PROW_GIT_TAG=$_GIT_TAG
     - PULL_BASE_REF=$_PULL_BASE_REF
+    - VERSION=$_GIT_TAG
     args:
     - -c
     - |
