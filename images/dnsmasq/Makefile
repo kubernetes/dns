@@ -155,7 +155,7 @@ endif
 $(DNSMASQ_ARCHIVE):
 	@mkdir -p $(@D)
 	@curl -sSL $(DNSMASQ_URL) > $@
-	@echo "$(DNSMASQ_SHA256) $(DNSMASQ_ARCHIVE)" > $(@D)/sha256.txt
+	@echo "$(DNSMASQ_SHA256)  $(DNSMASQ_ARCHIVE)" > $(@D)/sha256.txt
 	@sha256sum -c $(@D)/sha256.txt
 
 .PHONY: containers
