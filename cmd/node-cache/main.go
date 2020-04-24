@@ -28,6 +28,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/metrics"
 	_ "github.com/coredns/coredns/plugin/pprof"
 	_ "github.com/coredns/coredns/plugin/reload"
+	_ "github.com/coredns/coredns/plugin/template"
 	_ "github.com/coredns/coredns/plugin/whoami"
 )
 
