@@ -65,10 +65,17 @@ func (c *CacheApp) Init() {
 	}
 	initMetrics(c.params.MetricsListenAddress)
 	// Write the config file from template.
-	// this is required in case there is no kube-dns configmap specified.
+	// this is required in case there is no or erroneous kube-dns configpath specified.
 	c.updateCorefile(&config.Config{})
-	c.initKubeDNSConfigSync()
+	// Initialize periodic sync for node-local-dns, kube-dns configmap.
+	c.initDNSConfigSync()
+	// Setup only the network interface during this init. IPTables will be setup via runPeriodic.
+	// This is to ensure that iptables rules don't get setup if the cache(coreDNS) is unable to startup due to config
+	// error, port conflicts or other reasons.
+	setupIptables := c.params.SetupIptables
+	c.params.SetupIptables = false
 	c.setupNetworking()
+	c.params.SetupIptables = setupIptables
 }
 
 func (c *CacheApp) initIptables() {
