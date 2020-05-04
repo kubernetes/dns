@@ -54,7 +54,7 @@
   version = "v3.0.0"
 
 [[projects]]
-  digest = "1:667ed82ad1f40f34b6e1004f0c954f011e31bf1e07a6827ee4383d7f37c523f4"
+  digest = "1:cc7ceb7cdd6efc917b996058d3996280a8a57d90c805492ed7dca2d2f75057d7"
   name = "github.com/coredns/coredns"
   packages = [
     "core/dnsserver",
@@ -84,6 +84,7 @@
     "plugin/pkg/dnsutil",
     "plugin/pkg/doh",
     "plugin/pkg/edns",
+    "plugin/pkg/fall",
     "plugin/pkg/fuzz",
     "plugin/pkg/log",
     "plugin/pkg/nonwriter",
@@ -98,8 +99,10 @@
     "plugin/pkg/transport",
     "plugin/pkg/uniq",
     "plugin/pkg/up",
+    "plugin/pkg/upstream",
     "plugin/pprof",
     "plugin/reload",
+    "plugin/template",
     "plugin/test",
     "plugin/whoami",
     "request",
@@ -979,6 +982,7 @@
     "github.com/coredns/coredns/plugin/pkg/log",
     "github.com/coredns/coredns/plugin/pprof",
     "github.com/coredns/coredns/plugin/reload",
+    "github.com/coredns/coredns/plugin/template",
     "github.com/coredns/coredns/plugin/whoami",
     "github.com/coreos/etcd/client",
     "github.com/golang/glog",
