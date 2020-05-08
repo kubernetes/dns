@@ -34,7 +34,7 @@ cluster.local:53 {
     cache 30
     reload
     loop
-    bind __PILLAR__LOCAL__DNS__
+    bind __PILLAR__LOCAL__DNS__ __PILLAR__DNS__SERVER__
     forward . __PILLAR__UPSTREAM__SERVERS__ {
             force_tcp
     }
@@ -134,12 +134,18 @@ func TestUpdateCoreFile(t *testing.T) {
 	c.initDNSConfigSync()
 	// listenIP to bind plugin should be space-separated.
 	listenIPs := strings.Replace(c.params.LocalIPStr, ",", " ", -1)
-	r := strings.NewReplacer("__PILLAR__LOCAL__DNS__", listenIPs, "__PILLAR__CLUSTER__DNS__", "9.10.11.12",
-		"__PILLAR__UPSTREAM__SERVERS__", "/etc/resolv.conf")
+	r := strings.NewReplacer(LocalListenIPsVar, listenIPs,
+		UpstreamClusterDNSVar, "9.10.11.12",
+		UpstreamServerVar, "/etc/resolv.conf",
+		LocalDNSServerVar, "")
 	expectedContents := r.Replace(templateCoreFileContents)
 	if out, diff := compareFileContents(c.params.CoreFile, expectedContents, t); diff != 0 {
 		t.Errorf("Expected contents '%s', Got '%s'", expectedContents, out)
 	}
+	if strings.Contains(expectedContents, "PILLAR") {
+		t.Errorf("Not all variables were substituted in file, Got '%s'", expectedContents)
+	}
+
 	// Modify the template file to mimic node-local-dns configmap being updated.
 	// Replace "loop" plugin with "template" as an example config change.
 	newTemplateContents := strings.Replace(templateCoreFileContents, "loop", "template", -1)
@@ -157,9 +163,11 @@ func TestUpdateCoreFile(t *testing.T) {
 		UpstreamNameservers: []string{"2.2.2.2:10053", "3.3.3.3"},
 	}
 	updateStubDomainsAndUpstreamServers(t, c.params, customConfig)
-	upstreamUDP := strings.Replace(upstreamUDPBlock, "__PILLAR__UPSTREAM__SERVERS__",
+	upstreamUDP := strings.Replace(upstreamUDPBlock, UpstreamServerVar,
 		strings.Join(customConfig.UpstreamNameservers, " "), -1)
-	r = strings.NewReplacer("__PILLAR__LOCAL__DNS__", listenIPs, "__PILLAR__CLUSTER__DNS__", "9.10.11.12",
+	r = strings.NewReplacer(LocalListenIPsVar, listenIPs,
+		UpstreamClusterDNSVar, "9.10.11.12",
+		LocalDNSServerVar, "",
 		upstreamBlock, upstreamUDP)
 	expectedContents = r.Replace(newTemplateContents)
 	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,

@@ -31,6 +31,10 @@ const (
     forward . __PILLAR__UPSTREAM__SERVERS__
 `
 	DefaultConfigSyncPeriod = 10 * time.Second
+	UpstreamServerVar       = "__PILLAR__UPSTREAM__SERVERS__"
+	UpstreamClusterDNSVar   = "__PILLAR__CLUSTER__DNS__"
+	LocalListenIPsVar       = "__PILLAR__LOCAL__DNS__"
+	LocalDNSServerVar       = "__PILLAR__DNS__SERVER__"
 )
 
 // stubDomainInfo contains all the parameters needed to compute
@@ -77,20 +81,26 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 		// forward plugin supports both nameservers as well as resolv.conf
 		// use resolv.conf by default and use TCP for upstream.
 		upstreamServers = "/etc/resolv.conf"
-		baseConfig = bytes.Replace(baseConfig, []byte("__PILLAR__UPSTREAM__SERVERS__"), []byte(upstreamServers), -1)
+		baseConfig = bytes.Replace(baseConfig, []byte(UpstreamServerVar), []byte(upstreamServers), -1)
 	} else {
 		// Use UDP to connect to custom upstream DNS servers.
-		upstreamUDP := bytes.Replace([]byte(upstreamUDPBlock), []byte("__PILLAR__UPSTREAM__SERVERS__"), []byte(upstreamServers), -1)
+		upstreamUDP := bytes.Replace([]byte(upstreamUDPBlock), []byte(UpstreamServerVar), []byte(upstreamServers), -1)
 		baseConfig = bytes.Replace(baseConfig, []byte(upstreamBlock), upstreamUDP, -1)
 		// Just in case previous replace failed due to different indetation in config file
 		// this step will put in the correct upstream servers, though it might still use TCP.
-		if bytes.Contains(baseConfig, []byte("__PILLAR__UPSTREAM__SERVERS__")) {
+		if bytes.Contains(baseConfig, []byte(UpstreamServerVar)) {
 			clog.Warningf("Failed to replace TCP upstream block with UDP, node-cache will connect to custom upstream servers via TCP.")
-			baseConfig = bytes.Replace(baseConfig, []byte("__PILLAR__UPSTREAM__SERVERS__"), []byte(upstreamServers), -1)
+			baseConfig = bytes.Replace(baseConfig, []byte(UpstreamServerVar), []byte(upstreamServers), -1)
 		}
 	}
-	baseConfig = bytes.Replace(baseConfig, []byte("__PILLAR__CLUSTER__DNS__"), []byte(c.clusterDNSIP.String()), -1)
-	baseConfig = bytes.Replace(baseConfig, []byte("__PILLAR__LOCAL__DNS__"), []byte(strings.Replace(c.params.LocalIPStr, ",", " ", -1)), -1)
+	baseConfig = bytes.Replace(baseConfig, []byte(UpstreamClusterDNSVar), []byte(c.clusterDNSIP.String()), -1)
+	baseConfig = bytes.Replace(baseConfig, []byte(LocalListenIPsVar), []byte(strings.Replace(c.params.LocalIPStr, ",", " ", -1)), -1)
+	// All Listen IP Substitutions should have happened with replacing "LocalListenIPsVar". This is to ensure that no
+	// variables are left unsubstituted.
+	if bytes.Contains(baseConfig, []byte(LocalDNSServerVar)) {
+		baseConfig = bytes.Replace(baseConfig, []byte(LocalDNSServerVar), []byte(""), -1)
+	}
+
 	newConfig := bytes.Buffer{}
 	newConfig.WriteString(string(baseConfig))
 	newConfig.WriteString(stubDomainStr)
