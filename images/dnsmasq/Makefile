@@ -27,9 +27,9 @@ OUTPUT_DIR := _output/$(ARCH)
 # Ensure that the docker command line supports the manifest images
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
-BASEIMAGE ?= k8s.gcr.io/debian-base-$(ARCH):v2.0.0
+BASEIMAGE ?= us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.0
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := k8s.gcr.io/debian-base-$(ARCH):v2.0.0
+	COMPILE_IMAGE := us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.0
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
