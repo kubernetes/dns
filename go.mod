@@ -34,12 +34,11 @@ require (
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 )
 
-//replace k8s.io/apimachinery v0.18.3 => k8s.io/apimachinery v0.0.0-20170829124512-35be0db31bd6
 replace (
 	github.com/caddyserver/caddy => github.com/caddyserver/caddy v1.0.5
 	github.com/coreos/bbolt v1.3.4 => go.etcd.io/bbolt v1.3.4
 	github.com/mholt/caddy => github.com/caddyserver/caddy v1.0.5
 	github.com/godbus/dbus => github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e
-  k8s.io/client-go/pkg/api => k8s.io/api v0.0.0-20190118113203-912cbe2bfef3
+	k8s.io/client-go/pkg/api => k8s.io/api v0.0.0-20190118113203-912cbe2bfef3
 )
 
