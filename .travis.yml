@@ -26,6 +26,8 @@ install:
 - mkdir -p ${GOPATH}/src/k8s.io
 - ln -s `pwd` ${GOPATH}/src/k8s.io/dns
 script:
+- mkdir /tmp/gocache
+- chmod 777 /tmp/gocache
 - GOCACHE=/tmp/gocache make build
 - make test
 - make all-containers
