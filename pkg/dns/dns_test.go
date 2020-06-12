@@ -35,9 +35,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/api"
 	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -64,7 +64,7 @@ func newKubeDNS() *KubeDNS {
 
 		cache:               treecache.NewTreeCache(),
 		reverseRecordMap:    make(map[string]*skymsg.Service),
-		clusterIPServiceMap: make(map[string]*v1.Service),
+		clusterIPServiceMap: make(map[string]*corev1.Service),
 		cacheLock:           sync.RWMutex{},
 
 		config:     config.NewDefaultConfig(),
@@ -335,7 +335,7 @@ func TestHeadlessServiceEndpointsUpdate(t *testing.T) {
 	assertNoReverseDNSForHeadlessService(t, kd, endpoints)
 
 	// remove all endpoints
-	endpoints.Subsets = []v1.EndpointSubset{}
+	endpoints.Subsets = []corev1.EndpointSubset{}
 	kd.handleEndpointAdd(endpoints)
 	assertNoDNSForHeadlessService(t, kd, service)
 	assertNoReverseDNSForHeadlessService(t, kd, endpoints)
@@ -353,11 +353,11 @@ func TestNamedHeadlessServiceEndpointAdd(t *testing.T) {
 	// add service to store
 	assert.NoError(t, kd.servicesStore.Add(service))
 
-	endpoints := newEndpoints(service, v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{
+	endpoints := newEndpoints(service, corev1.EndpointSubset{
+		Addresses: []corev1.EndpointAddress{
 			{
 				IP: "10.0.0.1",
-				TargetRef: &v1.ObjectReference{
+				TargetRef: &corev1.ObjectReference{
 					Kind:      "Pod",
 					Name:      "foo",
 					Namespace: testNamespace,
@@ -365,7 +365,7 @@ func TestNamedHeadlessServiceEndpointAdd(t *testing.T) {
 				Hostname: "foo",
 			},
 		},
-		Ports: []v1.EndpointPort{},
+		Ports: []corev1.EndpointPort{},
 	})
 	// add endpoints to store
 	assert.NoError(t, kd.endpointsStore.Add(endpoints))
@@ -386,11 +386,11 @@ func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 	// add service to store
 	assert.NoError(t, kd.servicesStore.Add(service))
 
-	oldEndpoints := newEndpoints(service, v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{
+	oldEndpoints := newEndpoints(service, corev1.EndpointSubset{
+		Addresses: []corev1.EndpointAddress{
 			{
 				IP: "10.0.0.1",
-				TargetRef: &v1.ObjectReference{
+				TargetRef: &corev1.ObjectReference{
 					Kind:      "Pod",
 					Name:      "foo",
 					Namespace: testNamespace,
@@ -398,16 +398,16 @@ func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 				Hostname: "foo",
 			},
 		},
-		Ports: []v1.EndpointPort{},
+		Ports: []corev1.EndpointPort{},
 	})
 	// add endpoints to store
 	assert.NoError(t, kd.endpointsStore.Add(oldEndpoints))
 
-	newEndpoints := newEndpoints(service, v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{
+	newEndpoints := newEndpoints(service, corev1.EndpointSubset{
+		Addresses: []corev1.EndpointAddress{
 			{
 				IP: "10.0.0.2",
-				TargetRef: &v1.ObjectReference{
+				TargetRef: &corev1.ObjectReference{
 					Kind:      "Pod",
 					Name:      "foo",
 					Namespace: testNamespace,
@@ -415,7 +415,7 @@ func TestNamedHeadlessServiceEndpointUpdate(t *testing.T) {
 				Hostname: "foo",
 			},
 		},
-		Ports: []v1.EndpointPort{},
+		Ports: []corev1.EndpointPort{},
 	})
 
 	// add service
@@ -435,11 +435,11 @@ func TestNamedHeadlessServiceEndpointDelete(t *testing.T) {
 	// add service to store
 	assert.NoError(t, kd.servicesStore.Add(service))
 
-	endpoints := newEndpoints(service, v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{
+	endpoints := newEndpoints(service, corev1.EndpointSubset{
+		Addresses: []corev1.EndpointAddress{
 			{
 				IP: "10.0.0.1",
-				TargetRef: &v1.ObjectReference{
+				TargetRef: &corev1.ObjectReference{
 					Kind:      "Pod",
 					Name:      "foo",
 					Namespace: testNamespace,
@@ -447,7 +447,7 @@ func TestNamedHeadlessServiceEndpointDelete(t *testing.T) {
 				Hostname: "foo",
 			},
 		},
-		Ports: []v1.EndpointPort{},
+		Ports: []corev1.EndpointPort{},
 	})
 	// add endpoints to store
 	assert.NoError(t, kd.endpointsStore.Add(endpoints))
@@ -534,7 +534,7 @@ func TestFederationHeadlessService(t *testing.T) {
 		"testservice.default.svc.cluster.local.", t, kd)
 
 	// Delete the endpoint.
-	endpoints.Subsets = []v1.EndpointSubset{}
+	endpoints.Subsets = []corev1.EndpointSubset{}
 	kd.handleEndpointAdd(endpoints)
 	kd.updateService(s, s)
 
@@ -576,7 +576,7 @@ func TestFederationService(t *testing.T) {
 		"testservice.default.svc.cluster.local.", t, kd)
 
 	// Remove the endpoint.
-	endpoints.Subsets = []v1.EndpointSubset{}
+	endpoints.Subsets = []corev1.EndpointSubset{}
 	kd.handleEndpointAdd(endpoints)
 	kd.updateService(s, s)
 
@@ -735,9 +735,9 @@ func TestUpdateConfig(t *testing.T) {
 	assert.Equal(t, []string{"127.0.0.1:53"}, kd.SkyDNSConfig.Nameservers)
 }
 
-func newNodes() *v1.NodeList {
-	return &v1.NodeList{
-		Items: []v1.Node{
+func newNodes() *corev1.NodeList {
+	return &corev1.NodeList{
+		Items: []corev1.Node{
 			// Node without annotation.
 			{
 				ObjectMeta: metav1.ObjectMeta{
@@ -751,8 +751,8 @@ func newNodes() *v1.NodeList {
 						// Note: The zone name here is an arbitrary string and doesn't exactly follow the
 						// format used by the cloud providers to name their zones. But that shouldn't matter
 						// for these tests here.
-						metav1.LabelZoneFailureDomain: "testcontinent-testreg-testzone",
-						metav1.LabelZoneRegion:        "testcontinent-testreg",
+						corev1.LabelZoneFailureDomain: "testcontinent-testreg-testzone",
+						corev1.LabelZoneRegion:        "testcontinent-testreg",
 					},
 				},
 			},
@@ -760,15 +760,15 @@ func newNodes() *v1.NodeList {
 	}
 }
 
-func newService(namespace, serviceName, clusterIP, portName string, portNumber int32) *v1.Service {
-	service := v1.Service{
+func newService(namespace, serviceName, clusterIP, portName string, portNumber int32) *corev1.Service {
+	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
 			Namespace: namespace,
 		},
-		Spec: v1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			ClusterIP: clusterIP,
-			Ports: []v1.ServicePort{
+			Ports: []corev1.ServicePort{
 				{Port: portNumber, Name: portName, Protocol: "TCP"},
 			},
 		},
@@ -776,17 +776,17 @@ func newService(namespace, serviceName, clusterIP, portName string, portNumber i
 	return &service
 }
 
-func newExternalNameService() *v1.Service {
-	service := v1.Service{
+func newExternalNameService() *corev1.Service {
+	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testService,
 			Namespace: testNamespace,
 		},
-		Spec: v1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			ClusterIP:    "None",
-			Type:         v1.ServiceTypeExternalName,
+			Type:         corev1.ServiceTypeExternalName,
 			ExternalName: testExternalName,
-			Ports: []v1.ServicePort{
+			Ports: []corev1.ServicePort{
 				{Port: 0},
 			},
 		},
@@ -794,15 +794,15 @@ func newExternalNameService() *v1.Service {
 	return &service
 }
 
-func newHeadlessService() *v1.Service {
-	service := v1.Service{
+func newHeadlessService() *corev1.Service {
+	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testService,
 			Namespace: testNamespace,
 		},
-		Spec: v1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
-			Ports: []v1.ServicePort{
+			Ports: []corev1.ServicePort{
 				{Port: 0},
 			},
 		},
@@ -810,48 +810,48 @@ func newHeadlessService() *v1.Service {
 	return &service
 }
 
-func newEndpoints(service *v1.Service, subsets ...v1.EndpointSubset) *v1.Endpoints {
-	endpoints := v1.Endpoints{
+func newEndpoints(service *corev1.Service, subsets ...corev1.EndpointSubset) *corev1.Endpoints {
+	endpoints := corev1.Endpoints{
 		ObjectMeta: service.ObjectMeta,
-		Subsets:    []v1.EndpointSubset{},
+		Subsets:    []corev1.EndpointSubset{},
 	}
 
 	endpoints.Subsets = append(endpoints.Subsets, subsets...)
 	return &endpoints
 }
 
-func newSubsetWithOnePort(portName string, port int32, ips ...string) v1.EndpointSubset {
+func newSubsetWithOnePort(portName string, port int32, ips ...string) corev1.EndpointSubset {
 	return newSubsetWithOnePortWithHostname(portName, port, false, ips...)
 }
 
-func newSubsetWithOnePortWithHostname(portName string, port int32, addHostname bool, ips ...string) v1.EndpointSubset {
+func newSubsetWithOnePortWithHostname(portName string, port int32, addHostname bool, ips ...string) corev1.EndpointSubset {
 	subset := newSubset()
-	subset.Ports = append(subset.Ports, v1.EndpointPort{Port: port, Name: portName, Protocol: "TCP"})
+	subset.Ports = append(subset.Ports, corev1.EndpointPort{Port: port, Name: portName, Protocol: "TCP"})
 	for i, ip := range ips {
 		var hostname string
 		if addHostname {
 			hostname = fmt.Sprintf("ep-%d", i)
 		}
-		subset.Addresses = append(subset.Addresses, v1.EndpointAddress{IP: ip, Hostname: hostname})
+		subset.Addresses = append(subset.Addresses, corev1.EndpointAddress{IP: ip, Hostname: hostname})
 	}
 	return subset
 }
 
-func newSubsetWithTwoPorts(portName1 string, portNumber1 int32, portName2 string, portNumber2 int32, ips ...string) v1.EndpointSubset {
+func newSubsetWithTwoPorts(portName1 string, portNumber1 int32, portName2 string, portNumber2 int32, ips ...string) corev1.EndpointSubset {
 	subset := newSubsetWithOnePort(portName1, portNumber1, ips...)
-	subset.Ports = append(subset.Ports, v1.EndpointPort{Port: portNumber2, Name: portName2, Protocol: "TCP"})
+	subset.Ports = append(subset.Ports, corev1.EndpointPort{Port: portNumber2, Name: portName2, Protocol: "TCP"})
 	return subset
 }
 
-func newSubset() v1.EndpointSubset {
-	subset := v1.EndpointSubset{
-		Addresses: []v1.EndpointAddress{},
-		Ports:     []v1.EndpointPort{},
+func newSubset() corev1.EndpointSubset {
+	subset := corev1.EndpointSubset{
+		Addresses: []corev1.EndpointAddress{},
+		Ports:     []corev1.EndpointPort{},
 	}
 	return subset
 }
 
-func assertSRVForHeadlessService(t *testing.T, kd *KubeDNS, s *v1.Service, e *v1.Endpoints) {
+func assertSRVForHeadlessService(t *testing.T, kd *KubeDNS, s *corev1.Service, e *corev1.Endpoints) {
 	for _, subset := range e.Subsets {
 		for _, port := range subset.Ports {
 			records, err := kd.Records(getSRVFQDN(kd, s, port.Name), false)
@@ -862,7 +862,7 @@ func assertSRVForHeadlessService(t *testing.T, kd *KubeDNS, s *v1.Service, e *v1
 	}
 }
 
-func assertDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
+func assertDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *corev1.Endpoints) {
 	records, err := kd.Records(getEndpointsFQDN(kd, e), false)
 	require.NoError(t, err)
 	endpoints := map[string]bool{}
@@ -878,7 +878,7 @@ func assertDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
 	}
 }
 
-func assertReverseDNSForNamedHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
+func assertReverseDNSForNamedHeadlessService(t *testing.T, kd *KubeDNS, e *corev1.Endpoints) {
 	for _, subset := range e.Subsets {
 		for _, endpointAddress := range subset.Addresses {
 			record := kd.reverseRecordMap[endpointAddress.IP]
@@ -888,7 +888,7 @@ func assertReverseDNSForNamedHeadlessService(t *testing.T, kd *KubeDNS, e *v1.En
 	}
 }
 
-func assertNoReverseDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpoints) {
+func assertNoReverseDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *corev1.Endpoints) {
 	for _, subset := range e.Subsets {
 		for _, endpointAddress := range subset.Addresses {
 			assert.Nil(t, kd.reverseRecordMap[endpointAddress.IP])
@@ -896,7 +896,7 @@ func assertNoReverseDNSForHeadlessService(t *testing.T, kd *KubeDNS, e *v1.Endpo
 	}
 }
 
-func assertDNSForExternalService(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertDNSForExternalService(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	records, err := kd.Records(getServiceFQDN(kd.domain, s), false)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(records))
@@ -909,7 +909,7 @@ func assertRecordPortsMatchPort(t *testing.T, port int32, records []skymsg.Servi
 	}
 }
 
-func assertCNameRecordsMatchEndpointIPs(t *testing.T, kd *KubeDNS, e []v1.EndpointAddress, records []skymsg.Service) {
+func assertCNameRecordsMatchEndpointIPs(t *testing.T, kd *KubeDNS, e []corev1.EndpointAddress, records []skymsg.Service) {
 	endpoints := map[string]bool{}
 	for _, endpointAddress := range e {
 		endpoints[endpointAddress.IP] = true
@@ -929,32 +929,32 @@ func getIPForCName(t *testing.T, kd *KubeDNS, cname string) string {
 	return records[0].Host
 }
 
-func assertNoDNSForHeadlessService(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertNoDNSForHeadlessService(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	records, err := kd.Records(getServiceFQDN(kd.domain, s), false)
 	require.Error(t, err)
 	assert.Equal(t, 0, len(records))
 }
 
-func assertNoDNSForExternalService(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertNoDNSForExternalService(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	records, err := kd.Records(getServiceFQDN(kd.domain, s), false)
 	require.Error(t, err)
 	assert.Equal(t, 0, len(records))
 }
 
-func assertSRVForNamedPort(t *testing.T, kd *KubeDNS, s *v1.Service, portName string) {
+func assertSRVForNamedPort(t *testing.T, kd *KubeDNS, s *corev1.Service, portName string) {
 	records, err := kd.Records(getSRVFQDN(kd, s, portName), false)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(records))
 	assert.Equal(t, getServiceFQDN(kd.domain, s), records[0].Host)
 }
 
-func assertNoSRVForNamedPort(t *testing.T, kd *KubeDNS, s *v1.Service, portName string) {
+func assertNoSRVForNamedPort(t *testing.T, kd *KubeDNS, s *corev1.Service, portName string) {
 	records, err := kd.Records(getSRVFQDN(kd, s, portName), false)
 	require.Error(t, err)
 	assert.Equal(t, 0, len(records))
 }
 
-func assertNoDNSForClusterIP(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertNoDNSForClusterIP(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	serviceFQDN := getServiceFQDN(kd.domain, s)
 	queries := getEquivalentQueries(serviceFQDN, s.Namespace)
 	for _, query := range queries {
@@ -964,7 +964,7 @@ func assertNoDNSForClusterIP(t *testing.T, kd *KubeDNS, s *v1.Service) {
 	}
 }
 
-func assertDNSForClusterIP(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertDNSForClusterIP(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	serviceFQDN := getServiceFQDN(kd.domain, s)
 	queries := getEquivalentQueries(serviceFQDN, s.Namespace)
 	for _, query := range queries {
@@ -975,7 +975,7 @@ func assertDNSForClusterIP(t *testing.T, kd *KubeDNS, s *v1.Service) {
 	}
 }
 
-func assertReverseRecord(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertReverseRecord(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	segments := util.ReverseArray(strings.Split(s.Spec.ClusterIP, "."))
 	reverseLookup := fmt.Sprintf("%s%s", strings.Join(segments, "."), util.ArpaSuffix)
 	reverseRecord, err := kd.ReverseRecord(reverseLookup)
@@ -983,7 +983,7 @@ func assertReverseRecord(t *testing.T, kd *KubeDNS, s *v1.Service) {
 	assert.Equal(t, getServiceFQDN(kd.domain, s), reverseRecord.Host)
 }
 
-func assertNoReverseRecord(t *testing.T, kd *KubeDNS, s *v1.Service) {
+func assertNoReverseRecord(t *testing.T, kd *KubeDNS, s *corev1.Service) {
 	segments := util.ReverseArray(strings.Split(s.Spec.ClusterIP, "."))
 	reverseLookup := fmt.Sprintf("%s%s", strings.Join(segments, "."), util.ArpaSuffix)
 	reverseRecord, err := kd.ReverseRecord(reverseLookup)
@@ -1001,18 +1001,18 @@ func getEquivalentQueries(serviceFQDN, namespace string) []string {
 	}
 }
 
-func getFederationServiceFQDN(kd *KubeDNS, s *v1.Service, federationName string) string {
+func getFederationServiceFQDN(kd *KubeDNS, s *corev1.Service, federationName string) string {
 	return fmt.Sprintf("%s.%s.%s.svc.%s", s.Name, s.Namespace, federationName, kd.domain)
 }
 
-func getEndpointsFQDN(kd *KubeDNS, e *v1.Endpoints) string {
+func getEndpointsFQDN(kd *KubeDNS, e *corev1.Endpoints) string {
 	return fmt.Sprintf("%s.%s.svc.%s", e.Name, e.Namespace, kd.domain)
 }
 
-func getPodsFQDN(kd *KubeDNS, e *v1.Endpoints, podHostName string) string {
+func getPodsFQDN(kd *KubeDNS, e *corev1.Endpoints, podHostName string) string {
 	return fmt.Sprintf("%s.%s.%s.svc.%s", podHostName, e.Name, e.Namespace, kd.domain)
 }
 
-func getSRVFQDN(kd *KubeDNS, s *v1.Service, portName string) string {
+func getSRVFQDN(kd *KubeDNS, s *corev1.Service, portName string) string {
 	return fmt.Sprintf("_%s._tcp.%s.%s.svc.%s", portName, s.Name, s.Namespace, kd.domain)
 }
