@@ -29,7 +29,7 @@ script:
 - mkdir /tmp/gocache
 - chmod 777 /tmp/gocache
 - GOCACHE=/tmp/gocache make build
-- make test
+- GOCACHE=/tmp/gocache make test
 - make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
