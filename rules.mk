@@ -137,7 +137,6 @@ define CONTAINER_RULE
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
 		-f .$(BINARY)-$(ARCH)-dockerfile .	\
-		-e GOCACHE=/tmp/gocache             \
 		$(VERBOSE_OUTPUT)
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
 	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@

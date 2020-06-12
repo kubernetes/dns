@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	"github.com/spf13/pflag"
 	"k8s.io/apiserver/pkg/util/flag"
+	glog "k8s.io/klog"
 	"k8s.io/kubectl/pkg/util/logs"
 
 	"k8s.io/dns/pkg/sidecar"
