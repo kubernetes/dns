@@ -43,6 +43,8 @@ ARCH ?= amd64
 BUILD_IMAGE ?= golang:1.14-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
+# Caching for go builds, disabled for CI
+GOCACHE ?= $$(pwd)/.go/cache/$(ARCH)
 
 # This version-strategy uses git tags to set the version string
 VERSION ?= $(shell git describe --tags --always --dirty)
