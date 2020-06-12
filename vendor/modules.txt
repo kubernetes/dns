@@ -74,7 +74,7 @@ github.com/coreos/etcd/version
 # github.com/coreos/go-semver v0.2.0
 ## explicit
 github.com/coreos/go-semver/semver
-# github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
+# github.com/coreos/go-systemd v0.0.0-20180409111510-d1b7d058aa2a
 ## explicit
 github.com/coreos/go-systemd/activation
 # github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f
@@ -246,6 +246,7 @@ golang.org/x/net/trace
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
+## explicit
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.2
@@ -579,6 +580,7 @@ k8s.io/kubectl/pkg/util/logs
 ## explicit
 k8s.io/utils/buffer
 k8s.io/utils/exec
+k8s.io/utils/exec/testing
 k8s.io/utils/integer
 k8s.io/utils/trace
 # sigs.k8s.io/structured-merge-diff/v3 v3.0.0
@@ -587,6 +589,6 @@ sigs.k8s.io/structured-merge-diff/v3/value
 sigs.k8s.io/yaml
 # github.com/caddyserver/caddy => github.com/caddyserver/caddy v1.0.5
 # github.com/coreos/bbolt v1.3.4 => go.etcd.io/bbolt v1.3.4
-# github.com/mholt/caddy => github.com/caddyserver/caddy v1.0.5
 # github.com/godbus/dbus => github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e
+# github.com/mholt/caddy => github.com/caddyserver/caddy v1.0.5
 # k8s.io/client-go/pkg/api => k8s.io/api v0.0.0-20190118113203-912cbe2bfef3

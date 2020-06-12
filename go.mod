@@ -8,8 +8,9 @@ require (
 	github.com/coredns/coredns v1.6.10-0.20200611141247-86df1282cb0a
 	github.com/coreos/bbolt v1.3.4 // indirect
 	github.com/coreos/etcd v3.3.22+incompatible
-	github.com/coreos/go-semver v0.2.0
-	github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76 // indirect
+	github.com/coreos/go-semver v0.2.0 // indirect
+	// TODO(peter.novotnak@reddit.com) Unsafe fd reuse allowed here. Should upgrade
+	github.com/coreos/go-systemd v0.0.0-20180409111510-d1b7d058aa2a // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/godbus/dbus v0.0.0-20181025153459-66d97aec3384
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -24,6 +25,7 @@ require (
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
+	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	k8s.io/api v0.18.3
 	k8s.io/apimachinery v0.18.3
@@ -37,8 +39,7 @@ require (
 replace (
 	github.com/caddyserver/caddy => github.com/caddyserver/caddy v1.0.5
 	github.com/coreos/bbolt v1.3.4 => go.etcd.io/bbolt v1.3.4
-	github.com/mholt/caddy => github.com/caddyserver/caddy v1.0.5
 	github.com/godbus/dbus => github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e
+	github.com/mholt/caddy => github.com/caddyserver/caddy v1.0.5
 	k8s.io/client-go/pkg/api => k8s.io/api v0.0.0-20190118113203-912cbe2bfef3
 )
-

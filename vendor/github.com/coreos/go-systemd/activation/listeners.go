@@ -25,22 +25,24 @@ import (
 // The order of the file descriptors is preserved in the returned slice.
 // Nil values are used to fill any gaps. For example if systemd were to return file descriptors
 // corresponding with "udp, tcp, tcp", then the slice would contain {nil, net.Listener, net.Listener}
-func Listeners() ([]net.Listener, error) {
-	files := Files(true)
+func Listeners(unsetEnv bool) ([]net.Listener, error) {
+	files := Files(unsetEnv)
 	listeners := make([]net.Listener, len(files))
 
 	for i, f := range files {
 		if pc, err := net.FileListener(f); err == nil {
 			listeners[i] = pc
-			f.Close()
+			if unsetEnv {
+				f.Close()
+			}
 		}
 	}
 	return listeners, nil
 }
 
 // ListenersWithNames maps a listener name to a set of net.Listener instances.
-func ListenersWithNames() (map[string][]net.Listener, error) {
-	files := Files(true)
+func ListenersWithNames(unsetEnv bool) (map[string][]net.Listener, error) {
+	files := Files(unsetEnv)
 	listeners := map[string][]net.Listener{}
 
 	for _, f := range files {
@@ -51,7 +53,9 @@ func ListenersWithNames() (map[string][]net.Listener, error) {
 			} else {
 				listeners[f.Name()] = append(current, pc)
 			}
-			f.Close()
+			if unsetEnv {
+				f.Close()
+			}
 		}
 	}
 	return listeners, nil
@@ -60,8 +64,8 @@ func ListenersWithNames() (map[string][]net.Listener, error) {
 // TLSListeners returns a slice containing a net.listener for each matching TCP socket type
 // passed to this process.
 // It uses default Listeners func and forces TCP sockets handlers to use TLS based on tlsConfig.
-func TLSListeners(tlsConfig *tls.Config) ([]net.Listener, error) {
-	listeners, err := Listeners()
+func TLSListeners(unsetEnv bool, tlsConfig *tls.Config) ([]net.Listener, error) {
+	listeners, err := Listeners(unsetEnv)
 
 	if listeners == nil || err != nil {
 		return nil, err
@@ -81,8 +85,8 @@ func TLSListeners(tlsConfig *tls.Config) ([]net.Listener, error) {
 
 // TLSListenersWithNames maps a listener name to a net.Listener with
 // the associated TLS configuration.
-func TLSListenersWithNames(tlsConfig *tls.Config) (map[string][]net.Listener, error) {
-	listeners, err := ListenersWithNames()
+func TLSListenersWithNames(unsetEnv bool, tlsConfig *tls.Config) (map[string][]net.Listener, error) {
+	listeners, err := ListenersWithNames(unsetEnv)
 
 	if listeners == nil || err != nil {
 		return nil, err
