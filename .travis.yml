@@ -30,7 +30,7 @@ script:
 - chmod 777 /tmp/gocache
 - GOCACHE=/tmp/gocache make build
 - GOCACHE=/tmp/gocache make test
-- make all-containers
+- GOCACHE=/tmp/gocache make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
 - cd ${GOPATH}/src/k8s.io/dns && bin/amd64/ginkgo test/e2e
