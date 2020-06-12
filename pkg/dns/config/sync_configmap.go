@@ -17,11 +17,12 @@ limitations under the License.
 package config
 
 import (
+	"context"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"time"
@@ -39,14 +40,14 @@ func NewConfigMapSync(client kubernetes.Interface, ns string, name string) Sync 
 	}
 
 	listWatch := cache.NewListWatchFromClient(
-		syncSource.client.Core().RESTClient(),
+		syncSource.client.CoreV1().RESTClient(),
 		"configmaps",
 		ns,
 		fields.Everything())
 
 	store, controller := cache.NewInformer(
 		listWatch,
-		&v1.ConfigMap{},
+		&corev1.ConfigMap{},
 		time.Duration(0),
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    syncSource.onAdd,
@@ -72,7 +73,8 @@ type kubeAPISyncSource struct {
 }
 
 func (syncSource *kubeAPISyncSource) Once() (syncResult, error) {
-	cm, err := syncSource.client.Core().ConfigMaps(syncSource.ns).Get(syncSource.name, metav1.GetOptions{})
+	ctx, _ := context.WithTimeout(context.TODO(), time.Minute)
+	cm, err := syncSource.client.CoreV1().ConfigMaps(syncSource.ns).Get(ctx, syncSource.name, metav1.GetOptions{})
 	if err != nil {
 		glog.Errorf("Error getting ConfigMap %v:%v err: %v", syncSource.ns, syncSource.name, err)
 		return syncResult{}, err
@@ -85,8 +87,8 @@ func (syncSource *kubeAPISyncSource) Periodic() <-chan syncResult {
 	return syncSource.channel
 }
 
-func (syncSource *kubeAPISyncSource) toConfigMap(obj interface{}) *v1.ConfigMap {
-	cm, ok := obj.(*v1.ConfigMap)
+func (syncSource *kubeAPISyncSource) toConfigMap(obj interface{}) *corev1.ConfigMap {
+	cm, ok := obj.(*corev1.ConfigMap)
 	if !ok {
 		glog.Fatalf("Expected ConfigMap, got %T", obj)
 	}

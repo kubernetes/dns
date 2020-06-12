@@ -13,10 +13,13 @@ import (
 
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"k8s.io/dns/pkg/dns/util/dbus"
+	utiliptables "k8s.io/dns/pkg/dns/util/iptables"
 	"k8s.io/dns/pkg/netif"
-	"k8s.io/kubernetes/pkg/util/dbus"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
-	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
+	utilexec "k8s.io/utils/exec"
+	//"k8s.io/dns/pkg/dns/util/dbus"
+	//utilexec "k8s.io/kubernetes/pkg/util/exec"
+	//utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 )
 
 // ConfigParams lists the configuration options that can be provided to node-cache

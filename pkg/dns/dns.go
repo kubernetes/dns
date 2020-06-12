@@ -17,16 +17,17 @@ limitations under the License.
 package dns
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	kcache "k8s.io/client-go/tools/cache"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -93,7 +94,7 @@ type KubeDNS struct {
 	// IP.  Access to this is coordinated using cacheLock. We use the
 	// same lock for cache and this map to ensure that they don't get
 	// out of sync.
-	clusterIPServiceMap map[string]*v1.Service
+	clusterIPServiceMap map[string]*corev1.Service
 	// cacheLock protecting the cache. caller is responsible for using
 	// the cacheLock before invoking methods on cache the cache is not
 	// thread-safe, and the caller can guarantee thread safety by using
@@ -129,7 +130,7 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 		cacheLock:           sync.RWMutex{},
 		nodesStore:          kcache.NewStore(kcache.MetaNamespaceKeyFunc),
 		reverseRecordMap:    make(map[string]*skymsg.Service),
-		clusterIPServiceMap: make(map[string]*v1.Service),
+		clusterIPServiceMap: make(map[string]*corev1.Service),
 		domainPath:          util.ReverseArray(strings.Split(strings.TrimRight(clusterDomain, "."), ".")),
 		initialSyncTimeout:  timeout,
 
@@ -258,11 +259,11 @@ func (kd *KubeDNS) setServicesStore() {
 	// Returns a cache.ListWatch that gets all changes to services.
 	kd.servicesStore, kd.serviceController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
-			kd.kubeClient.Core().RESTClient(),
+			kd.kubeClient.CoreV1().RESTClient(),
 			"services",
-			v1.NamespaceAll,
+			corev1.NamespaceAll,
 			fields.Everything()),
-		&v1.Service{},
+		&corev1.Service{},
 		resyncPeriod,
 		kcache.ResourceEventHandlerFuncs{
 			AddFunc:    kd.newService,
@@ -276,11 +277,11 @@ func (kd *KubeDNS) setEndpointsStore() {
 	// Returns a cache.ListWatch that gets all changes to endpoints.
 	kd.endpointsStore, kd.endpointsController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
-			kd.kubeClient.Core().RESTClient(),
+			kd.kubeClient.CoreV1().RESTClient(),
 			"endpoints",
-			v1.NamespaceAll,
+			corev1.NamespaceAll,
 			fields.Everything()),
-		&v1.Endpoints{},
+		&corev1.Endpoints{},
 		resyncPeriod,
 		kcache.ResourceEventHandlerFuncs{
 			AddFunc:    kd.handleEndpointAdd,
@@ -291,8 +292,8 @@ func (kd *KubeDNS) setEndpointsStore() {
 	)
 }
 
-func assertIsService(obj interface{}) (*v1.Service, bool) {
-	service, ok := obj.(*v1.Service)
+func assertIsService(obj interface{}) (*corev1.Service, bool) {
+	service, ok := obj.(*corev1.Service)
 	if ok {
 		return service, ok
 	}
@@ -306,12 +307,12 @@ func (kd *KubeDNS) newService(obj interface{}) {
 		glog.V(4).Infof("Service details: %v", service)
 
 		// ExternalName services are a special kind that return CNAME records
-		if service.Spec.Type == v1.ServiceTypeExternalName {
+		if service.Spec.Type == corev1.ServiceTypeExternalName {
 			kd.newExternalNameService(service)
 			return
 		}
 		// if ClusterIP is not set, a DNS entry should not be created
-		if !v1.IsServiceIPSet(service) {
+		if !util.IsServiceIPSet(service) {
 			if err := kd.newHeadlessService(service); err != nil {
 				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
 			}
@@ -336,7 +337,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
-		if v1.IsServiceIPSet(s) {
+		if util.IsServiceIPSet(s) {
 			delete(kd.reverseRecordMap, s.Spec.ClusterIP)
 			delete(kd.clusterIPServiceMap, s.Spec.ClusterIP)
 		}
@@ -348,8 +349,8 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 		if old, ok := assertIsService(oldObj); ok {
 			// Remove old cache path only if changing type to/from ExternalName.
 			// In all other cases, we'll update records in place.
-			if (new.Spec.Type == v1.ServiceTypeExternalName) !=
-				(old.Spec.Type == v1.ServiceTypeExternalName) {
+			if (new.Spec.Type == corev1.ServiceTypeExternalName) !=
+				(old.Spec.Type == corev1.ServiceTypeExternalName) {
 				kd.removeService(oldObj)
 			}
 			kd.newService(newObj)
@@ -358,7 +359,7 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 }
 
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
-	if e, ok := obj.(*v1.Endpoints); ok {
+	if e, ok := obj.(*corev1.Endpoints); ok {
 		if err := kd.addDNSUsingEndpoints(e); err != nil {
 			glog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
 		}
@@ -366,15 +367,15 @@ func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 }
 
 func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
-	oldEndpoints, ok := oldObj.(*v1.Endpoints)
+	oldEndpoints, ok := oldObj.(*corev1.Endpoints)
 	if !ok {
-		glog.Errorf("oldObj type assertion failed! Expected 'v1.Endpoints', got %T", oldObj)
+		glog.Errorf("oldObj type assertion failed! Expected 'corev1.Endpoints', got %T", oldObj)
 		return
 	}
 
-	newEndpoints, ok := newObj.(*v1.Endpoints)
+	newEndpoints, ok := newObj.(*corev1.Endpoints)
 	if !ok {
-		glog.Errorf("newObj type assertion failed! Expected 'v1.Endpoints', got %T", newObj)
+		glog.Errorf("newObj type assertion failed! Expected 'corev1.Endpoints', got %T", newObj)
 		return
 	}
 
@@ -385,7 +386,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 	// svc is same for both old and new endpoints
 	svc, err := kd.getServiceFromEndpoints(oldEndpoints)
 	if svc != nil && err == nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !util.IsServiceIPSet(svc) {
 			for idx := range oldEndpoints.Subsets {
 				for subIdx := range oldEndpoints.Subsets[idx].Addresses {
 					address := &oldEndpoints.Subsets[idx].Addresses[subIdx]
@@ -429,9 +430,9 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 }
 
 func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
-	endpoints, ok := obj.(*v1.Endpoints)
+	endpoints, ok := obj.(*corev1.Endpoints)
 	if !ok {
-		glog.Errorf("obj type assertion failed! Expected 'v1.Endpoints', got %T", obj)
+		glog.Errorf("obj type assertion failed! Expected 'corev1.Endpoints', got %T", obj)
 		return
 	}
 
@@ -441,7 +442,7 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 		return
 	}
 	if svc != nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !util.IsServiceIPSet(svc) {
 			kd.cacheLock.Lock()
 			defer kd.cacheLock.Unlock()
 			// When endpoints for Named headless services deleted, delete old reverse dns records.
@@ -458,19 +459,19 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 	}
 }
 
-func (kd *KubeDNS) addDNSUsingEndpoints(e *v1.Endpoints) error {
+func (kd *KubeDNS) addDNSUsingEndpoints(e *corev1.Endpoints) error {
 	svc, err := kd.getServiceFromEndpoints(e)
 	if err != nil {
 		return err
 	}
-	if svc == nil || v1.IsServiceIPSet(svc) || svc.Spec.Type == v1.ServiceTypeExternalName {
+	if svc == nil || util.IsServiceIPSet(svc) || svc.Spec.Type == corev1.ServiceTypeExternalName {
 		// No headless service found corresponding to endpoints object.
 		return nil
 	}
 	return kd.generateRecordsForHeadlessService(e, svc)
 }
 
-func (kd *KubeDNS) getServiceFromEndpoints(e *v1.Endpoints) (*v1.Service, error) {
+func (kd *KubeDNS) getServiceFromEndpoints(e *corev1.Endpoints) (*corev1.Service, error) {
 	key, err := kcache.MetaNamespaceKeyFunc(e)
 	if err != nil {
 		return nil, err
@@ -492,12 +493,12 @@ func (kd *KubeDNS) getServiceFromEndpoints(e *v1.Endpoints) (*v1.Service, error)
 
 // fqdn constructs the fqdn for the given service. subpaths is a list of path
 // elements rooted at the given service, ending at a service record.
-func (kd *KubeDNS) fqdn(service *v1.Service, subpaths ...string) string {
+func (kd *KubeDNS) fqdn(service *corev1.Service, subpaths ...string) string {
 	domainLabels := append(append(kd.domainPath, serviceSubdomain, service.Namespace, service.Name), subpaths...)
 	return dns.Fqdn(strings.Join(util.ReverseArray(domainLabels), "."))
 }
 
-func (kd *KubeDNS) newPortalService(service *v1.Service) {
+func (kd *KubeDNS) newPortalService(service *corev1.Service) {
 	subCache := treecache.NewTreeCache()
 	recordValue, recordLabel := util.GetSkyMsg(service.Spec.ClusterIP, 0)
 	subCache.SetEntry(recordLabel, recordValue, kd.fqdn(service, recordLabel))
@@ -525,7 +526,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 	kd.clusterIPServiceMap[service.Spec.ClusterIP] = service
 }
 
-func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Service) error {
+func (kd *KubeDNS) generateRecordsForHeadlessService(e *corev1.Endpoints, svc *corev1.Service) error {
 	subCache := treecache.NewTreeCache()
 	glog.V(4).Infof("Endpoints Annotations: %v", e.Annotations)
 	generatedRecords := map[string]*skymsg.Service{}
@@ -567,14 +568,14 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	return nil
 }
 
-func getHostname(address *v1.EndpointAddress) (string, bool) {
+func getHostname(address *corev1.EndpointAddress) (string, bool) {
 	if len(address.Hostname) > 0 {
 		return address.Hostname, true
 	}
 	return "", false
 }
 
-func (kd *KubeDNS) generateSRVRecordValue(svc *v1.Service, portNumber int, labels ...string) *skymsg.Service {
+func (kd *KubeDNS) generateSRVRecordValue(svc *corev1.Service, portNumber int, labels ...string) *skymsg.Service {
 	host := strings.Join([]string{svc.Name, svc.Namespace, serviceSubdomain, kd.domain}, ".")
 	for _, cNameLabel := range labels {
 		host = cNameLabel + "." + host
@@ -584,7 +585,7 @@ func (kd *KubeDNS) generateSRVRecordValue(svc *v1.Service, portNumber int, label
 }
 
 // Generates skydns records for a headless service.
-func (kd *KubeDNS) newHeadlessService(service *v1.Service) error {
+func (kd *KubeDNS) newHeadlessService(service *corev1.Service) error {
 	// Create an A record for every pod in the service.
 	// This record must be periodically updated.
 	// Format is as follows:
@@ -603,14 +604,14 @@ func (kd *KubeDNS) newHeadlessService(service *v1.Service) error {
 			service.Name, service.Namespace)
 		return nil
 	}
-	if e, ok := e.(*v1.Endpoints); ok {
+	if e, ok := e.(*corev1.Endpoints); ok {
 		return kd.generateRecordsForHeadlessService(e, service)
 	}
 	return nil
 }
 
 // Generates skydns records for an ExternalName service.
-func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
+func (kd *KubeDNS) newExternalNameService(service *corev1.Service) {
 	// Create a CNAME record for the service's ExternalName.
 	// TODO: TTL?
 	recordValue, _ := util.GetSkyMsg(service.Spec.ExternalName, 0)
@@ -799,7 +800,7 @@ func (kd *KubeDNS) serviceWithClusterIPHasEndpoints(msg *skymsg.Service) (bool, 
 	if !exists {
 		return false, nil
 	}
-	if e, ok := e.(*v1.Endpoints); ok {
+	if e, ok := e.(*corev1.Endpoints); ok {
 		return len(e.Subsets) > 0, nil
 	}
 	return false, fmt.Errorf("unexpected: found non-endpoint object in endpoint store: %v", e)
@@ -964,20 +965,20 @@ func (kd *KubeDNS) federationRecords(queryPath []string) ([]skymsg.Service, erro
 // Also note that zone here means the zone in cloud provider terminology, not
 // the DNS zone.
 func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
-	var node *v1.Node
+	var node *corev1.Node
 
 	objs := kd.nodesStore.List()
 	if len(objs) > 0 {
 		var ok bool
-		if node, ok = objs[0].(*v1.Node); !ok {
+		if node, ok = objs[0].(*corev1.Node); !ok {
 			return "", "", fmt.Errorf("expected node object, got: %T", objs[0])
 		}
 	} else {
 		// An alternative to listing nodes each time is to set a watch, but that is totally
 		// wasteful in case of non-federated independent Kubernetes clusters. So carefully
 		// proceeding here.
-		// TODO(madhusudancs): Move this to external/v1 API.
-		nodeList, err := kd.kubeClient.Core().Nodes().List(metav1.ListOptions{})
+		// TODO(madhusudancs): Move this to external/corev1 API.
+		nodeList, err := kd.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil || len(nodeList.Items) == 0 {
 			return "", "", fmt.Errorf("failed to retrieve the cluster nodes: %v", err)
 		}
@@ -985,8 +986,8 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// Select a node (arbitrarily the first node) that has
 		// `LabelZoneFailureDomain` and `LabelZoneRegion` set.
 		for _, nodeItem := range nodeList.Items {
-			_, zfound := nodeItem.Labels[metav1.LabelZoneFailureDomain]
-			_, rfound := nodeItem.Labels[metav1.LabelZoneRegion]
+			_, zfound := nodeItem.Labels[corev1.LabelZoneFailureDomain]
+			_, rfound := nodeItem.Labels[corev1.LabelZoneRegion]
 			if !zfound || !rfound {
 				continue
 			}
@@ -1004,18 +1005,18 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		return "", "", fmt.Errorf("Could not find any nodes")
 	}
 
-	zone, ok := node.Labels[metav1.LabelZoneFailureDomain]
+	zone, ok := node.Labels[corev1.LabelZoneFailureDomain]
 	if !ok || zone == "" {
 		return "", "", fmt.Errorf("unknown cluster zone")
 	}
-	region, ok := node.Labels[metav1.LabelZoneRegion]
+	region, ok := node.Labels[corev1.LabelZoneRegion]
 	if !ok || region == "" {
 		return "", "", fmt.Errorf("unknown cluster region")
 	}
 	return zone, region, nil
 }
 
-func getServiceFQDN(domain string, service *v1.Service) string {
+func getServiceFQDN(domain string, service *corev1.Service) string {
 	return strings.Join(
 		[]string{service.Name, service.Namespace, serviceSubdomain, domain}, ".")
 }

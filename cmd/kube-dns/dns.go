@@ -26,10 +26,9 @@ import (
 	"k8s.io/dns/cmd/kube-dns/app"
 	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/dns/pkg/version"
-	"k8s.io/kubernetes/pkg/util/logs"
+	"k8s.io/kubectl/pkg/util/logs"
 
-	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
-	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
+	_ "k8s.io/component-base/metrics/prometheus/restclient" // for client metric registration
 )
 
 func main() {
