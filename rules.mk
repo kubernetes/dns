@@ -137,8 +137,7 @@ define CONTAINER_RULE
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
 		-f .$(BINARY)-$(ARCH)-dockerfile .	\
-		-v $(GOCACHE):$(GOCACHE)            \
-		-e GOCACHE=$(GOCACHE)               \
+		-e GOCACHE=/tmp/gocache             \
 		$(VERBOSE_OUTPUT)
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
 	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@
@@ -175,7 +174,8 @@ test: build-dirs images-test
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
-        -e GOCACHE=/tmp/gocache                                            \
+	    -v $(GOCACHE):$(GOCACHE)            	                           \
+        -e GOCACHE=$(GOCACHE)                                              \
 	    -w /go/src/$(PKG)                                                  \
 	    $(BUILD_IMAGE)                                                     \
 	    /bin/sh -c "                                                       \
