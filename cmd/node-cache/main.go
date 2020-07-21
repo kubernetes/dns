@@ -30,11 +30,13 @@ import (
 	_ "github.com/coredns/coredns/plugin/reload"
 	_ "github.com/coredns/coredns/plugin/template"
 	_ "github.com/coredns/coredns/plugin/whoami"
+	"k8s.io/dns/pkg/version"
 )
 
 var cache *app.CacheApp
 
 func init() {
+	clog.Infof("Starting node-cache image: %+v", version.VERSION)
 	params, err := parseAndValidateFlags()
 	if err != nil {
 		clog.Fatalf("Error parsing flags - %s, Exiting", err)
