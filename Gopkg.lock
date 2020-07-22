@@ -962,6 +962,17 @@
   pruneopts = "UT"
   revision = "326cf6c2d0e2d72b82e5014710f1b0cf1bacf3b4"
 
+[[projects]]
+  branch = "master"
+  digest = "1:19c16fb5fe0717482c86b3cfb5dfb6cc28a5c83b3604469caffc69c4c7b22488"
+  name = "k8s.io/utils"
+  packages = [
+    "exec",
+    "net/ebtables",
+  ]
+  pruneopts = "UT"
+  revision = "988ee3149bb2e41c01d6399ddafe7ff6a4949486"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
@@ -1018,6 +1029,8 @@
     "k8s.io/kubernetes/pkg/util/iptables",
     "k8s.io/kubernetes/pkg/util/logs",
     "k8s.io/kubernetes/pkg/version/prometheus",
+    "k8s.io/utils/exec",
+    "k8s.io/utils/net/ebtables",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
