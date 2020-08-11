@@ -23,18 +23,18 @@ const (
 `  // cache TTL is 30s by default
 	defaultTTL    = 30
 	upstreamBlock = `
-    forward . __PILLAR__UPSTREAM__SERVERS__ {
+    forward . __UPSTREAM__SERVERS__ {
             force_tcp
     }
 `
 	upstreamUDPBlock = `
-    forward . __PILLAR__UPSTREAM__SERVERS__
+    forward . __UPSTREAM__SERVERS__
 `
 	DefaultConfigSyncPeriod = 10 * time.Second
-	UpstreamServerVar       = "__PILLAR__UPSTREAM__SERVERS__"
-	UpstreamClusterDNSVar   = "__PILLAR__CLUSTER__DNS__"
-	LocalListenIPsVar       = "__PILLAR__LOCAL__DNS__"
-	LocalDNSServerVar       = "__PILLAR__DNS__SERVER__"
+	UpstreamServerVar       = "__UPSTREAM__SERVERS__"
+	UpstreamClusterDNSVar   = "__CLUSTER__DNS__"
+	LocalListenIPsVar       = "__LOCAL__DNS__"
+	LocalDNSServerVar       = "__DNS__SERVER__"
 )
 
 // stubDomainInfo contains all the parameters needed to compute
