@@ -44,6 +44,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
    `gcloud builds submit --config cloudbuild.yaml`, but this requires owner permissions in k8s-staging-dns project.
    The automated job pushes images for all architectures and makes them available in `gcr.io/k8s-staging-dns`.
+   Status for build jobs can be checked at - https://k8s-testgrid.appspot.com/sig-network-dns#dns-push-images
 5. Promote the images to `gcr.io/k8s-artifacts-prod` using the process described
    in [this](https://github.com/kubernetes/k8s.io/tree/master/k8s.gcr.io#image-promoter) link.
    The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
