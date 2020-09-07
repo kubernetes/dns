@@ -14,9 +14,8 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"k8s.io/dns/pkg/netif"
 	"k8s.io/kubernetes/pkg/util/dbus"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
-	utilsexec "k8s.io/utils/exec"
+	utilexec "k8s.io/utils/exec"
 	utilebtables "k8s.io/utils/net/ebtables"
 )
 
@@ -153,7 +152,7 @@ func (c *CacheApp) initEbtables() {
 }
 
 func newEBTables() utilebtables.Interface {
-	execer := utilsexec.New()
+	execer := utilexec.New()
 	return utilebtables.New(execer)
 }
 

@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	kcache "k8s.io/client-go/tools/cache"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -258,7 +258,7 @@ func (kd *KubeDNS) setServicesStore() {
 	// Returns a cache.ListWatch that gets all changes to services.
 	kd.servicesStore, kd.serviceController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
-			kd.kubeClient.Core().RESTClient(),
+			kd.kubeClient.CoreV1().RESTClient(),
 			"services",
 			v1.NamespaceAll,
 			fields.Everything()),
@@ -276,7 +276,7 @@ func (kd *KubeDNS) setEndpointsStore() {
 	// Returns a cache.ListWatch that gets all changes to endpoints.
 	kd.endpointsStore, kd.endpointsController = kcache.NewInformer(
 		kcache.NewListWatchFromClient(
-			kd.kubeClient.Core().RESTClient(),
+			kd.kubeClient.CoreV1().RESTClient(),
 			"endpoints",
 			v1.NamespaceAll,
 			fields.Everything()),
@@ -311,7 +311,7 @@ func (kd *KubeDNS) newService(obj interface{}) {
 			return
 		}
 		// if ClusterIP is not set, a DNS entry should not be created
-		if !v1.IsServiceIPSet(service) {
+		if !util.IsServiceIPSet(service) {
 			if err := kd.newHeadlessService(service); err != nil {
 				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
 			}
@@ -336,7 +336,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
-		if v1.IsServiceIPSet(s) {
+		if util.IsServiceIPSet(s) {
 			delete(kd.reverseRecordMap, s.Spec.ClusterIP)
 			delete(kd.clusterIPServiceMap, s.Spec.ClusterIP)
 		}
@@ -385,7 +385,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 	// svc is same for both old and new endpoints
 	svc, err := kd.getServiceFromEndpoints(oldEndpoints)
 	if svc != nil && err == nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !util.IsServiceIPSet(svc) {
 			for idx := range oldEndpoints.Subsets {
 				for subIdx := range oldEndpoints.Subsets[idx].Addresses {
 					address := &oldEndpoints.Subsets[idx].Addresses[subIdx]
@@ -441,7 +441,7 @@ func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 		return
 	}
 	if svc != nil {
-		if !v1.IsServiceIPSet(svc) {
+		if !util.IsServiceIPSet(svc) {
 			kd.cacheLock.Lock()
 			defer kd.cacheLock.Unlock()
 			// When endpoints for Named headless services deleted, delete old reverse dns records.
@@ -463,7 +463,7 @@ func (kd *KubeDNS) addDNSUsingEndpoints(e *v1.Endpoints) error {
 	if err != nil {
 		return err
 	}
-	if svc == nil || v1.IsServiceIPSet(svc) || svc.Spec.Type == v1.ServiceTypeExternalName {
+	if svc == nil || util.IsServiceIPSet(svc) || svc.Spec.Type == v1.ServiceTypeExternalName {
 		// No headless service found corresponding to endpoints object.
 		return nil
 	}
@@ -977,7 +977,7 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// wasteful in case of non-federated independent Kubernetes clusters. So carefully
 		// proceeding here.
 		// TODO(madhusudancs): Move this to external/v1 API.
-		nodeList, err := kd.kubeClient.Core().Nodes().List(metav1.ListOptions{})
+		nodeList, err := kd.kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil || len(nodeList.Items) == 0 {
 			return "", "", fmt.Errorf("failed to retrieve the cluster nodes: %v", err)
 		}
@@ -985,8 +985,8 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// Select a node (arbitrarily the first node) that has
 		// `LabelZoneFailureDomain` and `LabelZoneRegion` set.
 		for _, nodeItem := range nodeList.Items {
-			_, zfound := nodeItem.Labels[metav1.LabelZoneFailureDomain]
-			_, rfound := nodeItem.Labels[metav1.LabelZoneRegion]
+			_, zfound := nodeItem.Labels[v1.LabelZoneFailureDomain]
+			_, rfound := nodeItem.Labels[v1.LabelZoneRegion]
 			if !zfound || !rfound {
 				continue
 			}
@@ -1004,11 +1004,11 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		return "", "", fmt.Errorf("Could not find any nodes")
 	}
 
-	zone, ok := node.Labels[metav1.LabelZoneFailureDomain]
+	zone, ok := node.Labels[v1.LabelZoneFailureDomain]
 	if !ok || zone == "" {
 		return "", "", fmt.Errorf("unknown cluster zone")
 	}
-	region, ok := node.Labels[metav1.LabelZoneRegion]
+	region, ok := node.Labels[v1.LabelZoneRegion]
 	if !ok || region == "" {
 		return "", "", fmt.Errorf("unknown cluster region")
 	}
