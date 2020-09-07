@@ -17,11 +17,11 @@ limitations under the License.
 package config
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"time"
@@ -39,7 +39,7 @@ func NewConfigMapSync(client kubernetes.Interface, ns string, name string) Sync 
 	}
 
 	listWatch := cache.NewListWatchFromClient(
-		syncSource.client.Core().RESTClient(),
+		syncSource.client.CoreV1().RESTClient(),
 		"configmaps",
 		ns,
 		fields.Everything())
@@ -72,7 +72,7 @@ type kubeAPISyncSource struct {
 }
 
 func (syncSource *kubeAPISyncSource) Once() (syncResult, error) {
-	cm, err := syncSource.client.Core().ConfigMaps(syncSource.ns).Get(syncSource.name, metav1.GetOptions{})
+	cm, err := syncSource.client.CoreV1().ConfigMaps(syncSource.ns).Get(syncSource.name, metav1.GetOptions{})
 	if err != nil {
 		glog.Errorf("Error getting ConfigMap %v:%v err: %v", syncSource.ns, syncSource.name, err)
 		return syncResult{}, err
