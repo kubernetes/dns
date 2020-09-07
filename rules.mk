@@ -89,6 +89,12 @@ build: $(GO_BINARIES) images-build
 
 
 # Rule for all bin/$(ARCH)/bin/$(BINARY)
+# Add line
+# `           -v $(GOCACHE):$(GOCACHE)                                           \`
+# to use GOCACHE. Not used currently due to permission issues in  dev setup.
+# We also want a clean build in the CI, without caching. GOCACHE env variable cannot
+# be set to off in go1.12 and later - https://github.com/golang/go/issues/29378
+# So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
 	@docker pull $(BUILD_IMAGE)
@@ -100,6 +106,7 @@ $(GO_BINARIES): build-dirs
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)                       \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
+	    -e GOCACHE=$(GOCACHE)                                              \
 	    -w /go/src/$(PKG)                                                  \
 	    $(BUILD_IMAGE)                                                     \
 	    /bin/sh -c "                                                       \
@@ -161,6 +168,12 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(PUSH_RULE)))
 
 
 # Rule for `test`
+# Add line
+# `           -v $(GOCACHE):$(GOCACHE)                                           \`
+# to use GOCACHE. Not used currently due to permission issues in  dev setup.
+# We also want a clean build in the CI, without caching. GOCACHE env variable cannot
+# be set to off in go1.12 and later - https://github.com/golang/go/issues/29378
+# So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 .PHONY: test
 test: build-dirs images-test
 	@docker run                                                            \
@@ -171,6 +184,7 @@ test: build-dirs images-test
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
+	    -e GOCACHE=$(GOCACHE)                                              \
 	    -w /go/src/$(PKG)                                                  \
 	    $(BUILD_IMAGE)                                                     \
 	    /bin/sh -c "                                                       \
