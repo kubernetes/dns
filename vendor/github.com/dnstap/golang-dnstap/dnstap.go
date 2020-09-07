@@ -18,13 +18,21 @@ package dnstap
 
 const outputChannelSize = 32
 
+// FSContentType is the FrameStream content type for dnstap protobuf data.
 var FSContentType = []byte("protobuf:dnstap.Dnstap")
 
+// An Input is a source of dnstap data. It provides validation of the
+// content type and will present any data read or received on the channel
+// provided to the ReadInto method.
 type Input interface {
 	ReadInto(chan []byte)
 	Wait()
 }
 
+// An Output is a desintaion for dnstap data. It accepts data on the channel
+// returned from the GetOutputChannel method. The RunOutputLoop() method
+// processes data received on this channel, and returns after the Close()
+// method is called.
 type Output interface {
 	GetOutputChannel() chan []byte
 	RunOutputLoop()
