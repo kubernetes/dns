@@ -14,13 +14,18 @@ import (
 type HealthChecker interface {
 	Check(*Proxy) error
 	SetTLSConfig(*tls.Config)
+	SetRecursionDesired(bool)
+	GetRecursionDesired() bool
 }
 
 // dnsHc is a health checker for a DNS endpoint (DNS, and DoT).
-type dnsHc struct{ c *dns.Client }
+type dnsHc struct {
+	c                *dns.Client
+	recursionDesired bool
+}
 
 // NewHealthChecker returns a new HealthChecker based on transport.
-func NewHealthChecker(trans string) HealthChecker {
+func NewHealthChecker(trans string, recursionDesired bool) HealthChecker {
 	switch trans {
 	case transport.DNS, transport.TLS:
 		c := new(dns.Client)
@@ -28,7 +33,7 @@ func NewHealthChecker(trans string) HealthChecker {
 		c.ReadTimeout = 1 * time.Second
 		c.WriteTimeout = 1 * time.Second
 
-		return &dnsHc{c: c}
+		return &dnsHc{c: c, recursionDesired: recursionDesired}
 	}
 
 	log.Warningf("No healthchecker for transport %q", trans)
@@ -40,7 +45,14 @@ func (h *dnsHc) SetTLSConfig(cfg *tls.Config) {
 	h.c.TLSConfig = cfg
 }
 
-// For HC we send to . IN NS +norec message to the upstream. Dial timeouts and empty
+func (h *dnsHc) SetRecursionDesired(recursionDesired bool) {
+	h.recursionDesired = recursionDesired
+}
+func (h *dnsHc) GetRecursionDesired() bool {
+	return h.recursionDesired
+}
+
+// For HC we send to . IN NS +[no]rec message to the upstream. Dial timeouts and empty
 // replies are considered fails, basically anything else constitutes a healthy upstream.
 
 // Check is used as the up.Func in the up.Probe.
@@ -59,6 +71,7 @@ func (h *dnsHc) Check(p *Proxy) error {
 func (h *dnsHc) send(addr string) error {
 	ping := new(dns.Msg)
 	ping.SetQuestion(".", dns.TypeNS)
+	ping.MsgHdr.RecursionDesired = h.recursionDesired
 
 	m, _, err := h.c.Exchange(ping, addr)
 	// If we got a header, we're alright, basically only care about I/O errors 'n stuff.
