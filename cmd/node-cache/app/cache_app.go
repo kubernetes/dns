@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 
 	"k8s.io/dns/cmd/kube-dns/app/options"
@@ -273,7 +272,7 @@ func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
 	c := &CacheApp{params: params, kubednsConfig: options.NewKubeDNSConfig()}
 	c.clusterDNSIP = net.ParseIP(os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
 	if c.clusterDNSIP == nil {
-		return nil, fmt.Errorf("Unable to lookup IP address of Upstream service %s, env %s `%s`", params.UpstreamSvcName, toSvcEnv(params.UpstreamSvcName), os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
+		clog.Warningf("Unable to lookup IP address of Upstream service %s, env %s `%s`", params.UpstreamSvcName, toSvcEnv(params.UpstreamSvcName), os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
 	}
 	return c, nil
 }
