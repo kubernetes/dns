@@ -11,6 +11,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 * [kube-dns](http://kubernetes.io/docs/admin/dns/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
+* [node-cache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
 
 ## Building
 
@@ -50,3 +51,4 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
    The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
 6. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
+7. Images will be available in the repo k8s.gcr.io/dns/. The node-cache image with tag 1.15.14 can be found at k8s.gcr.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at k8s.gcr.io/k8s-dns-node-cache:<TAG>
