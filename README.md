@@ -4,13 +4,14 @@
 [![Coverage Status](https://coveralls.io/repos/github/kubernetes/dns/badge.svg?branch=master)](https://coveralls.io/github/kubernetes/dns?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes/dns)](https://goreportcard.com/report/github.com/kubernetes/dns)
 
-This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/).
+This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/). 
 
 ## Images
 
 * [kube-dns](http://kubernetes.io/docs/admin/dns/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
+* [node-cache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
 
 ## Building
 
@@ -50,3 +51,4 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
    The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
 6. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
+7. Images will be available in the repo k8s.gcr.io/dns/. The node-cache image with tag 1.15.14 can be found at k8s.gcr.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at k8s.gcr.io/k8s-dns-node-cache:<TAG>
