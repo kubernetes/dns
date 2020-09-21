@@ -26,6 +26,7 @@ type ConfigParams struct {
 	LocalIPs             []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
 	LocalPort            string        // port to listen for dns requests
 	MetricsListenAddress string        // address to serve metrics on
+	SetupInterface       bool          // Indicates whether to setup network interface
 	InterfaceName        string        // Name of the interface to be created
 	Interval             time.Duration // specifies how often to run iptables rules check
 	BaseCoreFile         string        // Path to the template config file for node-cache
@@ -69,7 +70,9 @@ func isLockedErr(err error) bool {
 
 // Init initializes the parameters and networking setup necessary to run node-cache
 func (c *CacheApp) Init() {
-	c.netifHandle = netif.NewNetifManager(c.params.LocalIPs)
+	if c.params.SetupInterface {
+		c.netifHandle = netif.NewNetifManager(c.params.LocalIPs)
+	}
 	if c.params.SetupIptables {
 		c.initIptables()
 	}
@@ -162,7 +165,10 @@ func (c *CacheApp) TeardownNetworking() error {
 		// exitChan is a buffered channel of size 1, so this will not block
 		c.exitChan <- true
 	}
-	err := c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
+	var err error
+	if c.params.SetupInterface {
+		err = c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
+	}
 	if c.params.SetupIptables {
 		for _, rule := range c.iptablesRules {
 			exists := true
@@ -230,17 +236,19 @@ func (c *CacheApp) setupNetworking() {
 		}
 	}
 
-	exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
-	if !exists {
-		if err != nil {
-			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
-			setupErrCount.WithLabelValues("interface_add").Inc()
+	if c.params.SetupInterface {
+		exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
+		if !exists {
+			if err != nil {
+				clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
+				setupErrCount.WithLabelValues("interface_add").Inc()
+			}
+			clog.Infof("Added interface - %s", c.params.InterfaceName)
 		}
-		clog.Infof("Added interface - %s", c.params.InterfaceName)
-	}
-	if err != nil {
-		clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
-		setupErrCount.WithLabelValues("interface_check").Inc()
+		if err != nil {
+			clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
+			setupErrCount.WithLabelValues("interface_check").Inc()
+		}
 	}
 }
 
