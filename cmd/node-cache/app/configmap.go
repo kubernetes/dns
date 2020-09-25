@@ -21,8 +21,8 @@ const (
     forward . {{.UpstreamServers}}
 }
 `  // cache TTL is 30s by default
-	defaultTTL    = 30
-	upstreamBlock = `
+	defaultTTL       = 30
+	upstreamTCPBlock = `
     forward . __PILLAR__UPSTREAM__SERVERS__ {
             force_tcp
     }
@@ -85,11 +85,12 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	} else {
 		// Use UDP to connect to custom upstream DNS servers.
 		upstreamUDP := bytes.Replace([]byte(upstreamUDPBlock), []byte(UpstreamServerVar), []byte(upstreamServers), -1)
-		baseConfig = bytes.Replace(baseConfig, []byte(upstreamBlock), upstreamUDP, -1)
-		// Just in case previous replace failed due to different indetation in config file
-		// this step will put in the correct upstream servers, though it might still use TCP.
+		// In case upstream was configured for TCP in the existing config, change to UDP since we now have custom upstream
+		baseConfig = bytes.Replace(baseConfig, []byte(upstreamTCPBlock), upstreamUDP, -1)
+		// Just in case previous replace failed due to different indentation in config file or existing config was
+		// already using UDP, this step will put in the correct upstream servers.
 		if bytes.Contains(baseConfig, []byte(UpstreamServerVar)) {
-			clog.Warningf("Failed to replace TCP upstream block with UDP, node-cache will connect to custom upstream servers via TCP.")
+			clog.Warningf("Did not find TCP upstream block to replace, assuming upstreams already use UDP.")
 			baseConfig = bytes.Replace(baseConfig, []byte(UpstreamServerVar), []byte(upstreamServers), -1)
 		}
 	}

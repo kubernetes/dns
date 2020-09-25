@@ -168,7 +168,7 @@ func TestUpdateCoreFile(t *testing.T) {
 	r = strings.NewReplacer(LocalListenIPsVar, listenIPs,
 		UpstreamClusterDNSVar, "9.10.11.12",
 		LocalDNSServerVar, "",
-		upstreamBlock, upstreamUDP)
+		upstreamTCPBlock, upstreamUDP)
 	expectedContents = r.Replace(newTemplateContents)
 	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
 		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
