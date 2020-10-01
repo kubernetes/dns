@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/klog/v2"
 )
 
 // loopDelayer encapsulates the delay-loop timing logic. This
@@ -53,7 +53,7 @@ func (d *defaultLoopDelayer) Start(interval time.Duration) {
 func (d *defaultLoopDelayer) Sleep(latency time.Duration) {
 	sleepInterval := d.interval - latency
 	if sleepInterval > 0 {
-		glog.V(4).Infof("Sleeping %v", sleepInterval)
+		klog.V(4).Infof("Sleeping %v", sleepInterval)
 		time.Sleep(sleepInterval)
 	}
 }
@@ -72,7 +72,7 @@ type dnsProbe struct {
 }
 
 func (p *dnsProbe) Start(options *Options) {
-	glog.V(2).Infof("Starting dnsProbe %+v", p.DNSProbeOption)
+	klog.V(2).Infof("Starting dnsProbe %+v", p.DNSProbeOption)
 
 	p.lastError = fmt.Errorf("waiting for first probe")
 
@@ -80,7 +80,7 @@ func (p *dnsProbe) Start(options *Options) {
 	p.registerMetrics(options)
 
 	if p.delayer == nil {
-		glog.V(4).Infof("Using defaultLoopDelayer")
+		klog.V(4).Infof("Using defaultLoopDelayer")
 		p.delayer = &defaultLoopDelayer{}
 	}
 
@@ -109,15 +109,15 @@ func (p *dnsProbe) registerMetrics(options *Options) {
 }
 
 func (p *dnsProbe) loop() {
-	glog.V(4).Infof("Starting loop")
+	klog.V(4).Infof("Starting loop")
 	p.delayer.Start(p.Interval)
 
 	dnsClient := &dns.Client{}
 
 	for {
-		glog.V(4).Infof("Sending DNS request @%v %v", p.Server, p.Name)
+		klog.V(4).Infof("Sending DNS request @%v %v", p.Server, p.Name)
 		msg, latency, err := dnsClient.Exchange(p.msg(), p.Server)
-		glog.V(4).Infof("Got response, err=%v after %v", err, latency)
+		klog.V(4).Infof("Got response, err=%v after %v", err, latency)
 
 		if err == nil && len(msg.Answer) == 0 {
 			err = fmt.Errorf("no RRs for domain %q", p.Name)
@@ -138,7 +138,7 @@ func (p *dnsProbe) update(err error, latency time.Duration) {
 
 		p.latencyHistogram.Observe(latency.Seconds() * 1000)
 	} else {
-		glog.V(3).Infof("DNS resolution error for %v: %v", p.Label, err)
+		klog.V(3).Infof("DNS resolution error for %v: %v", p.Label, err)
 		p.lastResolveLatency = 0
 		p.lastError = err
 
@@ -178,7 +178,7 @@ func (p *dnsProbe) httpHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write(buf)
 		} else {
-			glog.Errorf("JSON Marshal error: %v", err)
+			klog.Errorf("JSON Marshal error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write(([]byte)(fmt.Sprintf("Error: %v", err)))
 		}
@@ -191,7 +191,7 @@ func (p *dnsProbe) httpHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write(buf)
 		} else {
-			glog.Errorf("JSON Marshal error: %v", err)
+			klog.Errorf("JSON Marshal error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write(([]byte)(fmt.Sprintf("Error: %v", err)))
 		}

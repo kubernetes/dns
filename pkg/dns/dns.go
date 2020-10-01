@@ -36,10 +36,10 @@ import (
 	"k8s.io/dns/pkg/dns/util"
 
 	etcd "github.com/coreos/etcd/client"
-	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	skymsg "github.com/skynetservices/skydns/msg"
 	"github.com/skynetservices/skydns/server"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -146,7 +146,7 @@ func NewKubeDNS(client clientset.Interface, clusterDomain string, timeout time.D
 func (kd *KubeDNS) loadDefaultNameserver() []string {
 	c, err := dns.ClientConfigFromFile(defaultResolvFile)
 	if err != nil {
-		glog.Errorf("Load nameserver from resolv.conf failed: %v", err)
+		klog.Errorf("Load nameserver from resolv.conf failed: %v", err)
 		return []string{}
 	}
 
@@ -166,7 +166,7 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 		for _, nameServer := range nextConfig.UpstreamNameservers {
 			ip, port, err := util.ValidateNameserverIpAndPort(nameServer)
 			if err != nil {
-				glog.Errorf("Invalid nameserver %q: %v", nameServer, err)
+				klog.Errorf("Invalid nameserver %q: %v", nameServer, err)
 				if len(kd.SkyDNSConfig.Nameservers) == 0 {
 					// Fall back to resolv.conf on initialization failure.
 					kd.SkyDNSConfig.Nameservers = kd.loadDefaultNameserver()
@@ -182,14 +182,14 @@ func (kd *KubeDNS) updateConfig(nextConfig *config.Config) {
 		}
 	}
 	kd.config = nextConfig
-	glog.V(2).Infof("Configuration updated: %+v", *kd.config)
+	klog.V(2).Infof("Configuration updated: %+v", *kd.config)
 }
 
 func (kd *KubeDNS) Start() {
-	glog.V(2).Infof("Starting endpointsController")
+	klog.V(2).Infof("Starting endpointsController")
 	go kd.endpointsController.Run(wait.NeverStop)
 
-	glog.V(2).Infof("Starting serviceController")
+	klog.V(2).Infof("Starting serviceController")
 	go kd.serviceController.Run(wait.NeverStop)
 
 	kd.startConfigMapSync()
@@ -207,7 +207,7 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 	for {
 		select {
 		case <-timeout:
-			glog.Fatalf("Timeout waiting for initialization")
+			klog.Fatalf("Timeout waiting for initialization")
 		case <-ticker.C:
 			unsyncedResources := []string{}
 			if !kd.endpointsController.HasSynced() {
@@ -217,10 +217,10 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 				unsyncedResources = append(unsyncedResources, "services")
 			}
 			if len(unsyncedResources) > 0 {
-				glog.V(0).Infof("Waiting for %v to be initialized from apiserver...", unsyncedResources)
+				klog.V(0).Infof("Waiting for %v to be initialized from apiserver...", unsyncedResources)
 				continue
 			}
-			glog.V(0).Infof("Initialized services and endpoints from apiserver")
+			klog.V(0).Infof("Initialized services and endpoints from apiserver")
 			return
 		}
 	}
@@ -229,7 +229,7 @@ func (kd *KubeDNS) waitForResourceSyncedOrDie() {
 func (kd *KubeDNS) startConfigMapSync() {
 	initialConfig, err := kd.configSync.Once()
 	if err != nil {
-		glog.Errorf(
+		klog.Errorf(
 			"Error getting initial ConfigMap: %v, starting with default values", err)
 		kd.config = config.NewDefaultConfig()
 	} else {
@@ -296,14 +296,14 @@ func assertIsService(obj interface{}) (*v1.Service, bool) {
 	if ok {
 		return service, ok
 	}
-	glog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
+	klog.Errorf("Type assertion failed! Expected 'Service', got %T", service)
 	return nil, ok
 }
 
 func (kd *KubeDNS) newService(obj interface{}) {
 	if service, ok := assertIsService(obj); ok {
-		glog.V(3).Infof("New service: %v", service.Name)
-		glog.V(4).Infof("Service details: %v", service)
+		klog.V(3).Infof("New service: %v", service.Name)
+		klog.V(4).Infof("Service details: %v", service)
 
 		// ExternalName services are a special kind that return CNAME records
 		if service.Spec.Type == v1.ServiceTypeExternalName {
@@ -313,12 +313,12 @@ func (kd *KubeDNS) newService(obj interface{}) {
 		// if ClusterIP is not set, a DNS entry should not be created
 		if !util.IsServiceIPSet(service) {
 			if err := kd.newHeadlessService(service); err != nil {
-				glog.Errorf("Could not create new headless service %v: %v", service.Name, err)
+				klog.Errorf("Could not create new headless service %v: %v", service.Name, err)
 			}
 			return
 		}
 		if len(service.Spec.Ports) == 0 {
-			glog.Warningf("Service with no ports, this should not have happened: %v",
+			klog.Warningf("Service with no ports, this should not have happened: %v",
 				service)
 		}
 		kd.newPortalService(service)
@@ -332,7 +332,7 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 		defer kd.cacheLock.Unlock()
 
 		success := kd.cache.DeletePath(subCachePath...)
-		glog.V(3).Infof("removeService %v at path %v. Success: %v",
+		klog.V(3).Infof("removeService %v at path %v. Success: %v",
 			s.Name, subCachePath, success)
 
 		// ExternalName services have no IP
@@ -360,7 +360,7 @@ func (kd *KubeDNS) updateService(oldObj, newObj interface{}) {
 func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 	if e, ok := obj.(*v1.Endpoints); ok {
 		if err := kd.addDNSUsingEndpoints(e); err != nil {
-			glog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
+			klog.Errorf("Error in addDNSUsingEndpoints(%v): %v", e.Name, err)
 		}
 	}
 }
@@ -368,13 +368,13 @@ func (kd *KubeDNS) handleEndpointAdd(obj interface{}) {
 func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 	oldEndpoints, ok := oldObj.(*v1.Endpoints)
 	if !ok {
-		glog.Errorf("oldObj type assertion failed! Expected 'v1.Endpoints', got %T", oldObj)
+		klog.Errorf("oldObj type assertion failed! Expected 'v1.Endpoints', got %T", oldObj)
 		return
 	}
 
 	newEndpoints, ok := newObj.(*v1.Endpoints)
 	if !ok {
-		glog.Errorf("newObj type assertion failed! Expected 'v1.Endpoints', got %T", newObj)
+		klog.Errorf("newObj type assertion failed! Expected 'v1.Endpoints', got %T", newObj)
 		return
 	}
 
@@ -417,7 +417,7 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 			// the addresses that are no longer named.
 			kd.cacheLock.Lock()
 			for k := range oldAddressMap {
-				glog.V(4).Infof("Removing old endpoint IP %q", k)
+				klog.V(4).Infof("Removing old endpoint IP %q", k)
 				delete(kd.reverseRecordMap, k)
 			}
 			kd.cacheLock.Unlock()
@@ -431,13 +431,13 @@ func (kd *KubeDNS) handleEndpointUpdate(oldObj, newObj interface{}) {
 func (kd *KubeDNS) handleEndpointDelete(obj interface{}) {
 	endpoints, ok := obj.(*v1.Endpoints)
 	if !ok {
-		glog.Errorf("obj type assertion failed! Expected 'v1.Endpoints', got %T", obj)
+		klog.Errorf("obj type assertion failed! Expected 'v1.Endpoints', got %T", obj)
 		return
 	}
 
 	svc, err := kd.getServiceFromEndpoints(endpoints)
 	if err != nil {
-		glog.Errorf("Error from getServiceFromEndpoints(%v): %v", endpoints.Name, err)
+		klog.Errorf("Error from getServiceFromEndpoints(%v): %v", endpoints.Name, err)
 		return
 	}
 	if svc != nil {
@@ -480,7 +480,7 @@ func (kd *KubeDNS) getServiceFromEndpoints(e *v1.Endpoints) (*v1.Service, error)
 		return nil, fmt.Errorf("failed to get service object from services store - %v", err)
 	}
 	if !exists {
-		glog.V(3).Infof("No service for endpoint %q in namespace %q",
+		klog.V(3).Infof("No service for endpoint %q in namespace %q",
 			e.Name, e.Namespace)
 		return nil, nil
 	}
@@ -509,7 +509,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 			srvValue := kd.generateSRVRecordValue(service, int(port.Port))
 
 			l := []string{"_" + strings.ToLower(string(port.Protocol)), "_" + port.Name}
-			glog.V(3).Infof("Added SRV record %+v", srvValue)
+			klog.V(3).Infof("Added SRV record %+v", srvValue)
 
 			subCache.SetEntry(recordLabel, srvValue, kd.fqdn(service, append(l, recordLabel)...), l...)
 		}
@@ -527,7 +527,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 
 func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Service) error {
 	subCache := treecache.NewTreeCache()
-	glog.V(4).Infof("Endpoints Annotations: %v", e.Annotations)
+	klog.V(4).Infof("Endpoints Annotations: %v", e.Annotations)
 	generatedRecords := map[string]*skymsg.Service{}
 	for idx := range e.Subsets {
 		for subIdx := range e.Subsets[idx].Addresses {
@@ -542,7 +542,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 				endpointPort := &e.Subsets[idx].Ports[portIdx]
 				if endpointPort.Name != "" && endpointPort.Protocol != "" {
 					srvValue := kd.generateSRVRecordValue(svc, int(endpointPort.Port), endpointName)
-					glog.V(3).Infof("Added SRV record %+v", srvValue)
+					klog.V(3).Infof("Added SRV record %+v", srvValue)
 
 					l := []string{"_" + strings.ToLower(string(endpointPort.Protocol)), "_" + endpointPort.Name}
 					subCache.SetEntry(endpointName, srvValue, kd.fqdn(svc, append(l, endpointName)...), l...)
@@ -560,7 +560,7 @@ func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Se
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
 	for endpointIP, reverseRecord := range generatedRecords {
-		glog.V(4).Infof("Adding endpointIP %q to reverseRecord %+v", endpointIP, reverseRecord)
+		klog.V(4).Infof("Adding endpointIP %q to reverseRecord %+v", endpointIP, reverseRecord)
 		kd.reverseRecordMap[endpointIP] = reverseRecord
 	}
 	kd.cache.SetSubCache(svc.Name, subCache, subCachePath...)
@@ -599,7 +599,7 @@ func (kd *KubeDNS) newHeadlessService(service *v1.Service) error {
 		return fmt.Errorf("failed to get endpoints object from endpoints store - %v", err)
 	}
 	if !exists {
-		glog.V(1).Infof("Could not find endpoints for service %q in namespace %q. DNS records will be created once endpoints show up.",
+		klog.V(1).Infof("Could not find endpoints for service %q in namespace %q. DNS records will be created once endpoints show up.",
 			service.Name, service.Namespace)
 		return nil
 	}
@@ -616,7 +616,7 @@ func (kd *KubeDNS) newExternalNameService(service *v1.Service) {
 	recordValue, _ := util.GetSkyMsg(service.Spec.ExternalName, 0)
 	cachePath := append(kd.domainPath, serviceSubdomain, service.Namespace)
 	fqdn := kd.fqdn(service)
-	glog.V(3).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
+	klog.V(3).Infof("newExternalNameService: storing key %s with value %v as %s under %v",
 		service.Name, recordValue, fqdn, cachePath)
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
@@ -635,7 +635,7 @@ func (kd *KubeDNS) HasSynced() bool {
 // matching the given name is returned, otherwise all records stored under
 // the subtree matching the name are returned.
 func (kd *KubeDNS) Records(name string, exact bool) (retval []skymsg.Service, err error) {
-	glog.V(3).Infof("Query for %q, exact: %v", name, exact)
+	klog.V(3).Infof("Query for %q, exact: %v", name, exact)
 
 	trimmed := strings.TrimRight(name, ".")
 	segments := strings.Split(trimmed, ".")
@@ -643,7 +643,7 @@ func (kd *KubeDNS) Records(name string, exact bool) (retval []skymsg.Service, er
 	federationSegments := []string{}
 
 	if !exact && kd.isFederationQuery(segments) {
-		glog.V(3).Infof("Received federation query, trying local service first")
+		klog.V(3).Infof("Received federation query, trying local service first")
 		// Try querying the non-federation (local) service first. Will try
 		// the federation one later, if this fails.
 		isFederationQuery = true
@@ -664,11 +664,11 @@ func (kd *KubeDNS) Records(name string, exact bool) (retval []skymsg.Service, er
 	if isFederationQuery {
 		return kd.recordsForFederation(records, path, exact, federationSegments)
 	} else if len(records) > 0 {
-		glog.V(4).Infof("Records for %v: %v", name, records)
+		klog.V(4).Infof("Records for %v: %v", name, records)
 		return records, nil
 	}
 
-	glog.V(3).Infof("No record found for %v", name)
+	klog.V(3).Infof("No record found for %v", name)
 	return nil, etcd.Error{Code: etcd.ErrorCodeKeyNotFound}
 }
 
@@ -685,12 +685,12 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 		if !kd.isHeadlessServiceRecord(&val) {
 			ok, err := kd.serviceWithClusterIPHasEndpoints(&val)
 			if err != nil {
-				glog.V(3).Infof(
+				klog.V(3).Infof(
 					"Federation: error finding if service has endpoint: %v", err)
 				continue
 			}
 			if !ok {
-				glog.V(3).Infof("Federation: skipping record since service has no endpoint: %v", val)
+				klog.V(3).Infof("Federation: skipping record since service has no endpoint: %v", val)
 				continue
 			}
 		}
@@ -709,7 +709,7 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 		if !strings.HasSuffix(name, ".") {
 			name = name + "."
 		}
-		glog.V(3).Infof(
+		klog.V(3).Infof(
 			"Federation: Returning CNAME for local service: %v", name)
 		return []skymsg.Service{{Host: name}}, nil
 	}
@@ -718,7 +718,7 @@ func (kd *KubeDNS) recordsForFederation(records []skymsg.Service, path []string,
 	// records in the local store, attempt to send a federation redirect
 	// (CNAME) response.
 	if !exact {
-		glog.V(3).Infof(
+		klog.V(3).Infof(
 			"Federation: Did not find a local service. Trying federation redirect (CNAME)")
 		return kd.federationRecords(util.ReverseArray(federationSegments))
 	}
@@ -744,25 +744,25 @@ func (kd *KubeDNS) getRecordsForPath(path []string, exact bool) ([]skymsg.Servic
 		kd.cacheLock.RLock()
 		defer kd.cacheLock.RUnlock()
 		if record, ok := kd.cache.GetEntry(key, path[:len(path)-1]...); ok {
-			glog.V(3).Infof("Exact match %v for %v received from cache", record, path[:len(path)-1])
+			klog.V(3).Infof("Exact match %v for %v received from cache", record, path[:len(path)-1])
 			return []skymsg.Service{*(record.(*skymsg.Service))}, nil
 		}
 
-		glog.V(3).Infof("Exact match for %v not found in cache", path)
+		klog.V(3).Infof("Exact match for %v not found in cache", path)
 		return nil, etcd.Error{Code: etcd.ErrorCodeKeyNotFound}
 	}
 
 	kd.cacheLock.RLock()
 	defer kd.cacheLock.RUnlock()
 	records := kd.cache.GetValuesForPathWithWildcards(path...)
-	glog.V(3).Infof("Found %d records for %v in the cache", len(records), path)
+	klog.V(3).Infof("Found %d records for %v in the cache", len(records), path)
 
 	retval := []skymsg.Service{}
 	for _, val := range records {
 		retval = append(retval, *val)
 	}
 
-	glog.V(4).Infof("getRecordsForPath retval=%+v, path=%v", retval, path)
+	klog.V(4).Infof("getRecordsForPath retval=%+v, path=%v", retval, path)
 
 	return retval, nil
 }
@@ -807,7 +807,7 @@ func (kd *KubeDNS) serviceWithClusterIPHasEndpoints(msg *skymsg.Service) (bool, 
 
 // ReverseRecord performs a reverse lookup for the given name.
 func (kd *KubeDNS) ReverseRecord(name string) (*skymsg.Service, error) {
-	glog.V(3).Infof("Query for ReverseRecord %q", name)
+	klog.V(3).Infof("Query for ReverseRecord %q", name)
 
 	// if portalIP is not a valid IP, the reverseRecordMap lookup will fail
 	portalIP, ok := util.ExtractIP(name)
@@ -864,33 +864,33 @@ func (kd *KubeDNS) getPodIP(path []string) (string, error) {
 //   We can add support for wildcard queries later, if needed.
 func (kd *KubeDNS) isFederationQuery(path []string) bool {
 	if len(path) != 4+len(kd.domainPath) {
-		glog.V(4).Infof("Not a federation query: len(%q) != 4+len(%q)", path, kd.domainPath)
+		klog.V(4).Infof("Not a federation query: len(%q) != 4+len(%q)", path, kd.domainPath)
 		return false
 	}
 	if errs := validation.IsDNS1035Label(path[0]); len(errs) != 0 {
-		glog.V(4).Infof("Not a federation query: %q is not an RFC 1035 label: %q",
+		klog.V(4).Infof("Not a federation query: %q is not an RFC 1035 label: %q",
 			path[0], errs)
 		return false
 	}
 	if errs := validation.IsDNS1123Label(path[1]); len(errs) != 0 {
-		glog.V(4).Infof("Not a federation query: %q is not an RFC 1123 label: %q",
+		klog.V(4).Infof("Not a federation query: %q is not an RFC 1123 label: %q",
 			path[1], errs)
 		return false
 	}
 	if errs := validation.IsDNS1123Label(path[2]); len(errs) != 0 {
-		glog.V(4).Infof("Not a federation query: %q is not an RFC 1123 label: %q",
+		klog.V(4).Infof("Not a federation query: %q is not an RFC 1123 label: %q",
 			path[2], errs)
 		return false
 	}
 	if path[3] != serviceSubdomain {
-		glog.V(4).Infof("Not a federation query: %q != %q (serviceSubdomain)",
+		klog.V(4).Infof("Not a federation query: %q != %q (serviceSubdomain)",
 			path[3], serviceSubdomain)
 		return false
 	}
 	for i, domComp := range kd.domainPath {
 		// kd.domainPath is reversed, so we need to look in the `path` in the reverse order.
 		if domComp != path[len(path)-i-1] {
-			glog.V(4).Infof("Not a federation query: kd.domainPath[%d] != path[%d] (%q != %q)",
+			klog.V(4).Infof("Not a federation query: kd.domainPath[%d] != path[%d] (%q != %q)",
 				i, len(path)-i-1, domComp, path[len(path)-i-1])
 			return false
 		}
@@ -900,7 +900,7 @@ func (kd *KubeDNS) isFederationQuery(path []string) bool {
 	defer kd.configLock.RUnlock()
 
 	if _, ok := kd.config.Federations[path[2]]; !ok {
-		glog.V(4).Infof("Not a federation query: label %q not found", path[2])
+		klog.V(4).Infof("Not a federation query: label %q not found", path[2])
 		return false
 	}
 
