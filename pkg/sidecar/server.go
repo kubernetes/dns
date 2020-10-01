@@ -20,8 +20,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/dns/pkg/dnsmasq"
+	"k8s.io/klog/v2"
 )
 
 // Server that runs the dnsmasq-metrics daemon.
@@ -43,7 +43,7 @@ func NewServer() Server {
 // Run the server (does not return)
 func (s *server) Run(options *Options) {
 	s.options = options
-	glog.Infof("Starting server (options %+v)", *s.options)
+	klog.Infof("Starting server (options %+v)", *s.options)
 
 	for _, probeOption := range options.Probes {
 		probe := &dnsProbe{DNSProbeOption: probeOption}
@@ -62,10 +62,10 @@ func (s *server) runMetrics(options *Options) {
 	for {
 		metrics, err := s.metricsClient.GetMetrics()
 		if err != nil {
-			glog.Warningf("Error getting metrics from dnsmasq: %v", err)
+			klog.Warningf("Error getting metrics from dnsmasq: %v", err)
 			errorsCounter.Add(1)
 		} else {
-			glog.V(3).Infof("DnsMasq metrics %+v", metrics)
+			klog.V(3).Infof("DnsMasq metrics %+v", metrics)
 			exportMetrics(metrics)
 		}
 
