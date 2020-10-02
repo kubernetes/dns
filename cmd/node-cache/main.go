@@ -61,6 +61,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	params := &app.ConfigParams{LocalPort: "53"}
 
 	flag.StringVar(&params.LocalIPStr, "localip", "", "comma-separated string of ip addresses to bind dnscache to")
+	flag.BoolVar(&params.SetupInterface, "setupinterface", true, "indicates whether network interface should be setup")
 	flag.StringVar(&params.InterfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&params.Interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
 	flag.StringVar(&params.MetricsListenAddress, "metrics-listen-address", "0.0.0.0:9353", "address to serve metrics on")
