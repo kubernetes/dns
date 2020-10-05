@@ -24,14 +24,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/miekg/dns"
 	"github.com/spf13/pflag"
-	"k8s.io/apiserver/pkg/util/flag"
-	"k8s.io/kubernetes/pkg/util/logs"
+	"k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
 
 	"k8s.io/dns/pkg/sidecar"
 	"k8s.io/dns/pkg/version"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -48,7 +48,7 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	glog.Infof("Version v%s", version.VERSION)
+	klog.Infof("Version v%s", version.VERSION)
 
 	version.PrintAndExitIfRequested()
 

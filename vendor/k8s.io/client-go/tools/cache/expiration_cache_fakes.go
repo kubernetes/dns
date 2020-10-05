@@ -17,8 +17,8 @@ limitations under the License.
 package cache
 
 import (
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/util/clock"
 )
 
 type fakeThreadSafeMap struct {
@@ -38,7 +38,7 @@ type FakeExpirationPolicy struct {
 	RetrieveKeyFunc KeyFunc
 }
 
-func (p *FakeExpirationPolicy) IsExpired(obj *timestampedEntry) bool {
+func (p *FakeExpirationPolicy) IsExpired(obj *TimestampedEntry) bool {
 	key, _ := p.RetrieveKeyFunc(obj)
 	return !p.NeverExpire.Has(key)
 }
