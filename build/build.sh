@@ -45,4 +45,3 @@ go install                                                         \
     -installsuffix "static"                                        \
     -ldflags "-X ${PKG}/pkg/version.VERSION=${VERSION}"            \
     ./...                                                          \
-    ./vendor/...
