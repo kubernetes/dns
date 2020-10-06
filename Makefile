@@ -40,11 +40,10 @@ REGISTRY ?= gcr.io/k8s-staging-dns
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.13-alpine
+BUILD_IMAGE ?= golang:1.11-alpine
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
-# Caching for go builds, disabled for CI
-GOCACHE ?= /tmp/.gocache/$(ARCH)
+
 # This version-strategy uses git tags to set the version string
 VERSION ?= $(shell git describe --tags --always --dirty)
 

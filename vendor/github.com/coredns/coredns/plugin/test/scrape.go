@@ -30,8 +30,9 @@ import (
 	"strconv"
 
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 type (

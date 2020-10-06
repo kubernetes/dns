@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/miekg/dns"
-	"k8s.io/klog/v2"
 )
 
 // MetricsClient is a client used to obtain metrics from dnsmasq.
@@ -110,7 +110,7 @@ func (mc *metricsClient) getSingleMetric(name string) (int64, error) {
 	}
 
 	if t, ok := in.Answer[0].(*dns.TXT); ok {
-		klog.V(4).Infof("Got valid TXT response %+v for %s", t, name)
+		glog.V(4).Infof("Got valid TXT response %+v for %s", t, name)
 		if len(t.Txt) != 1 {
 			return 0, fmt.Errorf("invalid number of TXT records for %s: %d",
 				name, len(t.Txt))

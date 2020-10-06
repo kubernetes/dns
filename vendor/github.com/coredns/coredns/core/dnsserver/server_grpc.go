@@ -11,7 +11,6 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
-	"github.com/caddyserver/caddy"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/miekg/dns"
 	"github.com/opentracing/opentracing-go"
@@ -43,9 +42,6 @@ func NewServergRPC(addr string, group []*Config) (*ServergRPC, error) {
 
 	return &ServergRPC{Server: s, tlsConfig: tlsConfig}, nil
 }
-
-// Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
 
 // Serve implements caddy.TCPServer interface.
 func (s *ServergRPC) Serve(l net.Listener) error {

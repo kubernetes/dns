@@ -6,9 +6,6 @@ See the docs for Gomega for documentation on the matchers
 
 http://onsi.github.io/gomega/
 */
-
-// untested sections: 11
-
 package matchers
 
 import (

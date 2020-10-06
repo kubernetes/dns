@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/klog"
+	"github.com/golang/glog"
 )
 
 var (
@@ -43,7 +43,7 @@ var PanicHandlers = []func(interface{}){logPanic}
 // TODO: remove this function. We are switching to a world where it's safe for
 // apiserver to panic, since it will be restarted by kubelet. At the beginning
 // of the Kubernetes project, nothing was going to restart apiserver and so
-// catching panics was important. But it's actually much simpler for monitoring
+// catching panics was important. But it's actually much simpler for montoring
 // software if we just exit when an unexpected panic happens.
 func HandleCrash(additionalHandlers ...func(interface{})) {
 	if r := recover(); r != nil {
@@ -62,16 +62,21 @@ func HandleCrash(additionalHandlers ...func(interface{})) {
 
 // logPanic logs the caller tree when a panic occurs.
 func logPanic(r interface{}) {
-	// Same as stdlib http server code. Manually allocate stack trace buffer size
-	// to prevent excessively large logs
-	const size = 64 << 10
-	stacktrace := make([]byte, size)
-	stacktrace = stacktrace[:runtime.Stack(stacktrace, false)]
-	if _, ok := r.(string); ok {
-		klog.Errorf("Observed a panic: %s\n%s", r, stacktrace)
-	} else {
-		klog.Errorf("Observed a panic: %#v (%v)\n%s", r, r, stacktrace)
+	callers := getCallers(r)
+	glog.Errorf("Observed a panic: %#v (%v)\n%v", r, r, callers)
+}
+
+func getCallers(r interface{}) string {
+	callers := ""
+	for i := 0; true; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		callers = callers + fmt.Sprintf("%v:%v\n", file, line)
 	}
+
+	return callers
 }
 
 // ErrorHandlers is a list of functions which will be invoked when an unreturnable
@@ -106,7 +111,7 @@ func HandleError(err error) {
 
 // logError prints an error with the call stack of the location it was reported
 func logError(err error) {
-	klog.ErrorDepth(2, err)
+	glog.ErrorDepth(2, err)
 }
 
 type rudimentaryErrorBackoff struct {
@@ -124,7 +129,6 @@ func (r *rudimentaryErrorBackoff) OnError(error) {
 	defer r.lastErrorTimeLock.Unlock()
 	d := time.Since(r.lastErrorTime)
 	if d < r.minPeriod {
-		// If the time moves backwards for any reason, do nothing
 		time.Sleep(r.minPeriod - d)
 	}
 	r.lastErrorTime = time.Now()
@@ -146,23 +150,12 @@ func GetCaller() string {
 // handlers to handle errors and panics the same way.
 func RecoverFromPanic(err *error) {
 	if r := recover(); r != nil {
-		// Same as stdlib http server code. Manually allocate stack trace buffer size
-		// to prevent excessively large logs
-		const size = 64 << 10
-		stacktrace := make([]byte, size)
-		stacktrace = stacktrace[:runtime.Stack(stacktrace, false)]
+		callers := getCallers(r)
 
 		*err = fmt.Errorf(
-			"recovered from panic %q. (err=%v) Call stack:\n%s",
+			"recovered from panic %q. (err=%v) Call stack:\n%v",
 			r,
 			*err,
-			stacktrace)
-	}
-}
-
-// Must panics on non-nil errors.  Useful to handling programmer level errors.
-func Must(err error) {
-	if err != nil {
-		panic(err)
+			callers)
 	}
 }

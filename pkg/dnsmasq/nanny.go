@@ -25,8 +25,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/golang/glog"
 	"k8s.io/dns/pkg/dns/config"
-	"k8s.io/klog/v2"
 )
 
 // Nanny encapsulates a dnsmasq process and manages its configuration.
@@ -83,19 +83,19 @@ func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer st
 				switch {
 				case strings.HasSuffix(server, "cluster.local"):
 					if IPs, err := resolver.LookupIPAddr(context.Background(), server); err != nil {
-						klog.Errorf("Error looking up IP for name %q: %v", server, err)
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
 					} else if len(IPs) > 0 {
 						server = IPs[0].String()
 					} else {
-						klog.Errorf("Name %q does not resolve to any IPs", server)
+						glog.Errorf("Name %q does not resolve to any IPs", server)
 					}
 				default:
 					if IPs, err := net.LookupIP(server); err != nil {
-						klog.Errorf("Error looking up IP for name %q: %v", server, err)
+						glog.Errorf("Error looking up IP for name %q: %v", server, err)
 					} else if len(IPs) > 0 {
 						server = IPs[0].String()
 					} else {
-						klog.Errorf("Name %q does not resolve to any IPs", server)
+						glog.Errorf("Name %q does not resolve to any IPs", server)
 					}
 				}
 			}
@@ -121,7 +121,7 @@ func (n *Nanny) Configure(args []string, config *config.Config, kubednsServer st
 
 // Start the nanny.
 func (n *Nanny) Start() error {
-	klog.V(0).Infof("Starting dnsmasq %v", n.args)
+	glog.V(0).Infof("Starting dnsmasq %v", n.args)
 
 	n.cmd = exec.Command(n.Exec, n.args...)
 	stderrReader, err := n.cmd.StderrPipe()
@@ -143,15 +143,15 @@ func (n *Nanny) Start() error {
 		for {
 			bytes, err := bufReader.ReadBytes('\n')
 			if len(bytes) > 0 {
-				klog.V(1).Infof("%v", string(bytes))
+				glog.V(1).Infof("%v", string(bytes))
 			}
 			if err == io.EOF {
-				klog.V(1).Infof("%v", string(bytes))
-				klog.Warningf("Got EOF from %v", stream)
+				glog.V(1).Infof("%v", string(bytes))
+				glog.Warningf("Got EOF from %v", stream)
 				return
 			} else if err != nil {
-				klog.V(1).Infof("%v", string(bytes))
-				klog.Errorf("Error reading from %v: %v", stream, err)
+				glog.V(1).Infof("%v", string(bytes))
+				glog.Errorf("Error reading from %v: %v", stream, err)
 				return
 			}
 		}
@@ -170,13 +170,13 @@ func (n *Nanny) Start() error {
 
 // Kill the running Nanny.
 func (n *Nanny) Kill() error {
-	klog.V(0).Infof("Killing dnsmasq")
+	glog.V(0).Infof("Killing dnsmasq")
 	if n.cmd == nil {
 		return fmt.Errorf("Process is not running")
 	}
 
 	if err := n.cmd.Process.Kill(); err != nil {
-		klog.Errorf("Error killing dnsmasq: %v", err)
+		glog.Errorf("Error killing dnsmasq: %v", err)
 		return err
 	}
 
@@ -197,18 +197,18 @@ type RunNannyOpts struct {
 
 // RunNanny runs the nanny and handles configuration updates.
 func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
-	defer klog.Flush()
+	defer glog.Flush()
 
 	currentConfig, err := sync.Once()
 	if err != nil {
-		klog.Errorf("Error getting initial config, using default: %v", err)
+		glog.Errorf("Error getting initial config, using default: %v", err)
 		currentConfig = config.NewDefaultConfig()
 	}
 
 	nanny := &Nanny{Exec: opts.DnsmasqExec}
 	nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 	if err := nanny.Start(); err != nil {
-		klog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
+		glog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
 	}
 
 	configChan := sync.Periodic()
@@ -216,18 +216,18 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 	for {
 		select {
 		case status := <-nanny.ExitChannel:
-			klog.Flush()
-			klog.Fatalf("dnsmasq exited: %v", status)
+			glog.Flush()
+			glog.Fatalf("dnsmasq exited: %v", status)
 			break
 		case currentConfig = <-configChan:
 			if opts.RestartOnChange {
-				klog.V(0).Infof("Restarting dnsmasq with new configuration")
+				glog.V(0).Infof("Restarting dnsmasq with new configuration")
 				nanny.Kill()
 				nanny = &Nanny{Exec: opts.DnsmasqExec}
 				nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 				nanny.Start()
 			} else {
-				klog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
+				glog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
 			}
 			break
 		}

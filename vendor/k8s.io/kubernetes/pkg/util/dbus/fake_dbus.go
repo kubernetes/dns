@@ -18,30 +18,28 @@ package dbus
 
 import (
 	"fmt"
-	"sync"
 
 	godbus "github.com/godbus/dbus"
 )
 
-// Fake is a simple fake Interface type.
-type Fake struct {
-	systemBus  *FakeConnection
-	sessionBus *FakeConnection
+// DBusFake is a simple fake Interface type.
+type DBusFake struct {
+	systemBus  *DBusFakeConnection
+	sessionBus *DBusFakeConnection
 }
 
-// FakeConnection represents a fake D-Bus connection
-type FakeConnection struct {
-	lock           sync.Mutex
+// DBusFakeConnection represents a fake D-Bus connection
+type DBusFakeConnection struct {
 	busObject      *fakeObject
 	objects        map[string]*fakeObject
 	signalHandlers []chan<- *godbus.Signal
 }
 
-// FakeHandler is used to handle fake D-Bus method calls
-type FakeHandler func(method string, args ...interface{}) ([]interface{}, error)
+// DBusFakeHandler is used to handle fake D-Bus method calls
+type DBusFakeHandler func(method string, args ...interface{}) ([]interface{}, error)
 
 type fakeObject struct {
-	handler FakeHandler
+	handler DBusFakeHandler
 }
 
 type fakeCall struct {
@@ -50,47 +48,46 @@ type fakeCall struct {
 }
 
 // NewFake returns a new Interface which will fake talking to D-Bus
-func NewFake(systemBus *FakeConnection, sessionBus *FakeConnection) *Fake {
-	return &Fake{systemBus, sessionBus}
+func NewFake(systemBus *DBusFakeConnection, sessionBus *DBusFakeConnection) *DBusFake {
+	return &DBusFake{systemBus, sessionBus}
 }
 
-// NewFakeConnection returns a FakeConnection Interface
-func NewFakeConnection() *FakeConnection {
-	return &FakeConnection{
+func NewFakeConnection() *DBusFakeConnection {
+	return &DBusFakeConnection{
 		objects: make(map[string]*fakeObject),
 	}
 }
 
 // SystemBus is part of Interface
-func (db *Fake) SystemBus() (Connection, error) {
+func (db *DBusFake) SystemBus() (Connection, error) {
 	if db.systemBus != nil {
 		return db.systemBus, nil
+	} else {
+		return nil, fmt.Errorf("DBus is not running")
 	}
-	return nil, fmt.Errorf("DBus is not running")
 }
 
 // SessionBus is part of Interface
-func (db *Fake) SessionBus() (Connection, error) {
+func (db *DBusFake) SessionBus() (Connection, error) {
 	if db.sessionBus != nil {
 		return db.sessionBus, nil
+	} else {
+		return nil, fmt.Errorf("DBus is not running")
 	}
-	return nil, fmt.Errorf("DBus is not running")
 }
 
 // BusObject is part of the Connection interface
-func (conn *FakeConnection) BusObject() Object {
+func (conn *DBusFakeConnection) BusObject() Object {
 	return conn.busObject
 }
 
 // Object is part of the Connection interface
-func (conn *FakeConnection) Object(name, path string) Object {
+func (conn *DBusFakeConnection) Object(name, path string) Object {
 	return conn.objects[name+path]
 }
 
 // Signal is part of the Connection interface
-func (conn *FakeConnection) Signal(ch chan<- *godbus.Signal) {
-	conn.lock.Lock()
-	defer conn.lock.Unlock()
+func (conn *DBusFakeConnection) Signal(ch chan<- *godbus.Signal) {
 	for i := range conn.signalHandlers {
 		if conn.signalHandlers[i] == ch {
 			conn.signalHandlers = append(conn.signalHandlers[:i], conn.signalHandlers[i+1:]...)
@@ -101,19 +98,17 @@ func (conn *FakeConnection) Signal(ch chan<- *godbus.Signal) {
 }
 
 // SetBusObject sets the handler for the BusObject of conn
-func (conn *FakeConnection) SetBusObject(handler FakeHandler) {
+func (conn *DBusFakeConnection) SetBusObject(handler DBusFakeHandler) {
 	conn.busObject = &fakeObject{handler}
 }
 
 // AddObject adds a handler for the Object at name and path
-func (conn *FakeConnection) AddObject(name, path string, handler FakeHandler) {
+func (conn *DBusFakeConnection) AddObject(name, path string, handler DBusFakeHandler) {
 	conn.objects[name+path] = &fakeObject{handler}
 }
 
 // EmitSignal emits a signal on conn
-func (conn *FakeConnection) EmitSignal(name, path, iface, signal string, args ...interface{}) {
-	conn.lock.Lock()
-	defer conn.lock.Unlock()
+func (conn *DBusFakeConnection) EmitSignal(name, path, iface, signal string, args ...interface{}) {
 	sig := &godbus.Signal{
 		Sender: name,
 		Path:   godbus.ObjectPath(path),

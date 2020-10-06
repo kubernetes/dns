@@ -149,7 +149,7 @@ func textConvertMessage(m *Message, s *bytes.Buffer) {
 		err = msg.Unpack(m.ResponseMessage)
 	}
 
-	if err != nil || len(msg.Question) == 0 {
+	if err != nil {
 		s.WriteString("X ")
 	} else {
 		s.WriteString("\"" + msg.Question[0].Name + "\" ")
@@ -160,8 +160,6 @@ func textConvertMessage(m *Message, s *bytes.Buffer) {
 	s.WriteString("\n")
 }
 
-// TextFormat renders a dnstap message in a compact human-readable text
-// form.
 func TextFormat(dt *Dnstap) (out []byte, ok bool) {
 	var s bytes.Buffer
 

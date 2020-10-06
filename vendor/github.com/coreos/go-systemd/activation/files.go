@@ -18,7 +18,6 @@ package activation
 import (
 	"os"
 	"strconv"
-	"strings"
 	"syscall"
 )
 
@@ -31,7 +30,6 @@ func Files(unsetEnv bool) []*os.File {
 	if unsetEnv {
 		defer os.Unsetenv("LISTEN_PID")
 		defer os.Unsetenv("LISTEN_FDS")
-		defer os.Unsetenv("LISTEN_FDNAMES")
 	}
 
 	pid, err := strconv.Atoi(os.Getenv("LISTEN_PID"))
@@ -44,17 +42,10 @@ func Files(unsetEnv bool) []*os.File {
 		return nil
 	}
 
-	names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
-
 	files := make([]*os.File, 0, nfds)
 	for fd := listenFdsStart; fd < listenFdsStart+nfds; fd++ {
 		syscall.CloseOnExec(fd)
-		name := "LISTEN_FD_" + strconv.Itoa(fd)
-		offset := fd - listenFdsStart
-		if offset < len(names) && len(names[offset]) > 0 {
-			name = names[offset]
-		}
-		files = append(files, os.NewFile(uintptr(fd), name))
+		files = append(files, os.NewFile(uintptr(fd), "LISTEN_FD_"+strconv.Itoa(fd)))
 	}
 
 	return files

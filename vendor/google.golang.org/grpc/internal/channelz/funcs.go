@@ -24,13 +24,12 @@
 package channelz
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/grpclog"
 )
 
 const (
@@ -41,7 +40,7 @@ var (
 	db    dbWrapper
 	idGen idGenerator
 	// EntryPerPage defines the number of channelz entries to be shown on a web page.
-	EntryPerPage  = int64(50)
+	EntryPerPage  = 50
 	curState      int32
 	maxTraceEntry = defaultMaxTraceEntry
 )
@@ -96,14 +95,9 @@ func (d *dbWrapper) get() *channelMap {
 
 // NewChannelzStorage initializes channelz data storage and id generator.
 //
-// This function returns a cleanup function to wait for all channelz state to be reset by the
-// grpc goroutines when those entities get closed. By using this cleanup function, we make sure tests
-// don't mess up each other, i.e. lingering goroutine from previous test doing entity removal happen
-// to remove some entity just register by the new test, since the id space is the same.
-//
 // Note: This function is exported for testing purpose only. User should not call
 // it in most cases.
-func NewChannelzStorage() (cleanup func() error) {
+func NewChannelzStorage() {
 	db.set(&channelMap{
 		topLevelChannels: make(map[int64]struct{}),
 		channels:         make(map[int64]*channel),
@@ -113,48 +107,26 @@ func NewChannelzStorage() (cleanup func() error) {
 		subChannels:      make(map[int64]*subChannel),
 	})
 	idGen.reset()
-	return func() error {
-		var err error
-		cm := db.get()
-		if cm == nil {
-			return nil
-		}
-		for i := 0; i < 1000; i++ {
-			cm.mu.Lock()
-			if len(cm.topLevelChannels) == 0 && len(cm.servers) == 0 && len(cm.channels) == 0 && len(cm.subChannels) == 0 && len(cm.listenSockets) == 0 && len(cm.normalSockets) == 0 {
-				cm.mu.Unlock()
-				// all things stored in the channelz map have been cleared.
-				return nil
-			}
-			cm.mu.Unlock()
-			time.Sleep(10 * time.Millisecond)
-		}
-
-		cm.mu.Lock()
-		err = fmt.Errorf("after 10s the channelz map has not been cleaned up yet, topchannels: %d, servers: %d, channels: %d, subchannels: %d, listen sockets: %d, normal sockets: %d", len(cm.topLevelChannels), len(cm.servers), len(cm.channels), len(cm.subChannels), len(cm.listenSockets), len(cm.normalSockets))
-		cm.mu.Unlock()
-		return err
-	}
 }
 
 // GetTopChannels returns a slice of top channel's ChannelMetric, along with a
 // boolean indicating whether there's more top channels to be queried for.
 //
 // The arg id specifies that only top channel with id at or above it will be included
-// in the result. The returned slice is up to a length of the arg maxResults or
-// EntryPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
-	return db.get().GetTopChannels(id, maxResults)
+// in the result. The returned slice is up to a length of EntryPerPage, and is
+// sorted in ascending id order.
+func GetTopChannels(id int64) ([]*ChannelMetric, bool) {
+	return db.get().GetTopChannels(id)
 }
 
 // GetServers returns a slice of server's ServerMetric, along with a
 // boolean indicating whether there's more servers to be queried for.
 //
 // The arg id specifies that only server with id at or above it will be included
-// in the result. The returned slice is up to a length of the arg maxResults or
-// EntryPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
-	return db.get().GetServers(id, maxResults)
+// in the result. The returned slice is up to a length of EntryPerPage, and is
+// sorted in ascending id order.
+func GetServers(id int64) ([]*ServerMetric, bool) {
+	return db.get().GetServers(id)
 }
 
 // GetServerSockets returns a slice of server's (identified by id) normal socket's
@@ -162,10 +134,10 @@ func GetServers(id int64, maxResults int64) ([]*ServerMetric, bool) {
 // be queried for.
 //
 // The arg startID specifies that only sockets with id at or above it will be
-// included in the result. The returned slice is up to a length of the arg maxResults
-// or EntryPerPage if maxResults is zero, and is sorted in ascending id order.
-func GetServerSockets(id int64, startID int64, maxResults int64) ([]*SocketMetric, bool) {
-	return db.get().GetServerSockets(id, startID, maxResults)
+// included in the result. The returned slice is up to a length of EntryPerPage,
+// and is sorted in ascending id order.
+func GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool) {
+	return db.get().GetServerSockets(id, startID)
 }
 
 // GetChannel returns the ChannelMetric for the channel (identified by id).
@@ -181,11 +153,6 @@ func GetSubChannel(id int64) *SubChannelMetric {
 // GetSocket returns the SocketInternalMetric for the socket (identified by id).
 func GetSocket(id int64) *SocketMetric {
 	return db.get().GetSocket(id)
-}
-
-// GetServer returns the ServerMetric for the server (identified by id).
-func GetServer(id int64) *ServerMetric {
-	return db.get().GetServer(id)
 }
 
 // RegisterChannel registers the given channel c in channelz database with ref
@@ -216,7 +183,7 @@ func RegisterChannel(c Channel, pid int64, ref string) int64 {
 // by pid). It returns the unique channelz tracking id assigned to this subchannel.
 func RegisterSubChannel(c Channel, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.ErrorDepth(0, "a SubChannel's parent id cannot be 0")
+		grpclog.Error("a SubChannel's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -253,7 +220,7 @@ func RegisterServer(s Server, ref string) int64 {
 // this listen socket.
 func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.ErrorDepth(0, "a ListenSocket's parent id cannot be 0")
+		grpclog.Error("a ListenSocket's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -268,7 +235,7 @@ func RegisterListenSocket(s Socket, pid int64, ref string) int64 {
 // this normal socket.
 func RegisterNormalSocket(s Socket, pid int64, ref string) int64 {
 	if pid == 0 {
-		grpclog.ErrorDepth(0, "a NormalSocket's parent id cannot be 0")
+		grpclog.Error("a NormalSocket's parent id cannot be 0")
 		return 0
 	}
 	id := idGen.genID()
@@ -294,19 +261,7 @@ type TraceEventDesc struct {
 }
 
 // AddTraceEvent adds trace related to the entity with specified id, using the provided TraceEventDesc.
-func AddTraceEvent(id int64, depth int, desc *TraceEventDesc) {
-	for d := desc; d != nil; d = d.Parent {
-		switch d.Severity {
-		case CtUNKNOWN:
-			grpclog.InfoDepth(depth+1, d.Desc)
-		case CtINFO:
-			grpclog.InfoDepth(depth+1, d.Desc)
-		case CtWarning:
-			grpclog.WarningDepth(depth+1, d.Desc)
-		case CtError:
-			grpclog.ErrorDepth(depth+1, d.Desc)
-		}
-	}
+func AddTraceEvent(id int64, desc *TraceEventDesc) {
 	if getMaxTraceEntry() == 0 {
 		return
 	}
@@ -492,32 +447,29 @@ func copyMap(m map[int64]string) map[int64]string {
 	return n
 }
 
-func min(a, b int64) int64 {
+func min(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func (c *channelMap) GetTopChannels(id int64, maxResults int64) ([]*ChannelMetric, bool) {
-	if maxResults <= 0 {
-		maxResults = EntryPerPage
-	}
+func (c *channelMap) GetTopChannels(id int64) ([]*ChannelMetric, bool) {
 	c.mu.RLock()
-	l := int64(len(c.topLevelChannels))
+	l := len(c.topLevelChannels)
 	ids := make([]int64, 0, l)
-	cns := make([]*channel, 0, min(l, maxResults))
+	cns := make([]*channel, 0, min(l, EntryPerPage))
 
 	for k := range c.topLevelChannels {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
-	count := int64(0)
+	count := 0
 	var end bool
 	var t []*ChannelMetric
 	for i, v := range ids[idx:] {
-		if count == maxResults {
+		if count == EntryPerPage {
 			break
 		}
 		if cn, ok := c.channels[v]; ok {
@@ -547,24 +499,21 @@ func (c *channelMap) GetTopChannels(id int64, maxResults int64) ([]*ChannelMetri
 	return t, end
 }
 
-func (c *channelMap) GetServers(id, maxResults int64) ([]*ServerMetric, bool) {
-	if maxResults <= 0 {
-		maxResults = EntryPerPage
-	}
+func (c *channelMap) GetServers(id int64) ([]*ServerMetric, bool) {
 	c.mu.RLock()
-	l := int64(len(c.servers))
+	l := len(c.servers)
 	ids := make([]int64, 0, l)
-	ss := make([]*server, 0, min(l, maxResults))
+	ss := make([]*server, 0, min(l, EntryPerPage))
 	for k := range c.servers {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
 	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
-	count := int64(0)
+	count := 0
 	var end bool
 	var s []*ServerMetric
 	for i, v := range ids[idx:] {
-		if count == maxResults {
+		if count == EntryPerPage {
 			break
 		}
 		if svr, ok := c.servers[v]; ok {
@@ -592,10 +541,7 @@ func (c *channelMap) GetServers(id, maxResults int64) ([]*ServerMetric, bool) {
 	return s, end
 }
 
-func (c *channelMap) GetServerSockets(id int64, startID int64, maxResults int64) ([]*SocketMetric, bool) {
-	if maxResults <= 0 {
-		maxResults = EntryPerPage
-	}
+func (c *channelMap) GetServerSockets(id int64, startID int64) ([]*SocketMetric, bool) {
 	var svr *server
 	var ok bool
 	c.mu.RLock()
@@ -605,18 +551,18 @@ func (c *channelMap) GetServerSockets(id int64, startID int64, maxResults int64)
 		return nil, true
 	}
 	svrskts := svr.sockets
-	l := int64(len(svrskts))
+	l := len(svrskts)
 	ids := make([]int64, 0, l)
-	sks := make([]*normalSocket, 0, min(l, maxResults))
+	sks := make([]*normalSocket, 0, min(l, EntryPerPage))
 	for k := range svrskts {
 		ids = append(ids, k)
 	}
 	sort.Sort(int64Slice(ids))
-	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= startID })
-	count := int64(0)
+	idx := sort.Search(len(ids), func(i int) bool { return ids[i] >= id })
+	count := 0
 	var end bool
 	for i, v := range ids[idx:] {
-		if count == maxResults {
+		if count == EntryPerPage {
 			break
 		}
 		if ns, ok := c.normalSockets[v]; ok {
@@ -655,11 +601,8 @@ func (c *channelMap) GetChannel(id int64) *ChannelMetric {
 	}
 	cm.NestedChans = copyMap(cn.nestedChans)
 	cm.SubChans = copyMap(cn.subChans)
-	// cn.c can be set to &dummyChannel{} when deleteSelfFromMap is called. Save a copy of cn.c when
-	// holding the lock to prevent potential data race.
-	chanCopy := cn.c
 	c.mu.RUnlock()
-	cm.ChannelData = chanCopy.ChannelzMetric()
+	cm.ChannelData = cn.c.ChannelzMetric()
 	cm.ID = cn.id
 	cm.RefName = cn.refName
 	cm.Trace = cn.trace.dumpData()
@@ -677,11 +620,8 @@ func (c *channelMap) GetSubChannel(id int64) *SubChannelMetric {
 		return nil
 	}
 	cm.Sockets = copyMap(sc.sockets)
-	// sc.c can be set to &dummyChannel{} when deleteSelfFromMap is called. Save a copy of sc.c when
-	// holding the lock to prevent potential data race.
-	chanCopy := sc.c
 	c.mu.RUnlock()
-	cm.ChannelData = chanCopy.ChannelzMetric()
+	cm.ChannelData = sc.c.ChannelzMetric()
 	cm.ID = sc.id
 	cm.RefName = sc.refName
 	cm.Trace = sc.trace.dumpData()
@@ -707,23 +647,6 @@ func (c *channelMap) GetSocket(id int64) *SocketMetric {
 	}
 	c.mu.RUnlock()
 	return nil
-}
-
-func (c *channelMap) GetServer(id int64) *ServerMetric {
-	sm := &ServerMetric{}
-	var svr *server
-	var ok bool
-	c.mu.RLock()
-	if svr, ok = c.servers[id]; !ok {
-		c.mu.RUnlock()
-		return nil
-	}
-	sm.ListenSockets = copyMap(svr.listenSockets)
-	c.mu.RUnlock()
-	sm.ID = svr.id
-	sm.RefName = svr.refName
-	sm.ServerData = svr.s.ChannelzMetric()
-	return sm
 }
 
 type idGenerator struct {
