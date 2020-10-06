@@ -69,7 +69,7 @@ func yamlConvertMessage(m *Message, s *bytes.Buffer) {
 	if m.QueryZone != nil {
 		name, _, err := dns.UnpackDomainName(m.QueryZone, 0)
 		if err != nil {
-			fmt.Fprintf(s, "  # query_zone: parse failed: %v\n", err)
+			s.WriteString("  # query_zone: parse failed\n")
 		} else {
 			s.WriteString(fmt.Sprint("  query_zone: ", strconv.Quote(name), "\n"))
 		}
@@ -79,7 +79,7 @@ func yamlConvertMessage(m *Message, s *bytes.Buffer) {
 		msg := new(dns.Msg)
 		err := msg.Unpack(m.QueryMessage)
 		if err != nil {
-			fmt.Fprintf(s, "  # query_message: parse failed: %v\n", err)
+			s.WriteString("  # query_message: parse failed\n")
 		} else {
 			s.WriteString("  query_message: |\n")
 			s.WriteString("    " + strings.Replace(strings.TrimSpace(msg.String()), "\n", "\n    ", -1) + "\n")
@@ -89,7 +89,7 @@ func yamlConvertMessage(m *Message, s *bytes.Buffer) {
 		msg := new(dns.Msg)
 		err := msg.Unpack(m.ResponseMessage)
 		if err != nil {
-			fmt.Fprintf(s, "  # response_message: parse failed: %v\n", err)
+			s.WriteString(fmt.Sprint("  # response_message: parse failed: ", err, "\n"))
 		} else {
 			s.WriteString("  response_message: |\n")
 			s.WriteString("    " + strings.Replace(strings.TrimSpace(msg.String()), "\n", "\n    ", -1) + "\n")
@@ -98,8 +98,6 @@ func yamlConvertMessage(m *Message, s *bytes.Buffer) {
 	s.WriteString("---\n")
 }
 
-// YamlFormat renders a dnstap message in YAML format. Any encapsulated DNS
-// messages are rendered as strings in a format similar to 'dig' output.
 func YamlFormat(dt *Dnstap) (out []byte, ok bool) {
 	var s bytes.Buffer
 

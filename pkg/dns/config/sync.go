@@ -20,7 +20,8 @@ import (
 	"encoding/json"
 
 	fed "k8s.io/dns/pkg/dns/federation"
-	"k8s.io/klog/v2"
+
+	"github.com/golang/glog"
 )
 
 // Sync manages synchronization of the config map.
@@ -96,15 +97,15 @@ func (sync *kubeSync) Periodic() <-chan *Config {
 }
 
 func (sync *kubeSync) processUpdate(result syncResult, buildUnchangedConfig bool) (config *Config, changed bool, err error) {
-	klog.V(4).Infof("processUpdate %+v", result)
+	glog.V(4).Infof("processUpdate %+v", result)
 
 	if result.Version != sync.latestVersion {
-		klog.V(3).Infof("Updating config to version %v (was %v)",
+		glog.V(3).Infof("Updating config to version %v (was %v)",
 			result.Version, sync.latestVersion)
 		changed = true
 		sync.latestVersion = result.Version
 	} else {
-		klog.V(4).Infof("Config was unchanged (version %v)", sync.latestVersion)
+		glog.V(4).Infof("Config was unchanged (version %v)", sync.latestVersion)
 		// short-circuit if we haven't been asked to build an unchanged config object
 		if !buildUnchangedConfig {
 			return
@@ -125,18 +126,18 @@ func (sync *kubeSync) processUpdate(result syncResult, buildUnchangedConfig bool
 	} {
 		value, ok := result.Data[key]
 		if !ok {
-			klog.V(3).Infof("No %v present", key)
+			glog.V(3).Infof("No %v present", key)
 			continue
 		}
 
 		if err = updateFn(key, value, config); err != nil {
-			klog.Errorf("Invalid configuration for %v, ignoring update: %v", key, err)
+			glog.Errorf("Invalid configuration for %v, ignoring update: %v", key, err)
 			return
 		}
 	}
 
 	if err = config.Validate(); err != nil {
-		klog.Errorf("Invalid configuration: %v (value was %+v), ignoring update", err, config)
+		glog.Errorf("Invalid configuration: %v (value was %+v), ignoring update", err, config)
 		config = nil
 		return
 	}
@@ -149,10 +150,10 @@ type fieldUpdateFn func(key string, data string, config *Config) error
 func updateFederations(key string, value string, config *Config) error {
 	config.Federations = make(map[string]string)
 	if err := fed.ParseFederationsFlag(value, config.Federations); err != nil {
-		klog.Errorf("Invalid federations value: %v (value was %q)", err, value)
+		glog.Errorf("Invalid federations value: %v (value was %q)", err, value)
 		return err
 	}
-	klog.V(2).Infof("Updated %v to %v", key, config.Federations)
+	glog.V(2).Infof("Updated %v to %v", key, config.Federations)
 
 	return nil
 }
@@ -160,20 +161,20 @@ func updateFederations(key string, value string, config *Config) error {
 func updateStubDomains(key string, value string, config *Config) error {
 	config.StubDomains = make(map[string][]string)
 	if err := json.Unmarshal([]byte(value), &config.StubDomains); err != nil {
-		klog.Errorf("Invalid JSON %q: %v", value, err)
+		glog.Errorf("Invalid JSON %q: %v", value, err)
 		return err
 	}
-	klog.V(2).Infof("Updated %v to %v", key, config.StubDomains)
+	glog.V(2).Infof("Updated %v to %v", key, config.StubDomains)
 
 	return nil
 }
 
 func updateUpstreamNameservers(key string, value string, config *Config) error {
 	if err := json.Unmarshal([]byte(value), &config.UpstreamNameservers); err != nil {
-		klog.Errorf("Invalid JSON %q: %v", value, err)
+		glog.Errorf("Invalid JSON %q: %v", value, err)
 		return err
 	}
-	klog.V(2).Infof("Updated %v to %v", key, config.UpstreamNameservers)
+	glog.V(2).Infof("Updated %v to %v", key, config.UpstreamNameservers)
 
 	return nil
 }

@@ -1,5 +1,3 @@
-// untested sections: 5
-
 package matchers
 
 import (

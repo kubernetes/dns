@@ -4,14 +4,12 @@ package reload
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/caddyserver/caddy"
 	"github.com/caddyserver/caddy/caddyfile"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -63,6 +61,7 @@ func hook(event caddy.EventName, info interface{}) error {
 	if event != caddy.InstanceStartupEvent {
 		return nil
 	}
+
 	// if reload is removed from the Corefile, then the hook
 	// is still registered but setup is never called again
 	// so we need a flag to tell us not to reload
@@ -97,17 +96,15 @@ func hook(event caddy.EventName, info interface{}) error {
 				}
 				s := md5.Sum(parsedCorefile)
 				if s != md5sum {
-					reloadInfo.Delete(prometheus.Labels{"hash": "md5", "value": hex.EncodeToString(md5sum[:])})
 					// Let not try to restart with the same file, even though it is wrong.
 					md5sum = s
 					// now lets consider that plugin will not be reload, unless appear in next config file
 					// change status of usage will be reset in setup if the plugin appears in config file
 					r.setUsage(maybeUsed)
 					_, err := instance.Restart(corefile)
-					reloadInfo.WithLabelValues("md5", hex.EncodeToString(md5sum[:])).Set(1)
 					if err != nil {
 						log.Errorf("Corefile changed but reload failed: %s", err)
-						failedCount.Add(1)
+						FailedCount.Add(1)
 						continue
 					}
 					// we are done, if the plugin was not set used, then it is not.

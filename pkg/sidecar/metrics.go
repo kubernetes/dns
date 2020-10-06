@@ -21,10 +21,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/dns/pkg/dnsmasq"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -101,7 +101,7 @@ func InitializeMetrics(options *Options) {
 		err := http.ListenAndServe(
 			fmt.Sprintf("%s:%d", options.PrometheusAddr, options.PrometheusPort), nil)
 		if err != nil {
-			klog.Fatalf("Error starting metrics server: %v", err)
+			glog.Fatalf("Error starting metrics server: %v", err)
 		}
 	}()
 }

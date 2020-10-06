@@ -19,12 +19,11 @@ package v1
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ref "k8s.io/client-go/tools/reference"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 // The EventExpansion interface allows manually adding extra methods to the EventInterface.
@@ -100,7 +99,7 @@ func (e *events) PatchWithEventNamespace(incompleteEvent *v1.Event, data []byte)
 // object must match this event's client namespace unless the event client
 // was made with the "" namespace.
 func (e *events) Search(scheme *runtime.Scheme, objOrRef runtime.Object) (*v1.EventList, error) {
-	ref, err := ref.GetReference(scheme, objOrRef)
+	ref, err := v1.GetReference(scheme, objOrRef)
 	if err != nil {
 		return nil, err
 	}

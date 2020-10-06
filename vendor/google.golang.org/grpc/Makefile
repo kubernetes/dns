@@ -1,4 +1,4 @@
-all: vet test testrace
+all: vet test testrace testappengine
 
 build: deps
 	go build google.golang.org/grpc/...
@@ -18,9 +18,6 @@ proto:
 
 test: testdeps
 	go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-
-testsubmodule: testdeps
-	cd security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
 
 testappengine: testappenginedeps
 	goapp test -cpu 1,4 -timeout 7m google.golang.org/grpc/...

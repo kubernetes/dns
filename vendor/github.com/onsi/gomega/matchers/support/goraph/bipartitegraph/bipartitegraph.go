@@ -1,5 +1,6 @@
 package bipartitegraph
 
+import "errors"
 import "fmt"
 
 import . "github.com/onsi/gomega/matchers/support/goraph/node"
@@ -13,12 +14,12 @@ type BipartiteGraph struct {
 
 func NewBipartiteGraph(leftValues, rightValues []interface{}, neighbours func(interface{}, interface{}) (bool, error)) (*BipartiteGraph, error) {
 	left := NodeOrderedSet{}
-	for i := range leftValues {
+	for i, _ := range leftValues {
 		left = append(left, Node{Id: i})
 	}
 
 	right := NodeOrderedSet{}
-	for j := range rightValues {
+	for j, _ := range rightValues {
 		right = append(right, Node{Id: j + len(left)})
 	}
 
@@ -27,7 +28,7 @@ func NewBipartiteGraph(leftValues, rightValues []interface{}, neighbours func(in
 		for j, rightValue := range rightValues {
 			neighbours, err := neighbours(leftValue, rightValue)
 			if err != nil {
-				return nil, fmt.Errorf("error determining adjacency for %v and %v: %s", leftValue, rightValue, err.Error())
+				return nil, errors.New(fmt.Sprintf("error determining adjacency for %v and %v: %s", leftValue, rightValue, err.Error()))
 			}
 
 			if neighbours {

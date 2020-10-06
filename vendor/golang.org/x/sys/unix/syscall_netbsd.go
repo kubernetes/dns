@@ -13,7 +13,6 @@
 package unix
 
 import (
-	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -94,16 +93,21 @@ func nametomib(name string) (mib []_C_int, err error) {
 	return mib, nil
 }
 
-func direntIno(buf []byte) (uint64, bool) {
-	return readInt(buf, unsafe.Offsetof(Dirent{}.Fileno), unsafe.Sizeof(Dirent{}.Fileno))
-}
+func SysctlClockinfo(name string) (*Clockinfo, error) {
+	mib, err := sysctlmib(name)
+	if err != nil {
+		return nil, err
+	}
 
-func direntReclen(buf []byte) (uint64, bool) {
-	return readInt(buf, unsafe.Offsetof(Dirent{}.Reclen), unsafe.Sizeof(Dirent{}.Reclen))
-}
-
-func direntNamlen(buf []byte) (uint64, bool) {
-	return readInt(buf, unsafe.Offsetof(Dirent{}.Namlen), unsafe.Sizeof(Dirent{}.Namlen))
+	n := uintptr(SizeofClockinfo)
+	var ci Clockinfo
+	if err := sysctl(mib, (*byte)(unsafe.Pointer(&ci)), &n, nil, 0); err != nil {
+		return nil, err
+	}
+	if n != SizeofClockinfo {
+		return nil, EIO
+	}
+	return &ci, nil
 }
 
 //sysnb pipe() (fd1 int, fd2 int, err error)
@@ -115,30 +119,9 @@ func Pipe(p []int) (err error) {
 	return
 }
 
-//sys Getdents(fd int, buf []byte) (n int, err error)
+//sys getdents(fd int, buf []byte) (n int, err error)
 func Getdirentries(fd int, buf []byte, basep *uintptr) (n int, err error) {
-	n, err = Getdents(fd, buf)
-	if err != nil || basep == nil {
-		return
-	}
-
-	var off int64
-	off, err = Seek(fd, 0, 1 /* SEEK_CUR */)
-	if err != nil {
-		*basep = ^uintptr(0)
-		return
-	}
-	*basep = uintptr(off)
-	if unsafe.Sizeof(*basep) == 8 {
-		return
-	}
-	if off>>32 != 0 {
-		// We can't stuff the offset back into a uintptr, so any
-		// future calls would be suspect. Generate an error.
-		// EIO is allowed by getdirentries.
-		err = EIO
-	}
-	return
+	return getdents(fd, buf)
 }
 
 const ImplementsGetwd = true
@@ -170,12 +153,40 @@ func setattrlistTimes(path string, times []Timespec, flags int) error {
 
 //sys	ioctl(fd int, req uint, arg uintptr) (err error)
 
-//sys   sysctl(mib []_C_int, old *byte, oldlen *uintptr, new *byte, newlen uintptr) (err error) = SYS___SYSCTL
+// ioctl itself should not be exposed directly, but additional get/set
+// functions for specific types are permissible.
 
-func IoctlGetPtmget(fd int, req uint) (*Ptmget, error) {
-	var value Ptmget
+// IoctlSetInt performs an ioctl operation which sets an integer value
+// on fd, using the specified request number.
+func IoctlSetInt(fd int, req uint, value int) error {
+	return ioctl(fd, req, uintptr(value))
+}
+
+func ioctlSetWinsize(fd int, req uint, value *Winsize) error {
+	return ioctl(fd, req, uintptr(unsafe.Pointer(value)))
+}
+
+func ioctlSetTermios(fd int, req uint, value *Termios) error {
+	return ioctl(fd, req, uintptr(unsafe.Pointer(value)))
+}
+
+// IoctlGetInt performs an ioctl operation which gets an integer value
+// from fd, using the specified request number.
+func IoctlGetInt(fd int, req uint) (int, error) {
+	var value int
 	err := ioctl(fd, req, uintptr(unsafe.Pointer(&value)))
-	runtime.KeepAlive(value)
+	return value, err
+}
+
+func IoctlGetWinsize(fd int, req uint) (*Winsize, error) {
+	var value Winsize
+	err := ioctl(fd, req, uintptr(unsafe.Pointer(&value)))
+	return &value, err
+}
+
+func IoctlGetTermios(fd int, req uint) (*Termios, error) {
+	var value Termios
+	err := ioctl(fd, req, uintptr(unsafe.Pointer(&value)))
 	return &value, err
 }
 
@@ -225,21 +236,6 @@ func Uname(uname *Utsname) error {
 	return nil
 }
 
-func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
-	if raceenabled {
-		raceReleaseMerge(unsafe.Pointer(&ioSync))
-	}
-	return sendfile(outfd, infd, offset, count)
-}
-
-func Fstatvfs(fd int, buf *Statvfs_t) (err error) {
-	return Fstatvfs1(fd, buf, ST_WAIT)
-}
-
-func Statvfs(path string, buf *Statvfs_t) (err error) {
-	return Statvfs1(path, buf, ST_WAIT)
-}
-
 /*
  * Exposed directly
  */
@@ -253,7 +249,6 @@ func Statvfs(path string, buf *Statvfs_t) (err error) {
 //sys	Close(fd int) (err error)
 //sys	Dup(fd int) (nfd int, err error)
 //sys	Dup2(from int, to int) (err error)
-//sys	Dup3(from int, to int, flags int) (err error)
 //sys	Exit(code int)
 //sys	ExtattrGetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error)
 //sys	ExtattrSetFd(fd int, attrnamespace int, attrname string, data uintptr, nbytes int) (ret int, err error)
@@ -274,12 +269,10 @@ func Statvfs(path string, buf *Statvfs_t) (err error) {
 //sys	Fchmod(fd int, mode uint32) (err error)
 //sys	Fchmodat(dirfd int, path string, mode uint32, flags int) (err error)
 //sys	Fchown(fd int, uid int, gid int) (err error)
-//sys	Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error)
 //sys	Flock(fd int, how int) (err error)
 //sys	Fpathconf(fd int, name int) (val int, err error)
 //sys	Fstat(fd int, stat *Stat_t) (err error)
 //sys	Fstatat(fd int, path string, stat *Stat_t, flags int) (err error)
-//sys	Fstatvfs1(fd int, buf *Statvfs_t, flags int) (err error) = SYS_FSTATVFS1
 //sys	Fsync(fd int) (err error)
 //sys	Ftruncate(fd int, length int64) (err error)
 //sysnb	Getegid() (egid int)
@@ -300,15 +293,11 @@ func Statvfs(path string, buf *Statvfs_t) (err error) {
 //sys	Kqueue() (fd int, err error)
 //sys	Lchown(path string, uid int, gid int) (err error)
 //sys	Link(path string, link string) (err error)
-//sys	Linkat(pathfd int, path string, linkfd int, link string, flags int) (err error)
 //sys	Listen(s int, backlog int) (err error)
 //sys	Lstat(path string, stat *Stat_t) (err error)
 //sys	Mkdir(path string, mode uint32) (err error)
-//sys	Mkdirat(dirfd int, path string, mode uint32) (err error)
 //sys	Mkfifo(path string, mode uint32) (err error)
-//sys	Mkfifoat(dirfd int, path string, mode uint32) (err error)
 //sys	Mknod(path string, mode uint32, dev int) (err error)
-//sys	Mknodat(dirfd int, path string, mode uint32, dev int) (err error)
 //sys	Nanosleep(time *Timespec, leftover *Timespec) (err error)
 //sys	Open(path string, mode int, perm uint32) (fd int, err error)
 //sys	Openat(dirfd int, path string, mode int, perm uint32) (fd int, err error)
@@ -317,13 +306,11 @@ func Statvfs(path string, buf *Statvfs_t) (err error) {
 //sys	Pwrite(fd int, p []byte, offset int64) (n int, err error)
 //sys	read(fd int, p []byte) (n int, err error)
 //sys	Readlink(path string, buf []byte) (n int, err error)
-//sys	Readlinkat(dirfd int, path string, buf []byte) (n int, err error)
 //sys	Rename(from string, to string) (err error)
-//sys	Renameat(fromfd int, from string, tofd int, to string) (err error)
 //sys	Revoke(path string) (err error)
 //sys	Rmdir(path string) (err error)
 //sys	Seek(fd int, offset int64, whence int) (newoffset int64, err error) = SYS_LSEEK
-//sys	Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error)
+//sys	Select(n int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (err error)
 //sysnb	Setegid(egid int) (err error)
 //sysnb	Seteuid(euid int) (err error)
 //sysnb	Setgid(gid int) (err error)
@@ -336,14 +323,11 @@ func Statvfs(path string, buf *Statvfs_t) (err error) {
 //sysnb	Settimeofday(tp *Timeval) (err error)
 //sysnb	Setuid(uid int) (err error)
 //sys	Stat(path string, stat *Stat_t) (err error)
-//sys	Statvfs1(path string, buf *Statvfs_t, flags int) (err error) = SYS_STATVFS1
 //sys	Symlink(path string, link string) (err error)
-//sys	Symlinkat(oldpath string, newdirfd int, newpath string) (err error)
 //sys	Sync() (err error)
 //sys	Truncate(path string, length int64) (err error)
 //sys	Umask(newmask int) (oldmask int)
 //sys	Unlink(path string) (err error)
-//sys	Unlinkat(dirfd int, path string, flags int) (err error)
 //sys	Unmount(path string, flags int) (err error)
 //sys	write(fd int, p []byte) (n int, err error)
 //sys	mmap(addr uintptr, length uintptr, prot int, flag int, fd int, pos int64) (ret uintptr, err error)

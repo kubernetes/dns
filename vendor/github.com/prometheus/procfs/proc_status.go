@@ -15,10 +15,10 @@ package procfs
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
-
-	"github.com/prometheus/procfs/internal/util"
 )
 
 // ProcStatus provides status information about the process,
@@ -33,37 +33,37 @@ type ProcStatus struct {
 	TGID int
 
 	// Peak virtual memory size.
-	VmPeak uint64 // nolint:golint
+	VmPeak uint64
 	// Virtual memory size.
-	VmSize uint64 // nolint:golint
+	VmSize uint64
 	// Locked memory size.
-	VmLck uint64 // nolint:golint
+	VmLck uint64
 	// Pinned memory size.
-	VmPin uint64 // nolint:golint
+	VmPin uint64
 	// Peak resident set size.
-	VmHWM uint64 // nolint:golint
+	VmHWM uint64
 	// Resident set size (sum of RssAnnon RssFile and RssShmem).
-	VmRSS uint64 // nolint:golint
+	VmRSS uint64
 	// Size of resident anonymous memory.
-	RssAnon uint64 // nolint:golint
+	RssAnon uint64
 	// Size of resident file mappings.
-	RssFile uint64 // nolint:golint
+	RssFile uint64
 	// Size of resident shared memory.
-	RssShmem uint64 // nolint:golint
+	RssShmem uint64
 	// Size of data segments.
-	VmData uint64 // nolint:golint
+	VmData uint64
 	// Size of stack segments.
-	VmStk uint64 // nolint:golint
+	VmStk uint64
 	// Size of text segments.
-	VmExe uint64 // nolint:golint
+	VmExe uint64
 	// Shared library code size.
-	VmLib uint64 // nolint:golint
+	VmLib uint64
 	// Page table entries size.
-	VmPTE uint64 // nolint:golint
+	VmPTE uint64
 	// Size of second-level page tables.
-	VmPMD uint64 // nolint:golint
+	VmPMD uint64
 	// Swapped-out virtual memory size by anonymous private.
-	VmSwap uint64 // nolint:golint
+	VmSwap uint64
 	// Size of hugetlb memory portions
 	HugetlbPages uint64
 
@@ -71,14 +71,17 @@ type ProcStatus struct {
 	VoluntaryCtxtSwitches uint64
 	// Number of involuntary context switches.
 	NonVoluntaryCtxtSwitches uint64
-
-	// UIDs of the process (Real, effective, saved set, and filesystem UIDs (GIDs))
-	UIDs [4]string
 }
 
 // NewStatus returns the current status information of the process.
 func (p Proc) NewStatus() (ProcStatus, error) {
-	data, err := util.ReadFileNoStat(p.path("status"))
+	f, err := os.Open(p.path("status"))
+	if err != nil {
+		return ProcStatus{}, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
 	if err != nil {
 		return ProcStatus{}, err
 	}
@@ -117,8 +120,6 @@ func (s *ProcStatus) fillStatus(k string, vString string, vUint uint64, vUintByt
 		s.TGID = int(vUint)
 	case "Name":
 		s.Name = vString
-	case "Uid":
-		copy(s.UIDs[:], strings.Split(vString, "\t"))
 	case "VmPeak":
 		s.VmPeak = vUintBytes
 	case "VmSize":
