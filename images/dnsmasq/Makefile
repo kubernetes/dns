@@ -29,7 +29,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 
 BASEIMAGE ?= us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.2
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.0
+	COMPILE_IMAGE := us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.2
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
