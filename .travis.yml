@@ -35,4 +35,6 @@ script:
 - make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
+- rm -rf vendor/github.com/onsi/ginkgo/extensions/table
+- mv /go/src/github.com/onsi/ginkgo/extensions/table vendor/github.com/onsi/ginkgo/extensions
 - ginkgo test/e2e
