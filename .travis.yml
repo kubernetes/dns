@@ -25,8 +25,7 @@ services:
 install:
 - mkdir -p ${GOPATH}/src/k8s.io
 - ln -s `pwd` ${GOPATH}/src/k8s.io/dns
-- go get -v github.com/onsi/ginkgo/ginkgo
-- go get -v github.com/onsi/gomega
+- go install github.com/onsi/ginkgo/ginkgo
 - export PATH=$PATH:$HOME/gopath/bin
 
 script:
@@ -35,6 +34,4 @@ script:
 - make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
-- rm -rf vendor/github.com/onsi/ginkgo/extensions/table
-- mv /go/src/github.com/onsi/ginkgo/extensions/table vendor/github.com/onsi/ginkgo/extensions
 - ginkgo test/e2e
