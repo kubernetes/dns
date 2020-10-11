@@ -25,6 +25,7 @@ services:
 install:
 - mkdir -p ${GOPATH}/src/k8s.io
 - ln -s `pwd` ${GOPATH}/src/k8s.io/dns
+- export GOPATH=$GOPATH:${GOPATH}/src/k8s.io/dns
 - go install github.com/onsi/ginkgo/ginkgo
 - export PATH=$PATH:$HOME/gopath/bin
 
