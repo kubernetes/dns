@@ -25,11 +25,16 @@ services:
 install:
 - mkdir -p ${GOPATH}/src/k8s.io
 - ln -s `pwd` ${GOPATH}/src/k8s.io/dns
-- export GOPATH=$GOPATH:${GOPATH}/src/k8s.io/dns
-- go install github.com/onsi/ginkgo/ginkgo
+- GO111MODULE="off" go get -v -t ./...
+- GO111MODULE="off" go get golang.org/x/tools/cmd/cover
+- GO111MODULE="off" go get github.com/onsi/gomega
+- GO111MODULE="off" go install github.com/onsi/ginkgo/ginkgo
 - export PATH=$PATH:$HOME/gopath/bin
 
 script:
+- GO111MODULE="on" go mod tidy
+- diff -u <(echo -n) <(git diff go.mod)
+- diff -u <(echo -n) <(git diff go.sum)
 - make build
 - make test
 - make all-containers
