@@ -23,8 +23,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
 	"github.com/skynetservices/skydns/msg"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -65,7 +66,7 @@ func ReverseArray(arr []string) []string {
 func GetSkyMsg(ip string, port int) (*msg.Service, string) {
 	msg := NewServiceRecord(ip, port)
 	hash := HashServiceRecord(msg)
-	glog.V(5).Infof("Constructed new DNS record: %s, hash:%s",
+	klog.V(5).Infof("Constructed new DNS record: %s, hash:%s",
 		fmt.Sprintf("%v", msg), hash)
 	return msg, fmt.Sprintf("%x", hash)
 }
@@ -108,4 +109,10 @@ func ValidateNameserverIpAndPort(nameServer string) (string, string, error) {
 		return "", "", fmt.Errorf("bad port number: %q", port)
 	}
 	return host, port, nil
+}
+
+// IsServiceIPSet aims to check if the service's ClusterIP is set or not
+// the objective is not to perform validation here
+func IsServiceIPSet(service *corev1.Service) bool {
+	return service.Spec.ClusterIP != corev1.ClusterIPNone && service.Spec.ClusterIP != ""
 }

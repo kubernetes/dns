@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/client-go/util/clock"
-	"k8s.io/client-go/util/integer"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/integer"
 )
 
 type backoffEntry struct {
@@ -99,7 +99,7 @@ func (p *Backoff) IsInBackOffSince(id string, eventTime time.Time) bool {
 	if hasExpired(eventTime, entry.lastUpdate, p.maxDuration) {
 		return false
 	}
-	return p.Clock.Now().Sub(eventTime) < entry.backoff
+	return p.Clock.Since(eventTime) < entry.backoff
 }
 
 // Returns True if time since lastupdate is less than the current backoff window.

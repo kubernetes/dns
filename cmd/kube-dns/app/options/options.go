@@ -27,9 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
-	"k8s.io/kubernetes/pkg/api"
 )
 
 type KubeDNSConfig struct {
@@ -64,7 +64,7 @@ func NewKubeDNSConfig() *KubeDNSConfig {
 
 		Federations: make(map[string]string),
 
-		ConfigMapNs: api.NamespaceSystem,
+		ConfigMapNs: metav1.NamespaceSystem,
 		ConfigMap:   "", // default to using command line flags
 
 		ConfigPeriod: 10 * time.Second,
