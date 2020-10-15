@@ -23,7 +23,7 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 
-	"k8s.io/dns/cmd/ginkgo/config"
+	"github.com/onsi/ginkgo/config"
 	"k8s.io/dns/pkg/e2e"
 
 	"os"
