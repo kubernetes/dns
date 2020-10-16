@@ -46,6 +46,8 @@ GO_BINARIES := $(addprefix bin/$(ARCH)/,$(ALL_BINARIES))
 CONTAINER_BUILDSTAMPS := $(foreach BINARY,$(CONTAINER_BINARIES),.$(BUILDSTAMP_NAME)-container)
 PUSH_BUILDSTAMPS := $(foreach BINARY,$(CONTAINER_BINARIES),.$(BUILDSTAMP_NAME)-push)
 
+DOCKER_PULL ?= 1
+
 ifeq ($(VERBOSE), 1)
 	DOCKER_BUILD_FLAGS :=
 	VERBOSE_OUTPUT := >&1
@@ -97,7 +99,9 @@ build: $(GO_BINARIES) images-build
 # So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
+ifeq (DOCKER_PULL, 1)
 	@docker pull $(BUILD_IMAGE)
+endif
 	@docker run                                                            \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
@@ -137,7 +141,9 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
+ifeq (DOCKER_PULL, 1)
 	@docker pull $(BASEIMAGE)
+endif
 	@docker build					\
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
