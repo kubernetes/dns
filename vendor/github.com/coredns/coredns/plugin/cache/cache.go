@@ -210,6 +210,10 @@ func (w *ResponseWriter) set(m *dns.Msg, key uint64, mt response.Type, duration 
 	case response.NoError, response.Delegation:
 		i := newItem(m, w.now(), duration)
 		w.pcache.Add(key, i)
+		// when pre-fetching, remove the negative cache entry if it exists
+		if w.prefetch {
+			w.ncache.Remove(key)
+		}
 
 	case response.NameError, response.NoData, response.ServerError:
 		i := newItem(m, w.now(), duration)

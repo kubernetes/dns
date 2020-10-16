@@ -22,10 +22,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/glog"
-
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/dnsmasq"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -70,12 +69,13 @@ Any arguments given after "--" will be passed directly to dnsmasq itself.
 		"interval to check for configuration updates")
 	flag.StringVar(&opts.kubednsServer, "kubednsServer", opts.kubednsServer,
 		"local kubedns instance address for non-IP name resolution")
+	klog.InitFlags(nil)
 	flag.Parse()
 }
 
 func main() {
 	parseFlags()
-	glog.V(0).Infof("opts: %v", opts)
+	klog.V(0).Infof("opts: %v", opts)
 
 	sync := config.NewFileSync(opts.configDir, opts.syncInterval)
 
