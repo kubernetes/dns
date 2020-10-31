@@ -1,18 +1,18 @@
 package main
 
 import (
-	"fmt"
-
-	"k8s.io/dns/cmd/node-cache/app"
-
 	"flag"
+	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 
+	"k8s.io/dns/cmd/node-cache/app"
+
 	corednsmain "github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	utilnet "k8s.io/utils/net"
 
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
 	"github.com/caddyserver/caddy"
@@ -83,6 +83,12 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 		params.LocalIPs = append(params.LocalIPs, newIP)
 	}
 
+	// validate all the IPs have the same IP family
+	for _, ip := range params.LocalIPs {
+		if utilnet.IsIPv6(params.LocalIPs[0]) != utilnet.IsIPv6(ip) {
+			return params, fmt.Errorf("Unexpected IP Family for localIP - %q, want IPv6=%v", ip, utilnet.IsIPv6(params.LocalIPs[0]))
+		}
+	}
 	// lookup specified dns port
 	f := flag.Lookup("dns.port")
 	if f == nil {
