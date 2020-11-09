@@ -97,7 +97,10 @@ func (c *CacheApp) Init() {
 // isIPv6 return if the node-cache is working in IPv6 mode
 // LocalIPs are guaranteed to have the same family
 func (c *CacheApp) isIPv6() bool {
-	return utilnet.IsIPv6(c.params.LocalIPs[0])
+	if len(c.params.LocalIPs) > 0 {
+		return utilnet.IsIPv6(c.params.LocalIPs[0])
+	}
+	return false
 }
 
 func (c *CacheApp) initIptables() {
