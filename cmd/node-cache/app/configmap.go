@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"text/template"
@@ -35,6 +36,7 @@ const (
 	UpstreamClusterDNSVar   = "__PILLAR__CLUSTER__DNS__"
 	LocalListenIPsVar       = "__PILLAR__LOCAL__DNS__"
 	LocalDNSServerVar       = "__PILLAR__DNS__SERVER__"
+	DefaultKubednsCMPath    = "/etc/kube-dns"
 )
 
 // stubDomainInfo contains all the parameters needed to compute
@@ -146,6 +148,12 @@ func (c *CacheApp) initDNSConfigSync() {
 	var syncList []*syncInfo
 	var kubeDNSChan, NodeLocalDNSChan <-chan *config.Config
 	initialKubeDNSConfig := &config.Config{}
+
+	if c.params.KubednsCMPath == "" {
+		if _, err := os.Stat(DefaultKubednsCMPath); !os.IsNotExist(err) {
+			c.params.KubednsCMPath = DefaultKubednsCMPath
+		}
+	}
 
 	if c.params.KubednsCMPath != "" {
 		c.kubednsConfig.ConfigDir = c.params.KubednsCMPath

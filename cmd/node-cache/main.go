@@ -69,7 +69,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.BoolVar(&params.SetupEbtables, "setupebtables", false, "indicates whether ebtables rules should be setup")
 	flag.StringVar(&params.BaseCoreFile, "basecorefile", "/etc/coredns/Corefile.base", "Path to the template Corefile for node-cache")
 	flag.StringVar(&params.CoreFile, "corefile", "/etc/Corefile", "Path to the Corefile to be used by node-cache")
-	flag.StringVar(&params.KubednsCMPath, "kubednscm", "/etc/kube-dns", "Path where the kube-dns configmap will be mounted")
+	flag.StringVar(&params.KubednsCMPath, "kubednscm", "", "Path where the kube-dns configmap will be mounted")
 	flag.StringVar(&params.UpstreamSvcName, "upstreamsvc", "kube-dns", "Service name whose cluster IP is upstream for node-cache")
 	flag.StringVar(&params.HealthPort, "health-port", "8080", "port used by health plugin")
 	flag.BoolVar(&params.SkipTeardown, "skipteardown", false, "indicates whether iptables rules should be torn down on exit")
