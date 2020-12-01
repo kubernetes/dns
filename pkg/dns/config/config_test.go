@@ -35,10 +35,16 @@ func TestValidate(t *testing.T) {
 			"foo.com": []string{"ns.foo.com"},
 			"bar.com": []string{"1.2.3.4"},
 		}},
+		{StubDomains: map[string][]string{
+			"acme.local":   {"2001:db8:1:1:1::1"},
+			"google.local": {"google-public-dns-a.google.com"},
+			"widget.local": {"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"},
+		}},
 		{UpstreamNameservers: []string{}},
 		{UpstreamNameservers: []string{"1.2.3.4"}},
 		{UpstreamNameservers: []string{"1.2.3.4", "8.8.4.4", "8.8.8.8"}},
 		{UpstreamNameservers: []string{"1.2.3.4:53"}},
+		{UpstreamNameservers: []string{"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"}},
 	} {
 		err := testCase.Validate()
 		assert.Nil(t, err, "should be valid: %+v", testCase)

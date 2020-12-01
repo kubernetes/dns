@@ -18,8 +18,8 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"strconv"
-	"strings"
 
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -95,15 +95,21 @@ func (config *Config) validateStubDomains() error {
 		}
 
 		for _, ns := range nsList {
-			// TODO(rramkumar): Use net.SplitHostPort to support ipv6 case.
-			nsStrings := strings.SplitN(ns, ":", 2)
+			host, port, err := net.SplitHostPort(ns)
+			// it can error if the port is missing
+			// or if there are too many colons (invalid host)
+			// so we assume that ns is passed without port
+			// and fail later in validation if the host was invalid
+			if err != nil {
+				host = ns
+			}
 			// Validate port if specified
-			if len(nsStrings) == 2 {
-				if _, err := strconv.ParseUint(nsStrings[1], 10, 16); err != nil {
+			if port != "" {
+				if _, err := strconv.ParseUint(port, 10, 16); err != nil {
 					return fmt.Errorf("invalid nameserver: %q", ns)
 				}
 			}
-			if len(validation.IsValidIP(nsStrings[0])) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
+			if len(validation.IsValidIP(host)) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
 				return fmt.Errorf("invalid nameserver: %q", ns)
 			}
 		}
@@ -113,7 +119,6 @@ func (config *Config) validateStubDomains() error {
 }
 
 func (config *Config) validateUpstreamNameserver() error {
-
 	if len(config.UpstreamNameservers) > 3 {
 		return fmt.Errorf("upstreamNameserver cannot have more than three entries")
 	}

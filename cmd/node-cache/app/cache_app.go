@@ -16,6 +16,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/dbus"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilexec "k8s.io/utils/exec"
+	utilnet "k8s.io/utils/net"
 	utilebtables "k8s.io/utils/net/ebtables"
 )
 
@@ -93,6 +94,15 @@ func (c *CacheApp) Init() {
 	c.params.SetupIptables = setupIptables
 }
 
+// isIPv6 return if the node-cache is working in IPv6 mode
+// LocalIPs are guaranteed to have the same family
+func (c *CacheApp) isIPv6() bool {
+	if len(c.params.LocalIPs) > 0 {
+		return utilnet.IsIPv6(c.params.LocalIPs[0])
+	}
+	return false
+}
+
 func (c *CacheApp) initIptables() {
 	// using the localIPStr param since we need ip strings here
 	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
@@ -130,21 +140,29 @@ func (c *CacheApp) initIptables() {
 				"--sport", c.params.HealthPort, "-j", "NOTRACK"}},
 		}...)
 	}
-	c.iptables = newIPTables()
+	c.iptables = newIPTables(c.isIPv6())
 }
 
-func newIPTables() utiliptables.Interface {
+func newIPTables(isIPv6 bool) utiliptables.Interface {
 	execer := utilexec.New()
 	dbus := dbus.New()
-	return utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
+	protocol := utiliptables.ProtocolIpv4
+	if isIPv6 {
+		protocol = utiliptables.ProtocolIpv6
+	}
+	return utiliptables.New(execer, dbus, protocol)
 }
 
 func (c *CacheApp) initEbtables() {
+	protocol := "IPv4"
+	if c.isIPv6() {
+		protocol = "IPv6"
+	}
 	// using the localIPStr param since we need ip strings here
 	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
 		c.ebtablesRules = append(c.ebtablesRules, []ebtablesRule{
 			// Match traffic destined for localIp and use the MAC address of the bridge port as destination address
-			{utilebtables.TableBroute, utilebtables.ChainBrouting, []string{"-p", "IPv4", "--ip-dst", localIP,
+			{utilebtables.TableBroute, utilebtables.ChainBrouting, []string{"-p", protocol, "--ip-dst", localIP,
 				"-j", "redirect"}},
 		}...)
 	}
