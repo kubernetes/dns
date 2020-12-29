@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics/vars"
 	"github.com/coredns/coredns/plugin/pkg/edns"
@@ -20,7 +21,6 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/transport"
 	"github.com/coredns/coredns/request"
 
-	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
 )
@@ -66,10 +66,6 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		if site.Debug {
 			s.debug = true
 			log.D.Set()
-		} else {
-			// When reloading we need to explicitly disable debug logging if it is now disabled.
-			s.debug = false
-			log.D.Clear()
 		}
 		// set the config per zone
 		s.zones[site.Zone] = site
@@ -95,6 +91,11 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 			}
 		}
 		site.pluginChain = stack
+	}
+
+	if !s.debug {
+		// When reloading we need to explicitly disable debug logging if it is now disabled.
+		log.D.Clear()
 	}
 
 	return s, nil
@@ -193,7 +194,7 @@ func (s *Server) Stop() (err error) {
 // Address together with Stop() implement caddy.GracefulServer.
 func (s *Server) Address() string { return s.Addr }
 
-// ServeDNS is the entry point for every request to the address that s
+// ServeDNS is the entry point for every request to the address that
 // is bound to. It acts as a multiplexer for the requests zonename as
 // defined in the request so that the correct zone
 // (configuration and plugin stack) will handle the request.
@@ -239,6 +240,10 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	for {
 		if h, ok := s.zones[q[off:]]; ok {
+			if h.pluginChain == nil { // zone defined, but has not got any plugins
+				errorAndMetricsFunc(s.Addr, w, r, dns.RcodeRefused)
+				return
+			}
 			if r.Question[0].Qtype != dns.TypeDS {
 				if h.FilterFunc == nil {
 					rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)

@@ -9,14 +9,12 @@
 The *forward* plugin re-uses already opened sockets to the upstreams. It supports UDP, TCP and
 DNS-over-TLS and uses in band health checking.
 
-When it detects an error a health check is performed. This checks runs in a loop, starting with
-a *0.5s* interval and exponentially backing off with randomized intervals up to *15s* for as long
-as the upstream reports unhealthy. The exponential backoff will reset to *0.5s* after 2 minutes.
-Once healthy we stop health checking (until the next error). The health checks use a recursive
-DNS query (`. IN NS`) to get upstream health. Any response that is not a network error (REFUSED,
-NOTIMPL, SERVFAIL, etc) is taken as a healthy upstream. The health check uses the same protocol as
-specified in **TO**. If `max_fails` is set to 0, no checking is performed and upstreams will always
-be considered healthy.
+When it detects an error a health check is performed. This checks runs in a loop, performing each
+check at a *0.5s* interval for as long as the upstream reports unhealthy. Once healthy we stop
+health checking (until the next error). The health checks use a recursive DNS query (`. IN NS`)
+to get upstream health. Any response that is not a network error (REFUSED, NOTIMPL, SERVFAIL, etc)
+is taken as a healthy upstream. The health check uses the same protocol as specified in **TO**. If
+`max_fails` is set to 0, no checking is performed and upstreams will always be considered healthy.
 
 When *all* upstreams are down it assumes health checking as a mechanism has failed and will try to
 connect to a random upstream (which may or may not work).
@@ -107,16 +105,19 @@ On each endpoint, the timeouts for communication are set as follows:
 
 If monitoring is enabled (via the *prometheus* plugin) then the following metric are exported:
 
-* `coredns_forward_request_duration_seconds{to}` - duration per upstream interaction.
 * `coredns_forward_requests_total{to}` - query count per upstream.
+* `coredns_forward_responses_total{to}` - Counter of responses received per upstream.
+* `coredns_forward_request_duration_seconds{to}` - duration per upstream interaction.
 * `coredns_forward_responses_total{to, rcode}` - count of RCODEs per upstream.
 * `coredns_forward_healthcheck_failures_total{to}` - number of failed health checks per upstream.
 * `coredns_forward_healthcheck_broken_total{}` - counter of when all upstreams are unhealthy,
   and we are randomly (this always uses the `random` policy) spraying to an upstream.
-* `max_concurrent_rejects_total{}` - counter of the number of queries rejected because the
+* `coredns_forward_max_concurrent_rejects_total{}` - counter of the number of queries rejected because the
   number of concurrent queries were at maximum.
+* `coredns_forward_conn_cache_hits_total{to, proto}` - counter of connection cache hits per upstream and protocol.
+* `coredns_forward_conn_cache_misses_total{to, proto}` - counter of connection cache misses per upstream and protocol.
 Where `to` is one of the upstream servers (**TO** from the config), `rcode` is the returned RCODE
-from the upstream.
+from the upstream, `proto` is the transport protocol like `udp`, `tcp`, `tcp-tls`.
 
 ## Examples
 

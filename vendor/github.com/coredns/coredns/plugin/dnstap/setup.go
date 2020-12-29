@@ -3,22 +3,14 @@ package dnstap
 import (
 	"strings"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/dnstap/dnstapio"
 	"github.com/coredns/coredns/plugin/pkg/parse"
-
-	"github.com/caddyserver/caddy"
 )
 
-func init() { plugin.Register("dnstap", wrapSetup) }
-
-func wrapSetup(c *caddy.Controller) error {
-	if err := setup(c); err != nil {
-		return plugin.Error("dnstap", err)
-	}
-	return nil
-}
+func init() { plugin.Register("dnstap", setup) }
 
 type config struct {
 	target string
@@ -54,11 +46,11 @@ func parseConfig(d *caddy.Controller) (c config, err error) {
 func setup(c *caddy.Controller) error {
 	conf, err := parseConfig(c)
 	if err != nil {
-		return err
+		return plugin.Error("dnstap", err)
 	}
 
 	dio := dnstapio.New(conf.target, conf.socket)
-	dnstap := Dnstap{IO: dio, JoinRawMessage: conf.full}
+	dnstap := Dnstap{io: dio, IncludeRawMessage: conf.full}
 
 	c.OnStartup(func() error {
 		dio.Connect()

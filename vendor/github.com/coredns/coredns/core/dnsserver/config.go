@@ -4,9 +4,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
-
-	"github.com/caddyserver/caddy"
 )
 
 // Config configuration for a single server.
@@ -52,7 +51,7 @@ type Config struct {
 	registry map[string]plugin.Handler
 }
 
-// keyForConfig build a key for identifying the configs during setup time
+// keyForConfig builds a key for identifying the configs during setup time
 func keyForConfig(blocIndex int, blocKeyIndex int) string {
 	return fmt.Sprintf("%d:%d", blocIndex, blocKeyIndex)
 }

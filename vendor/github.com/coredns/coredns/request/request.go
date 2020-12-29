@@ -144,7 +144,7 @@ func (r *Request) Family() int {
 	return 2
 }
 
-// Do returns if the request has the DO (DNSSEC OK) bit set.
+// Do returns true if the request has the DO (DNSSEC OK) bit set.
 func (r *Request) Do() bool {
 	if r.size != 0 {
 		return r.do

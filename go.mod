@@ -3,47 +3,28 @@ module k8s.io/dns
 go 1.13
 
 require (
-	github.com/bifurcation/mint v0.0.0-20180715133206-93c51c6ce115 // indirect
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/caddyserver/caddy v1.0.5
-	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
-	github.com/coredns/coredns v1.7.0
+	github.com/coredns/coredns v1.8.0
 	github.com/coreos/etcd v3.3.25+incompatible
-	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/docker/engine-api v0.4.0 // indirect
-	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-units v0.4.0 // indirect
-	github.com/emicklei/go-restful v1.1.4-0.20170129114709-ad3e7d5a0a11 // indirect
-	github.com/go-acme/lego v2.7.2+incompatible // indirect
 	github.com/godbus/dbus v0.0.0-20181025153459-66d97aec3384 // indirect
-	github.com/golang/lint v0.0.0-20180702182130-06c8688daad7 // indirect
-	github.com/howeyc/gopass v0.0.0-20160826175423-3ca23474a7c7 // indirect
-	github.com/hpcloud/tail v1.0.1-0.20180514194441-a1dbeea552b7 // indirect
-	github.com/juju/ratelimit v0.0.0-20151125201925-77ed1c8a0121 // indirect
-	github.com/klauspost/cpuid v1.2.1 // indirect
-	github.com/lucas-clemente/aes12 v0.0.0-20171027163421-cd47fb39b79f // indirect
-	github.com/lucas-clemente/quic-clients v0.1.0 // indirect
-	github.com/lucas-clemente/quic-go-certificates v0.0.0-20160823095156-d2f86524cced // indirect
-	github.com/miekg/dns v1.1.29
+	github.com/kr/pretty v0.2.0 // indirect
+	github.com/miekg/dns v1.1.34
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.3
-	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.6.0
+	github.com/prometheus/client_golang v1.8.0
 	github.com/skynetservices/skydns v0.0.0-20191015171621-94b2ea0d8bfa
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.5.1
-	github.com/ugorji/go v0.0.0-20161130061742-9c7f9b7a2bc3 // indirect
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
-	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.18.3
-	k8s.io/apimachinery v0.18.3
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
 	k8s.io/client-go v3.0.0+incompatible
 	k8s.io/component-base v0.0.0
 	k8s.io/klog/v2 v2.0.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
-	k8s.io/utils v0.0.0-20200716102541-988ee3149bb2
+	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 )
 
 replace (

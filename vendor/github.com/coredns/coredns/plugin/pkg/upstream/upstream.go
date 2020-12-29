@@ -25,8 +25,11 @@ func (u *Upstream) Lookup(ctx context.Context, state request.Request, name strin
 		return nil, fmt.Errorf("no full server is running")
 	}
 
+	size := state.Size()
+	do := state.Do()
 	req := new(dns.Msg)
 	req.SetQuestion(name, typ)
+	req.SetEdns0(uint16(size), do)
 
 	nw := nonwriter.New(state.W)
 
