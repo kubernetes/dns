@@ -59,7 +59,7 @@ type CacheApp struct {
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
 	kubednsConfig *options.KubeDNSConfig
-	exitChan      chan bool // Channel to terminate background goroutines
+	exitChan      chan struct{} // Channel to terminate background goroutines
 	clusterDNSIP  net.IP
 }
 
@@ -179,7 +179,7 @@ func (c *CacheApp) TeardownNetworking() error {
 	if c.exitChan != nil {
 		// Stop the goroutine that periodically checks for iptables rules/dummy interface
 		// exitChan is a buffered channel of size 1, so this will not block
-		c.exitChan <- true
+		c.exitChan <- struct{}{}
 	}
 	var err error
 	if c.params.SetupInterface {
@@ -269,7 +269,7 @@ func (c *CacheApp) setupNetworking() {
 }
 
 func (c *CacheApp) runPeriodic() {
-	c.exitChan = make(chan bool, 1)
+	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
 	for {
 		select {
