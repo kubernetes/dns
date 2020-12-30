@@ -1,17 +1,16 @@
 package app
 
 import (
-	"os"
-
-	"k8s.io/dns/cmd/kube-dns/app/options"
-	"k8s.io/dns/pkg/dns/config"
-
 	"net"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+
+	"k8s.io/dns/cmd/kube-dns/app/options"
+	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
 	"k8s.io/kubernetes/pkg/util/dbus"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"

@@ -81,7 +81,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	for _, ipstr := range strings.Split(params.LocalIPStr, ",") {
 		newIP := net.ParseIP(ipstr)
 		if newIP == nil {
-			return params, fmt.Errorf("Invalid localip specified - %q", ipstr)
+			return params, fmt.Errorf("invalid localip specified - %q", ipstr)
 		}
 		params.LocalIPs = append(params.LocalIPs, newIP)
 	}
@@ -89,20 +89,20 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	// validate all the IPs have the same IP family
 	for _, ip := range params.LocalIPs {
 		if utilnet.IsIPv6(params.LocalIPs[0]) != utilnet.IsIPv6(ip) {
-			return params, fmt.Errorf("Unexpected IP Family for localIP - %q, want IPv6=%v", ip, utilnet.IsIPv6(params.LocalIPs[0]))
+			return params, fmt.Errorf("unexpected IP Family for localIP - %q, want IPv6=%v", ip, utilnet.IsIPv6(params.LocalIPs[0]))
 		}
 	}
 	// lookup specified dns port
 	f := flag.Lookup("dns.port")
 	if f == nil {
-		return nil, fmt.Errorf("Failed to lookup \"dns.port\" parameter")
+		return nil, fmt.Errorf("failed to lookup \"dns.port\" parameter")
 	}
 	params.LocalPort = f.Value.String()
 	if _, err := strconv.Atoi(params.LocalPort); err != nil {
-		return nil, fmt.Errorf("Invalid port specified - %q", params.LocalPort)
+		return nil, fmt.Errorf("invalid port specified - %q", params.LocalPort)
 	}
 	if _, err := strconv.Atoi(params.HealthPort); err != nil {
-		return nil, fmt.Errorf("Invalid healthcheck port specified - %q", params.HealthPort)
+		return nil, fmt.Errorf("invalid healthcheck port specified - %q", params.HealthPort)
 	}
 	if f = flag.Lookup("conf"); f != nil {
 		params.CoreFile = f.Value.String()
