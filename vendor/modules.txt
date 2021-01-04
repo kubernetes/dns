@@ -1,3 +1,11 @@
+# github.com/DataDog/datadog-go v3.5.0+incompatible
+github.com/DataDog/datadog-go/statsd
+# github.com/DataDog/zstd v1.3.5
+github.com/DataDog/zstd
+# github.com/Shopify/sarama v1.21.0
+github.com/Shopify/sarama
+# github.com/apache/thrift v0.13.0
+github.com/apache/thrift/lib/go/thrift
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/caddyserver/caddy v1.0.5
@@ -25,6 +33,7 @@ github.com/coredns/coredns/plugin/errors
 github.com/coredns/coredns/plugin/etcd/msg
 github.com/coredns/coredns/plugin/forward
 github.com/coredns/coredns/plugin/health
+github.com/coredns/coredns/plugin/hosts
 github.com/coredns/coredns/plugin/loadbalance
 github.com/coredns/coredns/plugin/log
 github.com/coredns/coredns/plugin/loop
@@ -53,8 +62,10 @@ github.com/coredns/coredns/plugin/pkg/up
 github.com/coredns/coredns/plugin/pkg/upstream
 github.com/coredns/coredns/plugin/pprof
 github.com/coredns/coredns/plugin/reload
+github.com/coredns/coredns/plugin/rewrite
 github.com/coredns/coredns/plugin/template
 github.com/coredns/coredns/plugin/test
+github.com/coredns/coredns/plugin/trace
 github.com/coredns/coredns/plugin/whoami
 github.com/coredns/coredns/request
 # github.com/coreos/etcd v3.3.25+incompatible
@@ -71,6 +82,12 @@ github.com/coreos/go-systemd/activation
 github.com/davecgh/go-spew/spew
 # github.com/dnstap/golang-dnstap v0.2.0
 github.com/dnstap/golang-dnstap
+# github.com/eapache/go-resiliency v1.1.0
+github.com/eapache/go-resiliency/breaker
+# github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21
+github.com/eapache/go-xerial-snappy
+# github.com/eapache/queue v1.1.0
+github.com/eapache/queue
 # github.com/evanphx/json-patch v0.0.0-20190203023257-5858425f7550
 github.com/evanphx/json-patch
 # github.com/farsightsec/golang-framestream v0.0.0-20190425193708-fa4b164d59b8
@@ -79,6 +96,8 @@ github.com/farsightsec/golang-framestream
 github.com/flynn/go-shlex
 # github.com/fsnotify/fsnotify v1.4.9
 github.com/fsnotify/fsnotify
+# github.com/go-logfmt/logfmt v0.4.0
+github.com/go-logfmt/logfmt
 # github.com/go-logr/logr v0.1.0
 github.com/go-logr/logr
 # github.com/godbus/dbus v0.0.0-20181025153459-66d97aec3384
@@ -92,6 +111,8 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+github.com/golang/snappy
 # github.com/google/go-cmp v0.4.0
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/internal/diff
@@ -115,6 +136,8 @@ github.com/hashicorp/golang-lru/simplelru
 github.com/imdario/mergo
 # github.com/json-iterator/go v1.1.9
 github.com/json-iterator/go
+# github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
+github.com/kr/logfmt
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/miekg/dns v1.1.29
@@ -169,10 +192,24 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492
+github.com/opentracing-contrib/go-observer
 # github.com/opentracing/opentracing-go v1.1.0
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 github.com/opentracing/opentracing-go/log
+# github.com/openzipkin-contrib/zipkin-go-opentracing v0.3.5
+github.com/openzipkin-contrib/zipkin-go-opentracing
+github.com/openzipkin-contrib/zipkin-go-opentracing/flag
+github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/scribe
+github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore
+github.com/openzipkin-contrib/zipkin-go-opentracing/types
+github.com/openzipkin-contrib/zipkin-go-opentracing/wire
+# github.com/philhofer/fwd v1.0.0
+github.com/philhofer/fwd
+# github.com/pierrec/lz4 v2.0.5+incompatible
+github.com/pierrec/lz4
+github.com/pierrec/lz4/internal/xxh32
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v1.6.0
@@ -189,6 +226,8 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
+github.com/rcrowley/go-metrics
 # github.com/skynetservices/skydns v0.0.0-20191015171621-94b2ea0d8bfa
 github.com/skynetservices/skydns/cache
 github.com/skynetservices/skydns/metrics
@@ -200,6 +239,8 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.5.1
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+# github.com/tinylib/msgp v1.1.2
+github.com/tinylib/msgp/msgp
 # github.com/vishvananda/netlink v1.0.0
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
@@ -340,6 +381,15 @@ google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/DataDog/dd-trace-go.v1 v1.24.1
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer
+gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer
+gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig
+gopkg.in/DataDog/dd-trace-go.v1/internal/log
+gopkg.in/DataDog/dd-trace-go.v1/internal/version
 # gopkg.in/inf.v0 v0.9.1
 gopkg.in/inf.v0
 # gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
@@ -548,6 +598,7 @@ k8s.io/kubernetes/pkg/version/prometheus
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
+k8s.io/utils/net
 k8s.io/utils/net/ebtables
 k8s.io/utils/trace
 # sigs.k8s.io/yaml v1.1.0
