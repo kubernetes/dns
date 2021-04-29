@@ -84,7 +84,7 @@ func (c *CacheApp) Init() {
 	c.updateCorefile(&config.Config{})
 	// Initialize periodic sync for node-local-dns, kube-dns configmap.
 	c.initDNSConfigSync()
-	// Setup only the network interface during this init. IPTables will be setup via runPeriodic.
+	// Setup only the network interface first.
 	// This is to ensure that iptables rules don't get setup if the cache(coreDNS) is unable to startup due to config
 	// error, port conflicts or other reasons.
 	c.setupInterface()
