@@ -84,12 +84,13 @@ func (c *CacheApp) Init() {
 	c.updateCorefile(&config.Config{})
 	// Initialize periodic sync for node-local-dns, kube-dns configmap.
 	c.initDNSConfigSync()
-	// Setup only the network interface first.
+	// Setup only the network interface during this init. IPTables will be setup via runPeriodic.
 	// This is to ensure that iptables rules don't get setup if the cache(coreDNS) is unable to startup due to config
 	// error, port conflicts or other reasons.
-	c.setupInterface()
-	// Initial setup of iptables/ebtables
+	setupIptables := c.params.SetupIptables
+	c.params.SetupIptables = false
 	c.setupNetworking()
+	c.params.SetupIptables = setupIptables
 }
 
 // isIPv6 return if the node-cache is working in IPv6 mode
@@ -251,10 +252,6 @@ func (c *CacheApp) setupNetworking() {
 		}
 	}
 
-	c.setupInterface()
-}
-
-func (c *CacheApp) setupInterface() {
 	if c.params.SetupInterface {
 		exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
 		if !exists {
@@ -274,6 +271,7 @@ func (c *CacheApp) setupInterface() {
 func (c *CacheApp) runPeriodic() {
 	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
+	c.setupNetworking()
 	for {
 		select {
 		case <-tick.C:
