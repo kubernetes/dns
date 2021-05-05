@@ -28,7 +28,7 @@ type ConfigParams struct {
 	SetupInterface       bool          // Indicates whether to setup network interface
 	InterfaceName        string        // Name of the interface to be created
 	Interval             time.Duration // specifies how often to run iptables rules check
-	InitialDelay         time.Duration // specifies the initial delay before configuring iptables
+	Pidfile              string        // Path to the coredns server pidfile
 	BaseCoreFile         string        // Path to the template config file for node-cache
 	CoreFile             string        // Path to config file used by node-cache
 	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
@@ -270,10 +270,19 @@ func (c *CacheApp) setupNetworking() {
 }
 
 func (c *CacheApp) runPeriodic() {
+	// if a pidfile is defined in flags, setup iptables as soon as it's created
+	if c.params.Pidfile != "" {
+		if ok := waitForFile(c.params.Pidfile, time.Second*5, time.Second*1); !ok {
+			// coreDNS did not start within 5 seconds, iptables will try updating next SyncInterval
+			clog.Warningf("timed out waiting for pidfile, networking setup will delay")
+		} else {
+			// we found the pidfile, coreDNS is running, we can setup networking early
+			c.setupNetworking()
+		}
+	}
+
 	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
-	time.Sleep(c.params.InitialDelay)
-	c.setupNetworking()
 	for {
 		select {
 		case <-tick.C:
@@ -309,4 +318,30 @@ func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
 func toSvcEnv(svcName string) string {
 	envName := strings.Replace(svcName, "-", "_", -1)
 	return "$" + strings.ToUpper(envName) + "_SERVICE_HOST"
+}
+
+// isFileExists returns true if a file exists with the given path
+func isFileExists(path string) bool {
+	f, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !f.IsDir()
+}
+
+// waitForFile checks if a file exists at intervals until it file exists or a timeout is reached, returns false
+// if timeout is reached
+func waitForFile(path string, max, t time.Duration) bool {
+	timeout := time.After(max)
+	tick := time.Tick(t)
+	for {
+		select {
+		case <-timeout:
+			return false
+		case <-tick:
+			if isFileExists(path) {
+				return true
+			}
+		}
+	}
 }
