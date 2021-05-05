@@ -67,6 +67,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.BoolVar(&params.SetupInterface, "setupinterface", true, "indicates whether network interface should be setup")
 	flag.StringVar(&params.InterfaceName, "interfacename", "nodelocaldns", "name of the interface to be created")
 	flag.DurationVar(&params.Interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
+	flag.DurationVar(&params.InitialDelay, "initialdelay", 10, "initial delay(in seconds) before configuring iptables")
 	flag.StringVar(&params.MetricsListenAddress, "metrics-listen-address", "0.0.0.0:9353", "address to serve metrics on")
 	flag.BoolVar(&params.SetupIptables, "setupiptables", true, "indicates whether iptables rules should be setup")
 	flag.BoolVar(&params.SetupEbtables, "setupebtables", false, "indicates whether ebtables rules should be setup")

@@ -28,6 +28,7 @@ type ConfigParams struct {
 	SetupInterface       bool          // Indicates whether to setup network interface
 	InterfaceName        string        // Name of the interface to be created
 	Interval             time.Duration // specifies how often to run iptables rules check
+	InitialDelay         time.Duration // specifies the initial delay before configuring iptables
 	BaseCoreFile         string        // Path to the template config file for node-cache
 	CoreFile             string        // Path to config file used by node-cache
 	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
@@ -271,6 +272,7 @@ func (c *CacheApp) setupNetworking() {
 func (c *CacheApp) runPeriodic() {
 	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
+	time.Sleep(c.params.InitialDelay)
 	c.setupNetworking()
 	for {
 		select {
