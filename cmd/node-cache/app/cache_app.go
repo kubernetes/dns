@@ -28,6 +28,7 @@ type ConfigParams struct {
 	SetupInterface       bool          // Indicates whether to setup network interface
 	InterfaceName        string        // Name of the interface to be created
 	Interval             time.Duration // specifies how often to run iptables rules check
+	Pidfile              string        // Path to the coredns server pidfile
 	BaseCoreFile         string        // Path to the template config file for node-cache
 	CoreFile             string        // Path to config file used by node-cache
 	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
@@ -269,6 +270,19 @@ func (c *CacheApp) setupNetworking() {
 }
 
 func (c *CacheApp) runPeriodic() {
+	// if a pidfile is defined in flags, setup iptables as soon as it's created
+	if c.params.Pidfile != "" {
+		for {
+			if isFileExists(c.params.Pidfile) {
+				break
+			}
+			clog.Infof("waiting for coredns pidfile '%s'", c.params.Pidfile)
+			time.Sleep(time.Second * 1)
+		}
+		// we found the pidfile, coreDNS is running, we can setup networking early
+		c.setupNetworking()
+	}
+
 	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
 	for {
@@ -306,4 +320,13 @@ func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
 func toSvcEnv(svcName string) string {
 	envName := strings.Replace(svcName, "-", "_", -1)
 	return "$" + strings.ToUpper(envName) + "_SERVICE_HOST"
+}
+
+// isFileExists returns true if a file exists with the given path
+func isFileExists(path string) bool {
+	f, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !f.IsDir()
 }

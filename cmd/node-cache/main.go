@@ -108,6 +108,10 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 		params.CoreFile = f.Value.String()
 		clog.Infof("Using Corefile %s", params.CoreFile)
 	}
+	if f = flag.Lookup("pidfile"); f != nil {
+		params.Pidfile = f.Value.String()
+		clog.Infof("Using Pidfile %s", params.Pidfile)
+	}
 	return params, nil
 }
 
