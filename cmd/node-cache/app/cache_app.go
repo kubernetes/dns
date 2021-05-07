@@ -273,7 +273,7 @@ func (c *CacheApp) runPeriodic() {
 	// if a pidfile is defined in flags, setup iptables as soon as it's created
 	if c.params.Pidfile != "" {
 		for {
-			if isFileExist(c.params.Pidfile) {
+			if isFileExists(c.params.Pidfile) {
 				break
 			}
 			clog.Infof("waiting for coredns pidfile '%s'", c.params.Pidfile)
