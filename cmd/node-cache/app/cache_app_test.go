@@ -42,7 +42,6 @@ cluster.local:53 {
     }
 `
 	templateCoreFileName   = "testCoreFile.base"
-	pidfileName            = "testCoredns.pid"
 	coreFileName           = "testCoreFile"
 	cmDirName              = "testKubeDNSDir"
 	stubDomainFileName     = "stubDomains"
@@ -81,11 +80,6 @@ func createBaseFiles(t *testing.T, p *ConfigParams) {
 	}
 	if err := os.Mkdir(p.KubednsCMPath, os.ModePerm); err != nil {
 		t.Fatalf("Failed to create KubeDNS configmap dir - %v", err)
-	}
-	if p.Pidfile != "" {
-		if err := ioutil.WriteFile(p.Pidfile, []byte("1"), os.ModePerm); err != nil {
-			t.Fatalf("Failed to write pidfile - %v", err)
-		}
 	}
 }
 
@@ -267,30 +261,4 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	if !stubDomainsEqual(strings.TrimSpace(stubStr), strings.TrimSpace(expectedStubStr), t) {
 		t.Fail()
 	}
-}
-
-func TestFileWaiter(t *testing.T) {
-	baseDir, err := ioutil.TempDir("", "dnstest")
-	if err != nil {
-		t.Fatalf("Failed to obtain temp directory for testing, err %v", err)
-	}
-	c, err := NewCacheApp(&ConfigParams{
-		Pidfile:       filepath.Join(baseDir, pidfileName),
-		BaseCoreFile:  filepath.Join(baseDir, templateCoreFileName),
-		KubednsCMPath: filepath.Join(baseDir, cmDirName),
-	})
-	if err != nil {
-		t.Fatalf("Failed to obtain CacheApp instance, err %v", err)
-	}
-	createBaseFiles(t, c.params)
-	ok := waitForFile(c.params.Pidfile, time.Second*1, time.Millisecond*100)
-	if !ok {
-		t.Fail()
-	}
-	os.RemoveAll(baseDir)
-	ok = waitForFile(c.params.Pidfile, time.Second*1, time.Millisecond*100)
-	if ok {
-		t.Fail()
-	}
-
 }

@@ -272,13 +272,15 @@ func (c *CacheApp) setupNetworking() {
 func (c *CacheApp) runPeriodic() {
 	// if a pidfile is defined in flags, setup iptables as soon as it's created
 	if c.params.Pidfile != "" {
-		if ok := waitForFile(c.params.Pidfile, time.Second*5, time.Second*1); !ok {
-			// coreDNS did not start within 5 seconds, iptables will try updating next SyncInterval
-			clog.Warningf("timed out waiting for pidfile, networking setup will delay")
-		} else {
-			// we found the pidfile, coreDNS is running, we can setup networking early
-			c.setupNetworking()
+		for {
+			if isFileExist(c.params.Pidfile) {
+				break
+			}
+			clog.Infof("waiting for coredns pidfile '%s'", c.params.Pidfile)
+			time.Sleep(time.Second * 1)
 		}
+		// we found the pidfile, coreDNS is running, we can setup networking early
+		c.setupNetworking()
 	}
 
 	c.exitChan = make(chan struct{}, 1)
@@ -327,21 +329,4 @@ func isFileExists(path string) bool {
 		return false
 	}
 	return !f.IsDir()
-}
-
-// waitForFile checks if a file exists at intervals until it file exists or a timeout is reached, returns false
-// if timeout is reached
-func waitForFile(path string, max, t time.Duration) bool {
-	timeout := time.After(max)
-	tick := time.Tick(t)
-	for {
-		select {
-		case <-timeout:
-			return false
-		case <-tick:
-			if isFileExists(path) {
-				return true
-			}
-		}
-	}
 }
