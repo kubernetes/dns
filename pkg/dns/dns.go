@@ -17,6 +17,7 @@ limitations under the License.
 package dns
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -977,7 +978,7 @@ func (kd *KubeDNS) getClusterZoneAndRegion() (string, string, error) {
 		// wasteful in case of non-federated independent Kubernetes clusters. So carefully
 		// proceeding here.
 		// TODO(madhusudancs): Move this to external/v1 API.
-		nodeList, err := kd.kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodeList, err := kd.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		if err != nil || len(nodeList.Items) == 0 {
 			return "", "", fmt.Errorf("failed to retrieve the cluster nodes: %v", err)
 		}

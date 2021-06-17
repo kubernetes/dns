@@ -15,7 +15,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
-	"github.com/caddyserver/caddy"
+	"github.com/coredns/caddy"
 	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/debug"
