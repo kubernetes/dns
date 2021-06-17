@@ -4,11 +4,11 @@ import (
 	"regexp"
 	gotmpl "text/template"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 
-	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 )
 
@@ -17,10 +17,6 @@ func init() { plugin.Register("template", setupTemplate) }
 func setupTemplate(c *caddy.Controller) error {
 	handler, err := templateParse(c)
 	if err != nil {
-		return plugin.Error("template", err)
-	}
-
-	if err := setupMetrics(c); err != nil {
 		return plugin.Error("template", err)
 	}
 

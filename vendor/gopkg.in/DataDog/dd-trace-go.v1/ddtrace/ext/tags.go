@@ -82,4 +82,7 @@ const (
 	// ManualDrop is a tag which specifies that the trace to which this span
 	// belongs to should be dropped when set to true.
 	ManualDrop = "manual.drop"
+
+	// RuntimeID is a tag that contains a unique id for this process.
+	RuntimeID = "runtime-id"
 )

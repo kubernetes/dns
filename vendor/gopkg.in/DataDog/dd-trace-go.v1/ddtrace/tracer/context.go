@@ -39,6 +39,10 @@ func SpanFromContext(ctx context.Context) (Span, bool) {
 // is found in the context, it will be used as the parent of the resulting span. If the ChildOf
 // option is passed, the span from context will take precedence over it as the parent span.
 func StartSpanFromContext(ctx context.Context, operationName string, opts ...StartSpanOption) (Span, context.Context) {
+	if ctx == nil {
+		// default to context.Background() to avoid panics on Go >= 1.15
+		ctx = context.Background()
+	}
 	if s, ok := SpanFromContext(ctx); ok {
 		opts = append(opts, ChildOf(s.Context()))
 	}

@@ -6,13 +6,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/cache"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-
-	"github.com/caddyserver/caddy"
 )
 
 var log = clog.NewWithPlugin("cache")
@@ -27,13 +25,6 @@ func setup(c *caddy.Controller) error {
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		ca.Next = next
 		return ca
-	})
-
-	c.OnStartup(func() error {
-		metrics.MustRegister(c,
-			cacheSize, cacheHits, cacheMisses,
-			cachePrefetches, cacheDrops, servedStale)
-		return nil
 	})
 
 	return nil

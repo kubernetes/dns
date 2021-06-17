@@ -7,11 +7,13 @@ package tracer
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -179,57 +181,57 @@ type rulesSampler struct {
 // Invalid rules or environment variable values are tolerated, by logging warnings and then ignoring them.
 func newRulesSampler(rules []SamplingRule) *rulesSampler {
 	return &rulesSampler{
-		rules:      appliedSamplingRules(rules),
+		rules:      rules,
 		globalRate: globalSampleRate(),
 		limiter:    newRateLimiter(),
 	}
 }
 
-// appliedSamplingRules validates the user-provided rules and returns an internal representation.
-// If the DD_TRACE_SAMPLING_RULES environment variable is set, it will replace the given rules.
-func appliedSamplingRules(rules []SamplingRule) []SamplingRule {
+// samplingRulesFromEnv parses sampling rules from the DD_TRACE_SAMPLING_RULES
+// environment variable.
+func samplingRulesFromEnv() ([]SamplingRule, error) {
 	rulesFromEnv := os.Getenv("DD_TRACE_SAMPLING_RULES")
-	if rulesFromEnv != "" {
-		rules = rules[:0]
-		jsonRules := []struct {
-			Service string      `json:"service"`
-			Name    string      `json:"name"`
-			Rate    json.Number `json:"sample_rate"`
-		}{}
-		err := json.Unmarshal([]byte(rulesFromEnv), &jsonRules)
-		if err != nil {
-			log.Warn("error parsing DD_TRACE_SAMPLING_RULES: %v", err)
-			return nil
-		}
-		for _, v := range jsonRules {
-			if v.Rate == "" {
-				log.Warn("error parsing rule: rate not provided")
-				continue
-			}
-			rate, err := v.Rate.Float64()
-			if err != nil {
-				log.Warn("error parsing rule: invalid rate: %v", err)
-				continue
-			}
-			switch {
-			case v.Service != "" && v.Name != "":
-				rules = append(rules, NameServiceRule(v.Name, v.Service, rate))
-			case v.Service != "":
-				rules = append(rules, ServiceRule(v.Service, rate))
-			case v.Name != "":
-				rules = append(rules, NameRule(v.Name, rate))
-			}
-		}
+	if rulesFromEnv == "" {
+		return nil, nil
 	}
-	validRules := make([]SamplingRule, 0, len(rules))
-	for _, v := range rules {
-		if !(v.Rate >= 0.0 && v.Rate <= 1.0) {
-			log.Warn("ignoring rule %+v: rate is out of range", v)
+	jsonRules := []struct {
+		Service string      `json:"service"`
+		Name    string      `json:"name"`
+		Rate    json.Number `json:"sample_rate"`
+	}{}
+	err := json.Unmarshal([]byte(rulesFromEnv), &jsonRules)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling JSON: %v", err)
+	}
+	rules := make([]SamplingRule, 0, len(jsonRules))
+	var errs []string
+	for i, v := range jsonRules {
+		if v.Rate == "" {
+			errs = append(errs, fmt.Sprintf("at index %d: rate not provided", i))
 			continue
 		}
-		validRules = append(validRules, v)
+		rate, err := v.Rate.Float64()
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("at index %d: %v", i, err))
+			continue
+		}
+		if !(rate >= 0.0 && rate <= 1.0) {
+			log.Warn("at index %d: ignoring rule %+v: rate is out of [0.0, 1.0] range", i, v)
+			continue
+		}
+		switch {
+		case v.Service != "" && v.Name != "":
+			rules = append(rules, NameServiceRule(v.Name, v.Service, rate))
+		case v.Service != "":
+			rules = append(rules, ServiceRule(v.Service, rate))
+		case v.Name != "":
+			rules = append(rules, NameRule(v.Name, rate))
+		}
 	}
-	return validRules
+	if len(errs) != 0 {
+		return rules, fmt.Errorf("found errors:\n\t%s", strings.Join(errs, "\n\t"))
+	}
+	return rules, nil
 }
 
 // globalSampleRate returns the sampling rate found in the DD_TRACE_SAMPLE_RATE environment variable.
@@ -382,6 +384,27 @@ func (sr *SamplingRule) match(s *span) bool {
 		return false
 	}
 	return true
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (sr *SamplingRule) MarshalJSON() ([]byte, error) {
+	s := struct {
+		Service string  `json:"service"`
+		Name    string  `json:"name"`
+		Rate    float64 `json:"sample_rate"`
+	}{}
+	if sr.exactService != "" {
+		s.Service = sr.exactService
+	} else if sr.Service != nil {
+		s.Service = fmt.Sprintf("%s", sr.Service)
+	}
+	if sr.exactName != "" {
+		s.Name = sr.exactName
+	} else if sr.Name != nil {
+		s.Name = fmt.Sprintf("%s", sr.Name)
+	}
+	s.Rate = sr.Rate
+	return json.Marshal(&s)
 }
 
 // rateLimiter is a wrapper on top of golang.org/x/time/rate which implements a rate limiter but also

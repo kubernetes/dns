@@ -12,6 +12,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+const name = "whoami"
+
 // Whoami is a plugin that returns your IP address, port and the protocol used for connecting
 // to CoreDNS.
 type Whoami struct{}
@@ -55,4 +57,4 @@ func (wh Whoami) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 }
 
 // Name implements the Handler interface.
-func (wh Whoami) Name() string { return "whoami" }
+func (wh Whoami) Name() string { return name }
