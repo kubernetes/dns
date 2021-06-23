@@ -29,7 +29,8 @@ export VERSION
 SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
-BASEIMAGE ?= us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.2
+BASEIMAGE ?= k8s.gcr.io/build-image/debian-base-$(ARCH):buster-v1.6.0
+IPTIMAGE ?= k8s.gcr.io/build-image/debian-iptables-$(ARCH):buster-v1.6.0
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
@@ -89,6 +90,12 @@ build: $(GO_BINARIES) images-build
 
 
 # Rule for all bin/$(ARCH)/bin/$(BINARY)
+# Add line
+# `           -v $(GOCACHE):$(GOCACHE)                                           \`
+# to use GOCACHE. Not used currently due to permission issues in  dev setup.
+# We also want a clean build in the CI, without caching. GOCACHE env variable cannot
+# be set to off in go1.12 and later - https://github.com/golang/go/issues/29378
+# So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
 	@docker pull $(BUILD_IMAGE)
@@ -100,6 +107,7 @@ $(GO_BINARIES): build-dirs
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin/linux_$(ARCH)                       \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
+	    -e GOCACHE=$(GOCACHE)                                              \
 	    -w /go/src/$(PKG)                                                  \
 	    $(BUILD_IMAGE)                                                     \
 	    /bin/sh -c "                                                       \
@@ -118,7 +126,8 @@ define DOCKERFILE_RULE
 	    -e 's|ARG_ARCH|$(ARCH)|g' \
 	    -e 's|ARG_BIN|$(BINARY)|g' \
 	    -e 's|ARG_REGISTRY|$(REGISTRY)|g' \
-	    -e 's|ARG_FROM|$(BASEIMAGE)|g' \
+	    -e 's|ARG_FROM_BASE|$(BASEIMAGE)|g' \
+	    -e 's|ARG_FROM_IPT|$(IPTIMAGE)|g' \
 	    -e 's|ARG_VERSION|$(VERSION)|g' \
 	    $$< > $$@
 .$(BUILDSTAMP_NAME)-container: .$(BINARY)-$(ARCH)-dockerfile
@@ -130,7 +139,6 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
-	@docker pull $(BASEIMAGE)
 	@docker build					\
 		$(DOCKER_BUILD_FLAGS)			\
 		-t $(CONTAINER_NAME):$(VERSION)		\
@@ -161,6 +169,12 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(PUSH_RULE)))
 
 
 # Rule for `test`
+# Add line
+# `           -v $(GOCACHE):$(GOCACHE)                                           \`
+# to use GOCACHE. Not used currently due to permission issues in  dev setup.
+# We also want a clean build in the CI, without caching. GOCACHE env variable cannot
+# be set to off in go1.12 and later - https://github.com/golang/go/issues/29378
+# So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 .PHONY: test
 test: build-dirs images-test
 	@docker run                                                            \
@@ -171,6 +185,7 @@ test: build-dirs images-test
 	    -v $$(pwd):/go/src/$(PKG)                                          \
 	    -v $$(pwd)/bin/$(ARCH):/go/bin                                     \
 	    -v $$(pwd)/.go/std/$(ARCH):/usr/local/go/pkg/linux_$(ARCH)_static  \
+	    -e GOCACHE=$(GOCACHE)                                              \
 	    -w /go/src/$(PKG)                                                  \
 	    $(BUILD_IMAGE)                                                     \
 	    /bin/sh -c "                                                       \

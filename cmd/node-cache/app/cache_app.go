@@ -1,22 +1,21 @@
 package app
 
 import (
-	"os"
-
-	"k8s.io/dns/cmd/kube-dns/app/options"
-	"k8s.io/dns/pkg/dns/config"
-
 	"net"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+
+	"k8s.io/dns/cmd/kube-dns/app/options"
+	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
 	"k8s.io/kubernetes/pkg/util/dbus"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
-	utilsexec "k8s.io/utils/exec"
+	utilexec "k8s.io/utils/exec"
+	utilnet "k8s.io/utils/net"
 	utilebtables "k8s.io/utils/net/ebtables"
 )
 
@@ -26,8 +25,10 @@ type ConfigParams struct {
 	LocalIPs             []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
 	LocalPort            string        // port to listen for dns requests
 	MetricsListenAddress string        // address to serve metrics on
+	SetupInterface       bool          // Indicates whether to setup network interface
 	InterfaceName        string        // Name of the interface to be created
 	Interval             time.Duration // specifies how often to run iptables rules check
+	Pidfile              string        // Path to the coredns server pidfile
 	BaseCoreFile         string        // Path to the template config file for node-cache
 	CoreFile             string        // Path to config file used by node-cache
 	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
@@ -59,7 +60,7 @@ type CacheApp struct {
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
 	kubednsConfig *options.KubeDNSConfig
-	exitChan      chan bool // Channel to terminate background goroutines
+	exitChan      chan struct{} // Channel to terminate background goroutines
 	clusterDNSIP  net.IP
 }
 
@@ -69,7 +70,9 @@ func isLockedErr(err error) bool {
 
 // Init initializes the parameters and networking setup necessary to run node-cache
 func (c *CacheApp) Init() {
-	c.netifHandle = netif.NewNetifManager(c.params.LocalIPs)
+	if c.params.SetupInterface {
+		c.netifHandle = netif.NewNetifManager(c.params.LocalIPs)
+	}
 	if c.params.SetupIptables {
 		c.initIptables()
 	}
@@ -89,6 +92,15 @@ func (c *CacheApp) Init() {
 	c.params.SetupIptables = false
 	c.setupNetworking()
 	c.params.SetupIptables = setupIptables
+}
+
+// isIPv6 return if the node-cache is working in IPv6 mode
+// LocalIPs are guaranteed to have the same family
+func (c *CacheApp) isIPv6() bool {
+	if len(c.params.LocalIPs) > 0 {
+		return utilnet.IsIPv6(c.params.LocalIPs[0])
+	}
+	return false
 }
 
 func (c *CacheApp) initIptables() {
@@ -128,21 +140,29 @@ func (c *CacheApp) initIptables() {
 				"--sport", c.params.HealthPort, "-j", "NOTRACK"}},
 		}...)
 	}
-	c.iptables = newIPTables()
+	c.iptables = newIPTables(c.isIPv6())
 }
 
-func newIPTables() utiliptables.Interface {
+func newIPTables(isIPv6 bool) utiliptables.Interface {
 	execer := utilexec.New()
 	dbus := dbus.New()
-	return utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
+	protocol := utiliptables.ProtocolIpv4
+	if isIPv6 {
+		protocol = utiliptables.ProtocolIpv6
+	}
+	return utiliptables.New(execer, dbus, protocol)
 }
 
 func (c *CacheApp) initEbtables() {
+	protocol := "IPv4"
+	if c.isIPv6() {
+		protocol = "IPv6"
+	}
 	// using the localIPStr param since we need ip strings here
 	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
 		c.ebtablesRules = append(c.ebtablesRules, []ebtablesRule{
 			// Match traffic destined for localIp and use the MAC address of the bridge port as destination address
-			{utilebtables.TableBroute, utilebtables.ChainBrouting, []string{"-p", "IPv4", "--ip-dst", localIP,
+			{utilebtables.TableBroute, utilebtables.ChainBrouting, []string{"-p", protocol, "--ip-dst", localIP,
 				"-j", "redirect"}},
 		}...)
 	}
@@ -150,7 +170,7 @@ func (c *CacheApp) initEbtables() {
 }
 
 func newEBTables() utilebtables.Interface {
-	execer := utilsexec.New()
+	execer := utilexec.New()
 	return utilebtables.New(execer)
 }
 
@@ -160,9 +180,12 @@ func (c *CacheApp) TeardownNetworking() error {
 	if c.exitChan != nil {
 		// Stop the goroutine that periodically checks for iptables rules/dummy interface
 		// exitChan is a buffered channel of size 1, so this will not block
-		c.exitChan <- true
+		c.exitChan <- struct{}{}
 	}
-	err := c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
+	var err error
+	if c.params.SetupInterface {
+		err = c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
+	}
 	if c.params.SetupIptables {
 		for _, rule := range c.iptablesRules {
 			exists := true
@@ -230,22 +253,37 @@ func (c *CacheApp) setupNetworking() {
 		}
 	}
 
-	exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
-	if !exists {
-		if err != nil {
-			clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
-			setupErrCount.WithLabelValues("interface_add").Inc()
+	if c.params.SetupInterface {
+		exists, err := c.netifHandle.EnsureDummyDevice(c.params.InterfaceName)
+		if !exists {
+			if err != nil {
+				clog.Errorf("Failed to add non-existent interface %s: %s", c.params.InterfaceName, err)
+				setupErrCount.WithLabelValues("interface_add").Inc()
+			}
+			clog.Infof("Added interface - %s", c.params.InterfaceName)
 		}
-		clog.Infof("Added interface - %s", c.params.InterfaceName)
-	}
-	if err != nil {
-		clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
-		setupErrCount.WithLabelValues("interface_check").Inc()
+		if err != nil {
+			clog.Errorf("Error checking dummy device %s - %s", c.params.InterfaceName, err)
+			setupErrCount.WithLabelValues("interface_check").Inc()
+		}
 	}
 }
 
 func (c *CacheApp) runPeriodic() {
-	c.exitChan = make(chan bool, 1)
+	// if a pidfile is defined in flags, setup iptables as soon as it's created
+	if c.params.Pidfile != "" {
+		for {
+			if isFileExists(c.params.Pidfile) {
+				break
+			}
+			clog.Infof("waiting for coredns pidfile '%s'", c.params.Pidfile)
+			time.Sleep(time.Second * 1)
+		}
+		// we found the pidfile, coreDNS is running, we can setup networking early
+		c.setupNetworking()
+	}
+
+	c.exitChan = make(chan struct{}, 1)
 	tick := time.NewTicker(c.params.Interval * time.Second)
 	for {
 		select {
@@ -282,4 +320,13 @@ func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
 func toSvcEnv(svcName string) string {
 	envName := strings.Replace(svcName, "-", "_", -1)
 	return "$" + strings.ToUpper(envName) + "_SERVICE_HOST"
+}
+
+// isFileExists returns true if a file exists with the given path
+func isFileExists(path string) bool {
+	f, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !f.IsDir()
 }

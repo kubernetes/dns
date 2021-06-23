@@ -26,9 +26,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/golang/glog"
-
-	"k8s.io/client-go/util/clock"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/klog/v2"
 )
 
 // NewFileSync returns a Sync that scans the given dir periodically for config data
@@ -62,10 +61,10 @@ func (syncSource *kubeFileSyncSource) Once() (syncResult, error) {
 func (syncSource *kubeFileSyncSource) Periodic() <-chan syncResult {
 	// TODO: drive via inotify?
 	go func() {
-		ticker := syncSource.clock.Tick(syncSource.period)
+		ticker := syncSource.clock.NewTicker(syncSource.period).C()
 		for {
 			if result, err := syncSource.load(); err != nil {
-				glog.Errorf("Error loading config from %s: %v", syncSource.dir, err)
+				klog.Errorf("Error loading config from %s: %v", syncSource.dir, err)
 			} else {
 				syncSource.channel <- result
 			}

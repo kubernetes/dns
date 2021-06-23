@@ -18,17 +18,19 @@ language: go
 # https://github.com/travis-ci/travis-ci/issues/5448
 dist: trusty
 go:
-- 1.11.x
+- 1.13
 
 services:
 - docker
 install:
 - mkdir -p ${GOPATH}/src/k8s.io
 - ln -s `pwd` ${GOPATH}/src/k8s.io/dns
+- GOFLAGS="-mod=vendor" go install github.com/onsi/ginkgo/ginkgo
+- export PATH=$PATH:$HOME/gopath/bin
 script:
 - make build
 - make test
 - make all-containers
 - bash test/e2e/sidecar/e2e.sh
 - sudo -v
-- cd ${GOPATH}/src/k8s.io/dns && bin/amd64/ginkgo test/e2e
+- $HOME/gopath/bin/ginkgo test/e2e

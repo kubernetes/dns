@@ -11,6 +11,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 * [kube-dns](http://kubernetes.io/docs/admin/dns/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
+* [node-cache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
 
 ## Building
 
@@ -37,8 +38,9 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 ## Release process
 
 1. Build and test (`make images-clean`; `make build`; `make containers`; `make test`)
-2. Update [go dependencies](docs/go-dependencies.md) if needed.
-3. Update the release tag. We use [semantic versioning](http://semver.org) to
+2. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
+3. Update [go dependencies](docs/go-dependencies.md) if needed.
+4. Update the release tag. We use [semantic versioning](http://semver.org) to
    name releases.
 4. Wait for container images to be pushed via cloudbuild yaml. This will be done automatically by
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
@@ -50,3 +52,4 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
    The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
 6. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
+7. Images will be available in the repo k8s.gcr.io/dns/. The node-cache image with tag 1.15.14 can be found at k8s.gcr.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at k8s.gcr.io/k8s-dns-node-cache:<TAG>

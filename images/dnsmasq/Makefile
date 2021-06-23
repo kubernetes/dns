@@ -15,7 +15,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty)
 REGISTRY ?= staging-k8s.gcr.io
 ARCH ?= amd64
-DNSMASQ_VERSION ?= dnsmasq-2.78
+DNSMASQ_VERSION ?= dnsmasq-2.85
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
@@ -27,9 +27,9 @@ OUTPUT_DIR := _output/$(ARCH)
 # Ensure that the docker command line supports the manifest images
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
-BASEIMAGE ?= us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.0
+BASEIMAGE ?= k8s.gcr.io/build-image/debian-base-$(ARCH):buster-v1.6.0
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := us.gcr.io/k8s-artifacts-prod/build-image/debian-base-$(ARCH):v2.1.0
+	COMPILE_IMAGE := k8s.gcr.io/build-image/debian-base-$(ARCH):buster-v1.6.0
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
@@ -50,14 +50,14 @@ DNSMASQ_URL := http://www.thekelleys.org.uk/dnsmasq/$(DNSMASQ_VERSION).tar.xz
 # SHA-256 computed from GPG-verified download:
 # $ gpg --recv 15CDDA6AE19135A2
 # ...
-# $ gpg --verify dnsmasq-2.78.tar.xz.asc dnsmasq-2.78.tar.xz
-# gpg: Signature made Mon 02 Oct 2017 06:40:03 AM PDT
-# gpg:                using RSA key 15CDDA6AE19135A2
+# $ gpg --verify dnsmasq-2.85.tar.xz.asc dnsmasq-2.85.tar.xz
+# gpg: Signature made Wed 07 Apr 2021 08:41:31 PM UTC
+# gpg:                using RSA key D6EACBD6EE46B834248D111215CDDA6AE19135A2
 # gpg: Good signature from "Simon Kelley <simon@thekelleys.org.uk>" [unknown]
 # gpg:                 aka "Simon Kelley <srk@debian.org>" [unknown]
 # ...
 # $ sha256sum dnsmasq-2.78.tar.xz
-DNSMASQ_SHA256 := 89949f438c74b0c7543f06689c319484bd126cc4b1f8c745c742ab397681252b
+DNSMASQ_SHA256 := ad98d3803df687e5b938080f3d25c628fe41c878752d03fbc6199787fee312fa
 DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
 
 MULTIARCH_CONTAINER := multiarch/qemu-user-static:register
