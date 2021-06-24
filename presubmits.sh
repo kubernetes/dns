@@ -2,5 +2,8 @@
 
 # These are the commands run by the prow presubmit job.
 
-service docker start
-make test VERBOSE=5
+make build
+make test
+make all-containers
+bash test/e2e/sidecar/e2e.sh
+
