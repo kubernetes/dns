@@ -13,7 +13,6 @@
 # limitations under the License.
 
 FROM ARG_FROM_IPT
-RUN update-alternatives --set ebtables /usr/sbin/ebtables-legacy
 ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
 EXPOSE 53 53/udp
 EXPOSE 53 53/tcp
