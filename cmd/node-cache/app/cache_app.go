@@ -16,7 +16,6 @@ import (
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilexec "k8s.io/utils/exec"
 	utilnet "k8s.io/utils/net"
-	utilebtables "k8s.io/utils/net/ebtables"
 )
 
 // ConfigParams lists the configuration options that can be provided to node-cache
@@ -35,7 +34,6 @@ type ConfigParams struct {
 	UpstreamSvcName      string        // Name of the service whose clusterIP is the upstream for node-cache for cluster domain
 	HealthPort           string        // port for the healthcheck
 	SetupIptables        bool
-	SetupEbtables        bool
 	SkipTeardown         bool // Indicates whether the iptables rules and interface should be torn down
 }
 
@@ -45,18 +43,10 @@ type iptablesRule struct {
 	args  []string
 }
 
-type ebtablesRule struct {
-	table utilebtables.Table
-	chain utilebtables.Chain
-	args  []string
-}
-
 // CacheApp contains all the config required to run node-cache.
 type CacheApp struct {
 	iptables      utiliptables.Interface
 	iptablesRules []iptablesRule
-	ebtables      utilebtables.Interface
-	ebtablesRules []ebtablesRule
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
 	kubednsConfig *options.KubeDNSConfig
@@ -75,9 +65,6 @@ func (c *CacheApp) Init() {
 	}
 	if c.params.SetupIptables {
 		c.initIptables()
-	}
-	if c.params.SetupEbtables {
-		c.initEbtables()
 	}
 	initMetrics(c.params.MetricsListenAddress)
 	// Write the config file from template.
@@ -153,27 +140,6 @@ func newIPTables(isIPv6 bool) utiliptables.Interface {
 	return utiliptables.New(execer, dbus, protocol)
 }
 
-func (c *CacheApp) initEbtables() {
-	protocol := "IPv4"
-	if c.isIPv6() {
-		protocol = "IPv6"
-	}
-	// using the localIPStr param since we need ip strings here
-	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
-		c.ebtablesRules = append(c.ebtablesRules, []ebtablesRule{
-			// Match traffic destined for localIp and use the MAC address of the bridge port as destination address
-			{utilebtables.TableBroute, utilebtables.ChainBrouting, []string{"-p", protocol, "--ip-dst", localIP,
-				"-j", "redirect"}},
-		}...)
-	}
-	c.ebtables = newEBTables()
-}
-
-func newEBTables() utilebtables.Interface {
-	execer := utilexec.New()
-	return utilebtables.New(execer)
-}
-
 // TeardownNetworking removes all custom iptables rules and network interface added by node-cache
 func (c *CacheApp) TeardownNetworking() error {
 	clog.Infof("Tearing down")
@@ -195,17 +161,6 @@ func (c *CacheApp) TeardownNetworking() error {
 			}
 			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
 			c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
-		}
-		if c.params.SetupEbtables {
-			for _, rule := range c.ebtablesRules {
-				exists := true
-				for exists == true {
-					c.ebtables.DeleteRule(rule.table, rule.chain, rule.args...)
-					exists, _ = c.ebtables.EnsureRule(utilebtables.Append, rule.table, rule.chain, rule.args...)
-				}
-				// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
-				c.ebtables.DeleteRule(rule.table, rule.chain, rule.args...)
-			}
 		}
 	}
 	return err
@@ -230,25 +185,6 @@ func (c *CacheApp) setupNetworking() {
 			default:
 				clog.Errorf("Error adding iptables rule %v - %s", rule, err)
 				setupErrCount.WithLabelValues("iptables").Inc()
-			}
-		}
-	}
-
-	if c.params.SetupEbtables {
-		for _, rule := range c.ebtablesRules {
-			exists, err := c.ebtables.EnsureRule(utilebtables.Append, rule.table, rule.chain, rule.args...)
-			switch {
-			case exists:
-				// debug messages can be printed by including "debug" plugin in coreFile.
-				clog.Debugf("ebtables rule %v for nodelocaldns already exists", rule)
-				continue
-			case err == nil:
-				clog.Infof("Added back ebtables rule - %v", rule)
-				continue
-				// if we got here, either ebtables check failed or adding rule back failed.
-			default:
-				clog.Errorf("Error adding ebtables rule %v - %s", rule, err)
-				setupErrCount.WithLabelValues("ebtables").Inc()
 			}
 		}
 	}

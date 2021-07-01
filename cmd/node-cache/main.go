@@ -69,7 +69,6 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.DurationVar(&params.Interval, "syncinterval", 60, "interval(in seconds) to check for iptables rules")
 	flag.StringVar(&params.MetricsListenAddress, "metrics-listen-address", "0.0.0.0:9353", "address to serve metrics on")
 	flag.BoolVar(&params.SetupIptables, "setupiptables", true, "indicates whether iptables rules should be setup")
-	flag.BoolVar(&params.SetupEbtables, "setupebtables", false, "indicates whether ebtables rules should be setup")
 	flag.StringVar(&params.BaseCoreFile, "basecorefile", "/etc/coredns/Corefile.base", "Path to the template Corefile for node-cache")
 	flag.StringVar(&params.CoreFile, "corefile", "/etc/Corefile", "Path to the Corefile to be used by node-cache")
 	flag.StringVar(&params.KubednsCMPath, "kubednscm", "", "Path where the kube-dns configmap will be mounted")
