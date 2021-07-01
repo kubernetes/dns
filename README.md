@@ -48,7 +48,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
    The automated job pushes images for all architectures and makes them available in `gcr.io/k8s-staging-dns`.
    Status for build jobs can be checked at - https://k8s-testgrid.appspot.com/sig-network-dns#dns-push-images
 5. Promote the images to `gcr.io/k8s-artifacts-prod` using the process described
-   in [this](https://github.com/kubernetes/k8s.io/tree/master/k8s.gcr.io#image-promoter) link.
+   in [this](https://github.com/kubernetes/k8s.io/tree/main/k8s.gcr.io#image-promoter) link.
    The image SHAs should be added to `images/k8s-staging-dns/images.yaml`.
 6. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers.
