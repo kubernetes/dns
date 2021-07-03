@@ -33,7 +33,6 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 * Setting `VERBOSE=1` will show additional build logging.
 * Setting `VERSION` will override the container version tag.
 
-[![Analytics](https://kubernetes-site.appspot.com/UA-36037335-10/GitHub/dns/README.md?pixel)]()
 
 ## Release process
 
