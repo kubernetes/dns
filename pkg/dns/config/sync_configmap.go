@@ -17,6 +17,9 @@ limitations under the License.
 package config
 
 import (
+	"context"
+	"time"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -25,7 +28,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/klog/v2"
-	"time"
 )
 
 // NewConfigMapSync returns a Sync that watches a config map in the API
@@ -71,7 +73,7 @@ type kubeAPISyncSource struct {
 }
 
 func (syncSource *kubeAPISyncSource) Once() (syncResult, error) {
-	cm, err := syncSource.client.CoreV1().ConfigMaps(syncSource.ns).Get(syncSource.name, metav1.GetOptions{})
+	cm, err := syncSource.client.CoreV1().ConfigMaps(syncSource.ns).Get(context.TODO(), syncSource.name, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Error getting ConfigMap %v:%v err: %v", syncSource.ns, syncSource.name, err)
 		return syncResult{}, err

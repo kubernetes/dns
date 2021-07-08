@@ -30,8 +30,7 @@ type Tracer interface {
 	// Inject injects a span context into the given carrier.
 	Inject(context SpanContext, carrier interface{}) error
 
-	// Stop stops the active tracer and sets the global tracer to a no-op. Calls to
-	// Stop should be idempotent.
+	// Stop stops the tracer. Calls to Stop should be idempotent.
 	Stop()
 }
 

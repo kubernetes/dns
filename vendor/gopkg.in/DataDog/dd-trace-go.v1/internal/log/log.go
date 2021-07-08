@@ -38,6 +38,7 @@ var (
 
 // UseLogger sets l as the active logger.
 func UseLogger(l ddtrace.Logger) {
+	Flush()
 	mu.Lock()
 	defer mu.Unlock()
 	logger = l
@@ -64,6 +65,11 @@ func Debug(fmt string, a ...interface{}) {
 // Warn prints a warning message.
 func Warn(fmt string, a ...interface{}) {
 	printMsg("WARN", fmt, a...)
+}
+
+// Info prints an informational message.
+func Info(fmt string, a ...interface{}) {
+	printMsg("INFO", fmt, a...)
 }
 
 var (

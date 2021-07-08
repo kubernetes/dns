@@ -12,7 +12,6 @@ import (
 	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
-	"k8s.io/kubernetes/pkg/util/dbus"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilexec "k8s.io/utils/exec"
 	utilnet "k8s.io/utils/net"
@@ -132,12 +131,11 @@ func (c *CacheApp) initIptables() {
 
 func newIPTables(isIPv6 bool) utiliptables.Interface {
 	execer := utilexec.New()
-	dbus := dbus.New()
-	protocol := utiliptables.ProtocolIpv4
+	protocol := utiliptables.ProtocolIPv4
 	if isIPv6 {
-		protocol = utiliptables.ProtocolIpv6
+		protocol = utiliptables.ProtocolIPv6
 	}
-	return utiliptables.New(execer, dbus, protocol)
+	return utiliptables.New(execer, protocol)
 }
 
 // TeardownNetworking removes all custom iptables rules and network interface added by node-cache

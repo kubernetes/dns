@@ -18,7 +18,7 @@ language: go
 # https://github.com/travis-ci/travis-ci/issues/5448
 dist: trusty
 go:
-- 1.13
+- 1.16
 
 services:
 - docker

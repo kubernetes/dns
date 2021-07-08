@@ -3,10 +3,10 @@ package dnsserver
 import (
 	"crypto/tls"
 	"fmt"
+	"net/http"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
-
-	"github.com/caddyserver/caddy"
 )
 
 // Config configuration for a single server.
@@ -32,6 +32,11 @@ type Config struct {
 	// DNS-over-TLS or DNS-over-gRPC.
 	Transport string
 
+	// If this function is not nil it will be used to inspect and validate
+	// HTTP requests. Although this isn't referenced in-tree, external plugins
+	// may depend on it.
+	HTTPRequestValidateFunc func(*http.Request) bool
+
 	// If this function is not nil it will be used to further filter access
 	// to this handler. The primary use is to limit access to a reverse zone
 	// on a non-octet boundary, i.e. /17
@@ -52,7 +57,7 @@ type Config struct {
 	registry map[string]plugin.Handler
 }
 
-// keyForConfig build a key for identifying the configs during setup time
+// keyForConfig builds a key for identifying the configs during setup time
 func keyForConfig(blocIndex int, blocKeyIndex int) string {
 	return fmt.Sprintf("%d:%d", blocIndex, blocKeyIndex)
 }

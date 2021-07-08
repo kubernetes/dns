@@ -7,6 +7,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // overloaded queries the health end point and updates a metrics showing how long it took.
@@ -15,7 +16,7 @@ func (h *health) overloaded() {
 	client := http.Client{
 		Timeout: timeout,
 	}
-	url := "http://" + h.Addr
+	url := "http://" + h.Addr + "/health"
 	tick := time.NewTicker(1 * time.Second)
 	defer tick.Stop()
 
@@ -39,7 +40,7 @@ func (h *health) overloaded() {
 
 var (
 	// HealthDuration is the metric used for exporting how fast we can retrieve the /health endpoint.
-	HealthDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+	HealthDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: "health",
 		Name:      "request_duration_seconds",
