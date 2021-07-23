@@ -36,10 +36,11 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 
 ## Release process
 
-1. Build and test (`make images-clean`; `make build`; `make containers`; `make test`)
-2. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
-3. Update [go dependencies](docs/go-dependencies.md) if needed.
-4. Update the release tag. We use [semantic versioning](http://semver.org) to
+1. Build and test (`make images-clean`; `make build`; `make containers`; `make test`). 
+2. To build just the node-cache container, use `make containers CONTAINER_BINARIES=node-cache`.
+3. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
+4. Update [go dependencies](docs/go-dependencies.md) if needed.
+5. Update the release tag. We use [semantic versioning](http://semver.org) to
    name releases.
 4. Wait for container images to be pushed via cloudbuild yaml. This will be done automatically by
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
