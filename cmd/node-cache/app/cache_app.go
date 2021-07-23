@@ -138,6 +138,17 @@ func newIPTables(isIPv6 bool) utiliptables.Interface {
 	return utiliptables.New(execer, protocol)
 }
 
+func handleIPTablesError(err error) {
+	if err == nil {
+		return
+	}
+	if isLockedErr(err) {
+		publishErrorMetric("iptables_lock")
+	} else {
+		publishErrorMetric("iptables")
+	}
+}
+
 // TeardownNetworking removes all custom iptables rules and network interface added by node-cache
 func (c *CacheApp) TeardownNetworking() error {
 	clog.Infof("Tearing down")
@@ -154,11 +165,20 @@ func (c *CacheApp) TeardownNetworking() error {
 		for _, rule := range c.iptablesRules {
 			exists := true
 			for exists == true {
-				c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
-				exists, _ = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+				// check in a loop in case the same rule got added multiple times.
+				err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
+				if err != nil {
+					clog.Errorf("Failed deleting iptables rule %v, error - %v", rule, err)
+					handleIPTablesError(err)
+				}
+				exists, err = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+				if err != nil {
+					clog.Errorf("Failed checking iptables rule after deletion, rule - %v, error - %v", rule, err)
+					handleIPTablesError(err)
+				}
 			}
 			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
-			c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
+			err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
 		}
 	}
 	return err
@@ -176,13 +196,10 @@ func (c *CacheApp) setupNetworking() {
 			case err == nil:
 				clog.Infof("Added back nodelocaldns rule - %v", rule)
 				continue
-				// if we got here, either iptables check failed or adding rule back failed.
-			case isLockedErr(err):
-				clog.Infof("Error checking/adding iptables rule %v, due to xtables lock in use, retrying in %v", rule, c.params.Interval)
-				setupErrCount.WithLabelValues("iptables_lock").Inc()
 			default:
-				clog.Errorf("Error adding iptables rule %v - %s", rule, err)
-				setupErrCount.WithLabelValues("iptables").Inc()
+				// iptables check/rule add failed with error since control reached here.
+				clog.Errorf("Error checking/adding iptables rule %v, error - %v", rule, err)
+				handleIPTablesError(err)
 			}
 		}
 	}

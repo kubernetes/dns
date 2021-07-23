@@ -34,6 +34,10 @@ func registerMetrics() {
 	setupErrCount.WithLabelValues("configmap").Add(0)
 }
 
+func publishErrorMetric(label string) {
+	setupErrCount.WithLabelValues(label).Inc()
+}
+
 func serveMetrics(ipport string) error {
 	ln, err := net.Listen("tcp", ipport)
 	if err != nil {
