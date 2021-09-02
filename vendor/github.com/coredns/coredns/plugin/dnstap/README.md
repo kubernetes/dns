@@ -9,8 +9,8 @@
 dnstap is a flexible, structured binary log format for DNS software; see https://dnstap.info. With this
 plugin you make CoreDNS output dnstap logging.
 
-Every message is sent to the socket as soon as it comes in, the *dnstap* plugin has a buffer of
-10000 messages, above that number dnstap messages will be dropped (this is logged).
+Note that there is an internal buffer, so expect at least 13 requests before the server sends its
+dnstap messages to the socket.
 
 ## Syntax
 
@@ -18,7 +18,7 @@ Every message is sent to the socket as soon as it comes in, the *dnstap* plugin 
 dnstap SOCKET [full]
 ~~~
 
-* **SOCKET** is the socket (path) supplied to the dnstap command line tool.
+* **SOCKET** is the socket path supplied to the dnstap command line tool.
 * `full` to include the wire-format DNS message.
 
 ## Examples
@@ -66,39 +66,28 @@ $ dnstap -l 127.0.0.1:6000
 
 ## Using Dnstap in your plugin
 
-In your setup function, check to see if the *dnstap* plugin is loaded:
+~~~ Go
+import (
+    "github.com/coredns/coredns/plugin/dnstap"
+    "github.com/coredns/coredns/plugin/dnstap/msg"
+)
 
-~~~ go
-c.OnStartup(func() error {
-    if taph := dnsserver.GetConfig(c).Handler("dnstap"); taph != nil {
-        if tapPlugin, ok := taph.(dnstap.Dnstap); ok {
-            f.tapPlugin = &tapPlugin
+func (h Dnstap) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+    // log client query to Dnstap
+    if t := dnstap.TapperFromContext(ctx); t != nil {
+        b := msg.New().Time(time.Now()).Addr(w.RemoteAddr())
+        if t.Pack() {
+            b.Msg(r)
+        }
+        if m, err := b.ToClientQuery(); err == nil {
+            t.TapMessage(m)
         }
     }
-    return nil
-})
-~~~
 
-And then in your plugin:
-
-~~~ go
-func (x RandomPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-    if tapPlugin != nil {
-        q := new(msg.Msg)
-        msg.SetQueryTime(q, time.Now())
-        msg.SetQueryAddress(q, w.RemoteAddr())
-        if tapPlugin.IncludeRawMessage {
-            buf, _ := r.Pack() // r has been seen packed/unpacked before, this should not fail
-            q.QueryMessage = buf
-        }
-        msg.SetType(q, tap.Message_CLIENT_QUERY)
-        tapPlugin.TapMessage(q)
-    }
     // ...
 }
 ~~~
 
 ## See Also
 
-The website [dnstap.info](https://dnstap.info) has info on the dnstap protocol. The *forward*
-plugin's `dnstap.go` uses dnstap to tap messages sent to an upstream.
+[dnstap.info](https://dnstap.info).

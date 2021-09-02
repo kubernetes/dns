@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/coredns/caddy v1.1.0
-	github.com/coredns/coredns v1.8.3
+	github.com/coredns/coredns v1.7.0
 	github.com/coreos/etcd v3.3.25+incompatible
 	github.com/miekg/dns v1.1.42
 	github.com/onsi/ginkgo v1.16.4

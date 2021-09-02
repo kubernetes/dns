@@ -19,9 +19,10 @@ package dnstap
 import (
 	"bufio"
 	"io"
+	"log"
 	"os"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 // A TextFormatFunc renders a dnstap message into a human readable format.
@@ -33,7 +34,6 @@ type TextOutput struct {
 	outputChannel chan []byte
 	wait          chan bool
 	writer        *bufio.Writer
-	log           Logger
 }
 
 // NewTextOutput creates a TextOutput writing dnstap data to the given io.Writer
@@ -67,11 +67,6 @@ func NewTextOutputFromFilename(fname string, format TextFormatFunc, doAppend boo
 	return NewTextOutput(writer, format), nil
 }
 
-// SetLogger configures a logger for error events in the TextOutput
-func (o *TextOutput) SetLogger(logger Logger) {
-	o.log = logger
-}
-
 // GetOutputChannel returns the channel on which the TextOutput accepts dnstap data.
 //
 // GetOutputChannel satisfies the dnstap Output interface.
@@ -88,16 +83,16 @@ func (o *TextOutput) RunOutputLoop() {
 	dt := &Dnstap{}
 	for frame := range o.outputChannel {
 		if err := proto.Unmarshal(frame, dt); err != nil {
-			o.log.Printf("dnstap.TextOutput: proto.Unmarshal() failed: %s, returning", err)
+			log.Fatalf("dnstap.TextOutput: proto.Unmarshal() failed: %s\n", err)
 			break
 		}
 		buf, ok := o.format(dt)
 		if !ok {
-			o.log.Printf("dnstap.TextOutput: text format function failed, returning")
+			log.Fatalf("dnstap.TextOutput: text format function failed\n")
 			break
 		}
 		if _, err := o.writer.Write(buf); err != nil {
-			o.log.Printf("dnstap.TextOutput: write error: %v, returning", err)
+			log.Fatalf("dnstap.TextOutput: write failed: %s\n", err)
 			break
 		}
 		o.writer.Flush()

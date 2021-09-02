@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/dnstap/msg"
+	"github.com/coredns/coredns/plugin/dnstap/taprw"
 
 	tap "github.com/dnstap/golang-dnstap"
 	"github.com/miekg/dns"
@@ -14,46 +14,75 @@ import (
 // Dnstap is the dnstap handler.
 type Dnstap struct {
 	Next plugin.Handler
-	io   tapper
+	IO   IORoutine
 
-	// IncludeRawMessage will include the raw DNS message into the dnstap messages if true.
-	IncludeRawMessage bool
+	// Set to true to include the relevant raw DNS message into the dnstap messages.
+	JoinRawMessage bool
 }
 
-// TapMessage sends the message m to the dnstap interface.
+type (
+	// IORoutine is the dnstap I/O thread as defined by: <http://dnstap.info/Architecture>.
+	IORoutine interface {
+		Dnstap(tap.Dnstap)
+	}
+	// Tapper is implemented by the Context passed by the dnstap handler.
+	Tapper interface {
+		TapMessage(message *tap.Message)
+		Pack() bool
+	}
+)
+
+// ContextKey defines the type of key that is used to save data into the context.
+type ContextKey string
+
+const (
+	// DnstapSendOption specifies the Dnstap message to be send.  Default is sent all.
+	DnstapSendOption ContextKey = "dnstap-send-option"
+)
+
+// TapMessage implements Tapper.
 func (h Dnstap) TapMessage(m *tap.Message) {
 	t := tap.Dnstap_MESSAGE
-	h.io.Dnstap(tap.Dnstap{Type: &t, Message: m})
+	h.IO.Dnstap(tap.Dnstap{
+		Type:    &t,
+		Message: m,
+	})
 }
 
-func (h Dnstap) tapQuery(w dns.ResponseWriter, query *dns.Msg, queryTime time.Time) {
-	q := new(tap.Message)
-	msg.SetQueryTime(q, queryTime)
-	msg.SetQueryAddress(q, w.RemoteAddr())
-
-	if h.IncludeRawMessage {
-		buf, _ := query.Pack()
-		q.QueryMessage = buf
-	}
-	msg.SetType(q, tap.Message_CLIENT_QUERY)
-	h.TapMessage(q)
+// Pack returns true if the raw DNS message should be included into the dnstap messages.
+func (h Dnstap) Pack() bool {
+	return h.JoinRawMessage
 }
 
 // ServeDNS logs the client query and response to dnstap and passes the dnstap Context.
 func (h Dnstap) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	rw := &ResponseWriter{
+
+	// Add send option into context so other plugin can decide on which DNSTap
+	// message to be sent out
+	sendOption := taprw.SendOption{Cq: true, Cr: true}
+	newCtx := context.WithValue(ctx, DnstapSendOption, &sendOption)
+	newCtx = ContextWithTapper(newCtx, h)
+
+	rw := &taprw.ResponseWriter{
 		ResponseWriter: w,
-		Dnstap:         h,
-		query:          r,
-		queryTime:      time.Now(),
+		Tapper:         &h,
+		Query:          r,
+		Send:           &sendOption,
+		QueryEpoch:     time.Now(),
 	}
 
-	// The query tap message should be sent before sending the query to the
-	// forwarder. Otherwise, the tap messages will come out out of order.
-	h.tapQuery(w, r, rw.queryTime)
+	code, err := plugin.NextOrFailure(h.Name(), h.Next, newCtx, rw, r)
+	if err != nil {
+		// ignore dnstap errors
+		return code, err
+	}
 
-	return plugin.NextOrFailure(h.Name(), h.Next, ctx, rw, r)
+	if err = rw.DnstapError(); err != nil {
+		return code, plugin.Error("dnstap", err)
+	}
+
+	return code, nil
 }
 
-// Name implements the plugin.Plugin interface.
+// Name returns dnstap.
 func (h Dnstap) Name() string { return "dnstap" }

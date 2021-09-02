@@ -6,24 +6,19 @@
 package tracer
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"gopkg.in/DataDog/dd-trace-go.v1/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
-)
-
-const (
-	// headerComputedTopLevel specifies that the client has marked top-level spans, when set.
-	// Any non-empty value will mean 'yes'.
-	headerComputedTopLevel = "Datadog-Client-Computed-Top-Level"
 )
 
 var defaultClient = &http.Client{
@@ -58,15 +53,13 @@ type transport interface {
 	// send sends the payload p to the agent using the transport set up.
 	// It returns a non-nil response body when no error occurred.
 	send(p *payload) (body io.ReadCloser, err error)
-	// endpoint returns the URL to which the transport will send traces.
-	endpoint() string
 }
 
 // newTransport returns a new Transport implementation that sends traces to a
 // trace agent running on the given hostname and port, using a given
-// *http.Client. If the zero values for hostname and port are provided,
+// http.RoundTripper. If the zero values for hostname and port are provided,
 // the default values will be used ("localhost" for hostname, and "8126" for
-// port). If client is nil, a default is used.
+// port). If roundTripper is nil, a default is used.
 //
 // In general, using this method is only necessary if you have a trace agent
 // running on a non-default port, if it's located on another machine, or when
@@ -100,14 +93,41 @@ func newHTTPTransport(addr string, client *http.Client) *httpTransport {
 		"Datadog-Meta-Tracer-Version":   version.Tag,
 		"Content-Type":                  "application/msgpack",
 	}
-	if cid := internal.ContainerID(); cid != "" {
-		defaultHeaders["Datadog-Container-ID"] = cid
+	f, err := os.Open("/proc/self/cgroup")
+	if err == nil {
+		if id, ok := readContainerID(f); ok {
+			defaultHeaders["Datadog-Container-ID"] = id
+		}
+		f.Close()
 	}
 	return &httpTransport{
 		traceURL: fmt.Sprintf("http://%s/v0.4/traces", resolveAddr(addr)),
 		client:   client,
 		headers:  defaultHeaders,
 	}
+}
+
+var (
+	// expLine matches a line in the /proc/self/cgroup file. It has a submatch for the last element (path), which contains the container ID.
+	expLine = regexp.MustCompile(`^\d+:[^:]*:(.+)$`)
+	// expContainerID matches contained IDs and sources. Source: https://github.com/Qard/container-info/blob/master/index.js
+	expContainerID = regexp.MustCompile(`([0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12}|[0-9a-f]{64})(?:.scope)?$`)
+)
+
+// readContainerID finds the first container ID reading from r and returns it.
+func readContainerID(r io.Reader) (id string, ok bool) {
+	scn := bufio.NewScanner(r)
+	for scn.Scan() {
+		path := expLine.FindStringSubmatch(scn.Text())
+		if len(path) != 2 {
+			// invalid entry, continue
+			continue
+		}
+		if id := expContainerID.FindString(path[1]); id != "" {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 func (t *httpTransport) send(p *payload) (body io.ReadCloser, err error) {
@@ -120,7 +140,6 @@ func (t *httpTransport) send(p *payload) (body io.ReadCloser, err error) {
 	}
 	req.Header.Set(traceCountHeader, strconv.Itoa(p.itemCount()))
 	req.Header.Set("Content-Length", strconv.Itoa(p.size()))
-	req.Header.Set(headerComputedTopLevel, "yes")
 	response, err := t.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -139,10 +158,6 @@ func (t *httpTransport) send(p *payload) (body io.ReadCloser, err error) {
 		return nil, fmt.Errorf("%s", txt)
 	}
 	return response.Body, nil
-}
-
-func (t *httpTransport) endpoint() string {
-	return t.traceURL
 }
 
 // resolveAddr resolves the given agent address and fills in any missing host

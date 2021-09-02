@@ -25,7 +25,7 @@ func (toc *timeoutConn) Read(b []byte) (int, error) {
 	return toc.conn.Read(b)
 }
 
-func timeoutWriter(w io.Writer, opt *WriterOptions) io.Writer {
+func timeoutWriter(w io.Writer, opt *EncoderOptions) io.Writer {
 	if !opt.Bidirectional {
 		return w
 	}
@@ -42,7 +42,7 @@ func timeoutWriter(w io.Writer, opt *WriterOptions) io.Writer {
 	return w
 }
 
-func timeoutReader(r io.Reader, opt *ReaderOptions) io.Reader {
+func timeoutReader(r io.Reader, opt *DecoderOptions) io.Reader {
 	if !opt.Bidirectional {
 		return r
 	}

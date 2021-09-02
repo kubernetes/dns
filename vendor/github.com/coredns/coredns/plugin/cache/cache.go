@@ -65,21 +65,31 @@ func New() *Cache {
 // key returns key under which we store the item, -1 will be returned if we don't store the message.
 // Currently we do not cache Truncated, errors zone transfers or dynamic update messages.
 // qname holds the already lowercased qname.
-func key(qname string, m *dns.Msg, t response.Type) (bool, uint64) {
+func key(qname string, m *dns.Msg, t response.Type, do bool) (bool, uint64) {
 	// We don't store truncated responses.
 	if m.Truncated {
 		return false, 0
 	}
-	// Nor errors or Meta or Update.
+	// Nor errors or Meta or Update
 	if t == response.OtherError || t == response.Meta || t == response.Update {
 		return false, 0
 	}
 
-	return true, hash(qname, m.Question[0].Qtype)
+	return true, hash(qname, m.Question[0].Qtype, do)
 }
 
-func hash(qname string, qtype uint16) uint64 {
+var one = []byte("1")
+var zero = []byte("0")
+
+func hash(qname string, qtype uint16, do bool) uint64 {
 	h := fnv.New64()
+
+	if do {
+		h.Write(one)
+	} else {
+		h.Write(zero)
+	}
+
 	h.Write([]byte{byte(qtype >> 8)})
 	h.Write([]byte{byte(qtype)})
 	h.Write([]byte(qname))
@@ -104,7 +114,6 @@ type ResponseWriter struct {
 	state  request.Request
 	server string // Server handling the request.
 
-	do         bool // When true the original request had the DO bit set.
 	prefetch   bool // When true write nothing back to the client.
 	remoteAddr net.Addr
 }
@@ -143,10 +152,14 @@ func (w *ResponseWriter) RemoteAddr() net.Addr {
 
 // WriteMsg implements the dns.ResponseWriter interface.
 func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
-	mt, _ := response.Typify(res, w.now().UTC())
+	do := false
+	mt, opt := response.Typify(res, w.now().UTC())
+	if opt != nil {
+		do = opt.Do()
+	}
 
 	// key returns empty string for anything we don't want to cache.
-	hasKey, key := key(w.state.Name(), res, mt)
+	hasKey, key := key(w.state.Name(), res, mt, do)
 
 	msgTTL := dnsutil.MinimalTTL(res, mt)
 	var duration time.Duration
@@ -175,12 +188,18 @@ func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
 	}
 
 	// Apply capped TTL to this reply to avoid jarring TTL experience 1799 -> 8 (e.g.)
-	// We also may need to filter out DNSSEC records, see toMsg() for similar code.
 	ttl := uint32(duration.Seconds())
-	res.Answer = filterRRSlice(res.Answer, ttl, w.do, false)
-	res.Ns = filterRRSlice(res.Ns, ttl, w.do, false)
-	res.Extra = filterRRSlice(res.Extra, ttl, w.do, false)
-
+	for i := range res.Answer {
+		res.Answer[i].Header().Ttl = ttl
+	}
+	for i := range res.Ns {
+		res.Ns[i].Header().Ttl = ttl
+	}
+	for i := range res.Extra {
+		if res.Extra[i].Header().Rrtype != dns.TypeOPT {
+			res.Extra[i].Header().Ttl = ttl
+		}
+	}
 	return w.ResponseWriter.WriteMsg(res)
 }
 

@@ -4,9 +4,10 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+
+	"github.com/caddyserver/caddy"
 )
 
 var log = clog.NewWithPlugin("pprof")
