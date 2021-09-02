@@ -1,3 +1,4 @@
+
 .DEFAULT_GOAL := test
 
 .PHONY: test
@@ -11,7 +12,9 @@ bench:
 .PHONY: lint
 lint:
 	# Ignore grep's exit code since no match returns 1.
-	echo 'linting...' ; golint ./...
+	-golint ./... | grep --invert-match -E '^.*\.pb\.go|^thrift'
+	@
+	@! (golint ./... | grep --invert-match -E '^.*\.pb\.go|^thrift' | read dummy)
 
 .PHONY: vet
 vet:

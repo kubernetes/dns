@@ -38,22 +38,22 @@ func (t *ResponseWriter) RemoteAddr() net.Addr {
 	return &net.UDPAddr{IP: ip, Port: port, Zone: ""}
 }
 
-// WriteMsg implements dns.ResponseWriter interface.
+// WriteMsg implement dns.ResponseWriter interface.
 func (t *ResponseWriter) WriteMsg(m *dns.Msg) error { return nil }
 
-// Write implements dns.ResponseWriter interface.
+// Write implement dns.ResponseWriter interface.
 func (t *ResponseWriter) Write(buf []byte) (int, error) { return len(buf), nil }
 
-// Close implements dns.ResponseWriter interface.
+// Close implement dns.ResponseWriter interface.
 func (t *ResponseWriter) Close() error { return nil }
 
-// TsigStatus implements dns.ResponseWriter interface.
+// TsigStatus implement dns.ResponseWriter interface.
 func (t *ResponseWriter) TsigStatus() error { return nil }
 
-// TsigTimersOnly implements dns.ResponseWriter interface.
+// TsigTimersOnly implement dns.ResponseWriter interface.
 func (t *ResponseWriter) TsigTimersOnly(bool) {}
 
-// Hijack implements dns.ResponseWriter interface.
+// Hijack implement dns.ResponseWriter interface.
 func (t *ResponseWriter) Hijack() {}
 
 // ResponseWriter6 returns fixed client and remote address in IPv6.  The remote

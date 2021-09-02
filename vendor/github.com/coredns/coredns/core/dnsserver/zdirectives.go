@@ -27,7 +27,6 @@ var Directives = []string{
 	"errors",
 	"log",
 	"dnstap",
-	"local",
 	"dns64",
 	"acl",
 	"any",
