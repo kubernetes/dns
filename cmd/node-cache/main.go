@@ -14,8 +14,9 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	utilnet "k8s.io/utils/net"
 
+	// This should match the caddy dep used by github.com/vendor/coredns/coredns/coremain/run.go.
+	"github.com/caddyserver/caddy"
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
-	"github.com/coredns/caddy"
 	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/debug"
