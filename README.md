@@ -33,6 +33,12 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 * Setting `VERBOSE=1` will show additional build logging.
 * Setting `VERSION` will override the container version tag.
 
+## Vulnerability patching
+
+Vulnerability patches are mainly for debian-base or debian-iptables images. They can be updated to the latest by modifying [rules.mk](https://github.com/kubernetes/dns/blob/master/rules.mk#L32-L33) and [dnsmasq Makefile](https://github.com/kubernetes/dns/blob/f44ede5f559a9a29fa23b438e6ce0cb70934d834/images/dnsmasq/Makefile#L30-L32).
+[Example PR](https://github.com/kubernetes/dns/pull/475).
+
+Once the PR has merged, a new release tag should be cut. The rest of the release process is described below.
 
 ## Release process
 
