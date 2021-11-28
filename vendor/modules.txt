@@ -27,6 +27,7 @@ github.com/coredns/coredns/plugin/bind
 github.com/coredns/coredns/plugin/cache
 github.com/coredns/coredns/plugin/cache/freq
 github.com/coredns/coredns/plugin/debug
+github.com/coredns/coredns/plugin/dns64
 github.com/coredns/coredns/plugin/dnstap
 github.com/coredns/coredns/plugin/dnstap/dnstapio
 github.com/coredns/coredns/plugin/dnstap/msg
