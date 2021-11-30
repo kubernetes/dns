@@ -4,7 +4,6 @@ go 1.13
 
 require (
 	github.com/caddyserver/caddy v1.0.5
-	github.com/coredns/caddy v1.1.0 // indirect
 	github.com/coredns/coredns v1.7.0
 	github.com/coreos/etcd v3.3.25+incompatible
 	github.com/miekg/dns v1.1.42
