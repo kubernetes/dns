@@ -17,7 +17,6 @@ limitations under the License.
 package sidecar
 
 import (
-	"math"
 	"time"
 
 	"k8s.io/dns/pkg/dnsmasq"
