@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Exit at the first failure.
+set -e
 # These are the commands run by the prow presubmit job.
 
 echo "installing ginkgo"
