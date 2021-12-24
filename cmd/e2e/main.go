@@ -69,7 +69,7 @@ start/stop containers on the local docker instance.
 
 func waitForSignal() {
 	log.Printf("Waiting for SIGINT, SIGTERM (use ctrl-c to stop cluster)")
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 	log.Printf("Cleaning up")

@@ -169,7 +169,7 @@ func (server *KubeDNSServer) setupHandlers() {
 // SIGTERM. This daemon will be killed by SIGKILL after the grace
 // period to allow for some manner of graceful shutdown.
 func setupSignalHandlers() {
-	sigChan := make(chan os.Signal)
+	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for {
