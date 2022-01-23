@@ -41,12 +41,14 @@ Vulnerability patches are mainly for debian-base or debian-iptables images. They
 Once the PR has merged, a new release tag should be cut. The rest of the release process is described below.
 
 ## Release process
+Follow these steps to make changes and release a new binary.
 
-1. Build and test (`make images-clean`; `make build`; `make containers`; `make test`). 
-2. To build just the node-cache container, use `make containers CONTAINER_BINARIES=node-cache`.
-3. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
-4. Update [go dependencies](docs/go-dependencies.md) if needed.
-5. Update the release tag. We use [semantic versioning](http://semver.org) to
+1. Make the necessary code changes and create a PR.
+2. Build and test locally (`make images-clean`; `make build`; `make containers`; `make test`). 
+3. To build just the node-cache container, use `make containers CONTAINER_BINARIES=node-cache`.
+4. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
+5. Merge the PR.
+6. Cut a new release tag. We use [semantic versioning](http://semver.org) to
    name releases.
 4. Wait for container images to be pushed via cloudbuild yaml. This will be done automatically by
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
