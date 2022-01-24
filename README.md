@@ -50,6 +50,11 @@ Follow these steps to make changes and release a new binary.
 5. Merge the PR.
 6. Cut a new release tag. We use [semantic versioning](http://semver.org) to
    name releases.
+   Example:
+   ```
+   git tag -a 1.21.4 -m "Build images using golang 1.17."
+   git push upstream 1.21.4
+   ```
 4. Wait for container images to be pushed via cloudbuild yaml. This will be done automatically by
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
    `gcloud builds submit --config cloudbuild.yaml`, but this requires owner permissions in k8s-staging-dns project.
