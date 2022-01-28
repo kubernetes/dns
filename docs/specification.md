@@ -88,7 +88,7 @@ For each port in the Service with name `<port>` and number
 form must exist.
 
 - Record Format:
-   - `_<port>._<proto>.<service>.<ns>.svc.<zone>. <ttl> IN SRV <weight> <priority> <port-number> <service>.<ns>.svc.<zone>.`
+   - `_<port>._<proto>.<service>.<ns>.svc.<zone>. <ttl> IN SRV <priority> <weight> <port-number> <service>.<ns>.svc.<zone>.`
 
 The priority `<priority>` and weight `<weight>` are numbers as described
 in [RFC2782](https://tools.ietf.org/html/rfc2782) and whose values are not
@@ -192,7 +192,7 @@ For each combination of _ready_ endpoint with _hostname_ of `<hostname>`, and
 port in the Service with name `<port>` and number `<port-number>` using
 protocol `<proto>`, an `SRV` record of the following form must exist.
 - Record Format:
-   - `_<port>._<proto>.<service>.<ns>.svc.<zone>. <ttl> IN SRV <weight> <priority> <port-number> <hostname>.<service>.<ns>.svc.<zone>.`
+   - `_<port>._<proto>.<service>.<ns>.svc.<zone>. <ttl> IN SRV <priority> <weight> <port-number> <hostname>.<service>.<ns>.svc.<zone>.`
 
 This implies that if there are **N** _ready_ endpoints and the Service
 defines **M** named ports, there will be **N** :heavy_multiplication_x: **M**
