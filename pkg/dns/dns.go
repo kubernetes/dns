@@ -338,8 +338,10 @@ func (kd *KubeDNS) removeService(obj interface{}) {
 
 		// ExternalName services have no IP
 		if util.IsServiceIPSet(s) {
-			delete(kd.reverseRecordMap, s.Spec.ClusterIP)
-			delete(kd.clusterIPServiceMap, s.Spec.ClusterIP)
+			for _, ip := range util.GetClusterIPs(s) {
+				delete(kd.reverseRecordMap, ip)
+				delete(kd.clusterIPServiceMap, ip)
+			}
 		}
 	}
 }
@@ -500,13 +502,20 @@ func (kd *KubeDNS) fqdn(service *v1.Service, subpaths ...string) string {
 
 func (kd *KubeDNS) newPortalService(service *v1.Service) {
 	subCache := treecache.NewTreeCache()
-	recordValue, recordLabel := util.GetSkyMsg(service.Spec.ClusterIP, 0)
-	subCache.SetEntry(recordLabel, recordValue, kd.fqdn(service, recordLabel))
+	clusterIPs := util.GetClusterIPs(service)
 
-	// Generate SRV Records
-	for i := range service.Spec.Ports {
-		port := &service.Spec.Ports[i]
-		if port.Name != "" && port.Protocol != "" {
+	for _, ip := range clusterIPs {
+		recordValue, recordLabel := util.GetSkyMsg(ip, 0)
+		subCache.SetEntry(recordLabel, recordValue, kd.fqdn(service, recordLabel))
+
+		// Generate SRV Records
+		for i := range service.Spec.Ports {
+			port := &service.Spec.Ports[i]
+
+			if port.Name == "" || port.Protocol == "" {
+				continue
+			}
+
 			srvValue := kd.generateSRVRecordValue(service, int(port.Port))
 
 			l := []string{"_" + strings.ToLower(string(port.Protocol)), "_" + port.Name}
@@ -515,6 +524,7 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 			subCache.SetEntry(recordLabel, srvValue, kd.fqdn(service, append(l, recordLabel)...), l...)
 		}
 	}
+
 	subCachePath := append(kd.domainPath, serviceSubdomain, service.Namespace)
 	host := getServiceFQDN(kd.domain, service)
 	reverseRecord, _ := util.GetSkyMsg(host, 0)
@@ -522,8 +532,11 @@ func (kd *KubeDNS) newPortalService(service *v1.Service) {
 	kd.cacheLock.Lock()
 	defer kd.cacheLock.Unlock()
 	kd.cache.SetSubCache(service.Name, subCache, subCachePath...)
-	kd.reverseRecordMap[service.Spec.ClusterIP] = reverseRecord
-	kd.clusterIPServiceMap[service.Spec.ClusterIP] = service
+
+	for _, ip := range clusterIPs {
+		kd.reverseRecordMap[ip] = reverseRecord
+		kd.clusterIPServiceMap[ip] = service
+	}
 }
 
 func (kd *KubeDNS) generateRecordsForHeadlessService(e *v1.Endpoints, svc *v1.Service) error {

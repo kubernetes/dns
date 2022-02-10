@@ -116,3 +116,11 @@ func ValidateNameserverIpAndPort(nameServer string) (string, string, error) {
 func IsServiceIPSet(service *corev1.Service) bool {
 	return service.Spec.ClusterIP != corev1.ClusterIPNone && service.Spec.ClusterIP != ""
 }
+
+// GetClusterIPs returns IPs set for the service
+func GetClusterIPs(service *corev1.Service) []string {
+	if len(service.Spec.ClusterIPs) > 0 {
+		return service.Spec.ClusterIPs
+	}
+	return []string{service.Spec.ClusterIP}
+}
