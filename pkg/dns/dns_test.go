@@ -138,7 +138,7 @@ func TestUnnamedSinglePortService(t *testing.T) {
 		// Delete the service
 		kd.removeService(s)
 		assertNoDNSForClusterIP(t, kd, s)
-		assertNoReverseRecord(t, kd, s)
+		assertNoReverseRecord(t, tt.name, kd, s)
 	}
 }
 
@@ -1115,19 +1115,46 @@ func assertDNSForClusterIP(t *testing.T, testCase string, kd *KubeDNS, s *v1.Ser
 }
 
 func assertReverseRecord(t *testing.T, testCase string, kd *KubeDNS, s *v1.Service) {
-	segments := util.ReverseArray(strings.Split(s.Spec.ClusterIP, "."))
-	reverseLookup := fmt.Sprintf("%s%s", strings.Join(segments, "."), util.ArpaSuffix)
-	reverseRecord, err := kd.ReverseRecord(reverseLookup)
-	require.NoError(t, err, testCase)
-	assert.Equal(t, getServiceFQDN(kd.domain, s), reverseRecord.Host, testCase)
+	for _, ip := range util.GetClusterIPs(s) {
+		reverseLookup, err := makePTRRecord(ip)
+		require.NoError(t, err, testCase)
+		reverseRecord, err := kd.ReverseRecord(reverseLookup)
+		require.NoError(t, err, testCase)
+		assert.Equal(t, getServiceFQDN(kd.domain, s), reverseRecord.Host, testCase)
+	}
 }
 
-func assertNoReverseRecord(t *testing.T, kd *KubeDNS, s *v1.Service) {
-	segments := util.ReverseArray(strings.Split(s.Spec.ClusterIP, "."))
-	reverseLookup := fmt.Sprintf("%s%s", strings.Join(segments, "."), util.ArpaSuffix)
-	reverseRecord, err := kd.ReverseRecord(reverseLookup)
-	require.Error(t, err)
-	require.Nil(t, reverseRecord)
+func assertNoReverseRecord(t *testing.T, testCase string, kd *KubeDNS, s *v1.Service) {
+	for _, ip := range util.GetClusterIPs(s) {
+		reverseLookup, err := makePTRRecord(ip)
+		require.NoError(t, err, testCase)
+		reverseRecord, err := kd.ReverseRecord(reverseLookup)
+		require.Error(t, err)
+		require.Nil(t, reverseRecord)
+	}
+}
+
+// 10.47.32.22 -> 22.32.47.10.in-addr.arpa.
+// 4321:0:1:2:3:4:567:89ab -> b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.
+func makePTRRecord(ip string) (string, error) {
+	if net.ParseIP(ip).To4() != nil {
+		segments := util.ReverseArray(strings.Split(ip, "."))
+		return fmt.Sprintf("%s%s", strings.Join(segments, "."), util.ArpaSuffix), nil
+	}
+
+	const ipv6nibbleCount = 32
+
+	if ipv6 := net.ParseIP(ip).To16(); ipv6 != nil {
+		b := make([]string, 0, ipv6nibbleCount)
+		for i := 0; i < len(ipv6); i += 2 {
+			for _, c := range fmt.Sprintf("%04x", int64(ipv6[i])<<8|int64(ipv6[i+1])) {
+				b = append(b, string(c))
+			}
+		}
+		return fmt.Sprintf("%s%s", strings.Join(util.ReverseArray(b), "."), util.ArpaSuffixV6), nil
+	}
+
+	return "", fmt.Errorf("incorrect ip adress: %q", ip)
 }
 
 func getEquivalentQueries(serviceFQDN, namespace string) []string {

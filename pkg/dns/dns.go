@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -824,9 +825,9 @@ func (kd *KubeDNS) ReverseRecord(name string) (*skymsg.Service, error) {
 	klog.V(3).Infof("Query for ReverseRecord %q", name)
 
 	// if portalIP is not a valid IP, the reverseRecordMap lookup will fail
-	portalIP, ok := util.ExtractIP(name)
-	if !ok {
-		return nil, fmt.Errorf("does not support reverse lookup for %s", name)
+	portalIP, err := util.ExtractIP(name)
+	if err != nil {
+		return nil, errors.Wrapf(err, "does not support reverse lookup for %s", name)
 	}
 
 	kd.cacheLock.RLock()
