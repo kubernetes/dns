@@ -15,6 +15,8 @@ FROM ARG_REGISTRY/k8s-dns-dnsmasq-ARG_ARCH:ARG_VERSION
 
 MAINTAINER Bowei Du <bowei@google.com>
 
-RUN mkdir -p /etc/k8s/dns/dnsmasq-nanny
+# ensure /etc/k8s/dns/dnsmasq-nanny exists as mkdir is not available
+WORKDIR /etc/k8s/dns/dnsmasq-nanny
+WORKDIR /
 ADD bin/ARG_ARCH/ARG_BIN /ARG_BIN
 ENTRYPOINT ["/ARG_BIN"]

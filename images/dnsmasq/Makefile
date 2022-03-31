@@ -27,7 +27,9 @@ OUTPUT_DIR := _output/$(ARCH)
 # Ensure that the docker command line supports the manifest images
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
-BASEIMAGE ?= k8s.gcr.io/build-image/debian-base-$(ARCH):bullseye-v1.3.0
+# Multiarch image
+# Uploaded: Jun 6, 2022, 7:19:17 PM
+BASEIMAGE ?= gcr.io/distroless/base-debian11@sha256:6c7c6e523cb42cddaace37a9125014b51768f2761138dbb8c7fb722d57a988a0
 ifeq ($(ARCH),amd64)
 	COMPILE_IMAGE := k8s.gcr.io/build-image/debian-base-$(ARCH):bullseye-v1.3.0
 else ifeq ($(ARCH),arm)
