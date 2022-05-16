@@ -79,37 +79,43 @@ func TestExtractIP(t *testing.T) {
 		{
 			testName: "empty ptr",
 			wantErr:  true,
-			errMsg:   "incorrect PTR: ",
+			errMsg:   "incorrect PTR: \"\"",
 		},
 		{
 			testName: "IPv4 ptr with incorrect suffix",
 			ptr:      "255.2.0.192.ip6.arpa.",
 			wantErr:  true,
-			errMsg:   "incorrect PTR IPv6: incorrect number of segments in IPv6 PTR: 4",
+			errMsg:   "incorrect PTR IPv6 \"255.2.0.192.ip6.arpa.\": incorrect number of segments in IPv6 PTR: 4",
+		},
+		{
+			testName: "incorrect IPv4 ptr",
+			ptr:      "255.2.0.322.in-addr.arpa.",
+			wantErr:  true,
+			errMsg:   "incorrect PTR IPv4 \"255.2.0.322.in-addr.arpa.\": failed to parse IPv4 reverse name: \"255.2.0.322\"",
 		},
 		{
 			testName: "IPv6 ptr with incorrect suffix",
 			ptr:      "b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.0.0.0.0.0.0.0.0.1.2.3.4.in-addr.arpa",
 			wantErr:  true,
-			errMsg:   "incorrect PTR: b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.0.0.0.0.0.0.0.0.1.2.3.4.in-addr.arpa",
+			errMsg:   "incorrect PTR: \"b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.0.0.0.0.0.0.0.0.1.2.3.4.in-addr.arpa\"",
 		},
 		{
 			testName: "large number of nibbles in ipv6 ptr",
 			ptr:      "a.b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.",
 			wantErr:  true,
-			errMsg:   "incorrect PTR IPv6: incorrect number of segments in IPv6 PTR: 33",
+			errMsg:   "incorrect PTR IPv6 \"a.b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.\": incorrect number of segments in IPv6 PTR: 33",
 		},
 		{
 			testName: "unexpected char",
 			ptr:      "z.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.",
 			wantErr:  true,
-			errMsg:   "incorrect PTR IPv6: failed to parse IPv6 segments: [4321 0000 0001 0002 0003 0004 0567 89az]",
+			errMsg:   "incorrect PTR IPv6 \"z.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.\": failed to parse IPv6 segments: [4321 0000 0001 0002 0003 0004 0567 89az]",
 		},
 		{
 			testName: "custom text",
 			ptr:      "custom text",
 			wantErr:  true,
-			errMsg:   "incorrect PTR: custom text",
+			errMsg:   "incorrect PTR: \"custom text\"",
 		},
 	} {
 		ip, err := ExtractIP(tc.ptr)

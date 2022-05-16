@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/skynetservices/skydns/msg"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -49,7 +48,7 @@ func ExtractIP(reverseName string) (string, error) {
 	if strings.HasSuffix(reverseName, ArpaSuffix) {
 		ip, err := extractIPv4(strings.TrimSuffix(reverseName, ArpaSuffix))
 		if err != nil {
-			return "", errors.Wrap(err, "incorrect PTR IPv4")
+			return "", fmt.Errorf("incorrect PTR IPv4 %q: %w", reverseName, err)
 		}
 		return ip, nil
 	}
@@ -57,12 +56,12 @@ func ExtractIP(reverseName string) (string, error) {
 	if strings.HasSuffix(reverseName, ArpaSuffixV6) {
 		ip, err := extractIPv6(strings.TrimSuffix(reverseName, ArpaSuffixV6))
 		if err != nil {
-			return "", errors.Wrap(err, "incorrect PTR IPv6")
+			return "", fmt.Errorf("incorrect PTR IPv6 %q: %w", reverseName, err)
 		}
 		return ip, nil
 	}
 
-	return "", fmt.Errorf("incorrect PTR: %v", reverseName)
+	return "", fmt.Errorf("incorrect PTR: %q", reverseName)
 }
 
 // extractIPv4 turns a standard PTR reverse record lookup name
@@ -73,7 +72,7 @@ func extractIPv4(reverseName string) (string, error) {
 
 	ip := net.ParseIP(strings.Join(segments, ".")).To4()
 	if ip == nil {
-		return "", fmt.Errorf("failed to parse IPv4 reverse name: %v", reverseName)
+		return "", fmt.Errorf("failed to parse IPv4 reverse name: %q", reverseName)
 	}
 	return ip.String(), nil
 }
