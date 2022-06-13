@@ -3,6 +3,7 @@ module k8s.io/dns
 go 1.13
 
 require (
+	github.com/apache/thrift v0.16.0 // indirect
 	github.com/caddyserver/caddy v1.0.5
 	github.com/coredns/coredns v1.7.0
 	github.com/coreos/etcd v3.3.25+incompatible
@@ -14,6 +15,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	github.com/vishvananda/netlink v1.1.0
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	k8s.io/api v0.21.6
 	k8s.io/apimachinery v0.21.6
 	k8s.io/client-go v0.21.6
