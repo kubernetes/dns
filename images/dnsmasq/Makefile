@@ -13,7 +13,7 @@
 # limitations under the License.
 
 VERSION ?= $(shell git describe --tags --always --dirty)
-REGISTRY ?= staging-k8s.gcr.io
+REGISTRY ?= gcr.io/k8s-staging-dns
 ARCH ?= amd64
 DNSMASQ_VERSION ?= dnsmasq-2.86
 CONTAINER_PREFIX ?= k8s-dns
@@ -165,7 +165,7 @@ containers: $(CONTAINER_STAMP)
 
 $(CONTAINER_STAMP): $(BINARY)
 	@echo "container:" $(REGISTRY)/$(IMAGE):$(VERSION)
-	@docker build --pull \
+	@docker buildx build --pull --load --platform linux/$(ARCH) \
 		-q -t $(REGISTRY)/$(IMAGE):$(VERSION) $(OUTPUT_DIR)/docker > $@
 
 .PHONY: test
