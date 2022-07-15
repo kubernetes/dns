@@ -32,7 +32,7 @@ ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Multiarch image
 # Uploaded: Jun 6, 2022, 7:19:10 PM
 BASEIMAGE ?= gcr.io/distroless/static-debian11@sha256:d6fa9db9548b5772860fecddb11d84f9ebd7e0321c0cb3c02870402680cc315f
-IPTIMAGE ?= k8s.gcr.io/build-image/debian-iptables-$(ARCH):bullseye-v1.4.0
+IPTIMAGE ?= k8s.gcr.io/build-image/debian-iptables-$(ARCH):bullseye-v1.5.0
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
