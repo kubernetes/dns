@@ -31,6 +31,7 @@ import (
 	"github.com/caddyserver/caddy"
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
 	_ "github.com/coredns/coredns/plugin/bind"
+	_ "github.com/coredns/coredns/plugin/bufsize"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/debug"
 	_ "github.com/coredns/coredns/plugin/dns64"
