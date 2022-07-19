@@ -14,7 +14,8 @@ steps:
     - -c
     - |
       echo "Building/Pushing DNS containers"
-      make all-push
+      gcloud auth configure-docker \
+      && make all-push
 substitutions:
   # _GIT_TAG will be filled with a git-based tag for the image, of the form vYYYYMMDD-hash, and
   # can be used as a substitution
