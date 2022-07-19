@@ -141,8 +141,9 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
-	@docker build					\
-		$(DOCKER_BUILD_FLAGS)			\
+	@docker buildx build					\
+		--platform linux/$(ARCH)			\
+		$(DOCKER_BUILD_FLAGS)				\
 		-t $(CONTAINER_NAME):$(VERSION)		\
 		-f .$(BINARY)-$(ARCH)-dockerfile .	\
 		$(VERBOSE_OUTPUT)
