@@ -31,7 +31,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 # Uploaded: Jul 14, 2022, 10:24:42 PM
 BASEIMAGE ?= gcr.io/distroless/base-debian11@sha256:a08c76433d484340bd97013b5d868edfba797fbf83dc82174ebd0768d12f491d
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := k8s.gcr.io/build-image/debian-base-$(ARCH):bullseye-v1.3.0
+	COMPILE_IMAGE := k8s.gcr.io/build-image/debian-base-$(ARCH):bullseye-v1.4.1
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
