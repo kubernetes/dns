@@ -31,6 +31,8 @@ import (
 const (
 	// ArpaSuffix is the standard suffix for PTR IP reverse lookups.
 	ArpaSuffix = ".in-addr.arpa."
+	// ArpaSuffixV6 is the suffix for PTR IPv6 reverse lookups.
+	ArpaSuffixV6 = ".ip6.arpa."
 	// defaultPriority used for service records
 	defaultPriority = 10
 	// defaultWeight used for service records
@@ -41,15 +43,64 @@ const (
 
 // ExtractIP turns a standard PTR reverse record lookup name
 // into an IP address
-func ExtractIP(reverseName string) (string, bool) {
-	if !strings.HasSuffix(reverseName, ArpaSuffix) {
-		return "", false
+// Returns "", error if the reverseName is not a valid PTR lookup name
+func ExtractIP(reverseName string) (string, error) {
+	if strings.HasSuffix(reverseName, ArpaSuffix) {
+		ip, err := extractIPv4(strings.TrimSuffix(reverseName, ArpaSuffix))
+		if err != nil {
+			return "", fmt.Errorf("incorrect PTR IPv4 %q: %w", reverseName, err)
+		}
+		return ip, nil
 	}
-	search := strings.TrimSuffix(reverseName, ArpaSuffix)
 
+	if strings.HasSuffix(reverseName, ArpaSuffixV6) {
+		ip, err := extractIPv6(strings.TrimSuffix(reverseName, ArpaSuffixV6))
+		if err != nil {
+			return "", fmt.Errorf("incorrect PTR IPv6 %q: %w", reverseName, err)
+		}
+		return ip, nil
+	}
+
+	return "", fmt.Errorf("incorrect PTR: %q", reverseName)
+}
+
+// extractIPv4 turns a standard PTR reverse record lookup name
+// into an IP address
+func extractIPv4(reverseName string) (string, error) {
 	// reverse the segments and then combine them
-	segments := ReverseArray(strings.Split(search, "."))
-	return strings.Join(segments, "."), true
+	segments := ReverseArray(strings.Split(reverseName, "."))
+
+	ip := net.ParseIP(strings.Join(segments, ".")).To4()
+	if ip == nil {
+		return "", fmt.Errorf("failed to parse IPv4 reverse name: %q", reverseName)
+	}
+	return ip.String(), nil
+}
+
+// extractIPv6 turns a IPv6 PTR reverse record lookup name
+// into an IPv6 address according to RFC3596
+// b.a.9.8.7.6.5.0.4.0.0.0.3.0.0.0.2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.ip6.arpa.
+// is reversed to 4321:0:1:2:3:4:567:89ab
+func extractIPv6(reverseName string) (string, error) {
+	segments := ReverseArray(strings.Split(reverseName, "."))
+
+	// IPv6nibbleCount is the expected number of nibbles in IPv6 PTR record as defined in rfc3596
+	const ipv6nibbleCount = 32
+
+	if len(segments) != ipv6nibbleCount {
+		return "", fmt.Errorf("incorrect number of segments in IPv6 PTR: %v", len(segments))
+	}
+
+	var slice6 []string
+	for i := 0; i < len(segments); i += 4 {
+		slice6 = append(slice6, strings.Join(segments[i:i+4], ""))
+	}
+
+	ip := net.ParseIP(strings.Join(slice6, ":")).To16()
+	if ip == nil {
+		return "", fmt.Errorf("failed to parse IPv6 segments: %v", slice6)
+	}
+	return ip.String(), nil
 }
 
 // ReverseArray reverses an array.
@@ -119,8 +170,22 @@ func IsServiceIPSet(service *corev1.Service) bool {
 
 // GetClusterIPs returns IPs set for the service
 func GetClusterIPs(service *corev1.Service) []string {
+	clusterIPs := []string{service.Spec.ClusterIP}
 	if len(service.Spec.ClusterIPs) > 0 {
-		return service.Spec.ClusterIPs
+		clusterIPs = service.Spec.ClusterIPs
 	}
-	return []string{service.Spec.ClusterIP}
+
+	// Same IPv6 could be represented differently (as from rfc5952):
+	// 2001:db8:0:0:aaaa::1
+	// 2001:db8::aaaa:0:0:1
+	// 2001:db8:0::aaaa:0:0:1
+	// net.ParseIP(ip).String() output is used as a normalization form
+	// for all cases above it returns 2001:db8::aaaa:0:0:1
+	// without the normalization there could be mismatches in key lookups e.g. for PTR
+	normalized := make([]string, 0, len(clusterIPs))
+	for _, ip := range clusterIPs {
+		normalized = append(normalized, net.ParseIP(ip).String())
+	}
+
+	return normalized
 }
