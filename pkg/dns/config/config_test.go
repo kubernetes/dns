@@ -64,3 +64,45 @@ func TestValidate(t *testing.T) {
 		assert.NotNil(t, err, "should not be valid: %+v", testCase)
 	}
 }
+
+func TestValidateNodeLocalCacheConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		config    Config
+		wantError bool
+	}{
+		{
+			name:   "empty config",
+			config: Config{},
+		},
+		{
+			name: "valid config",
+			config: Config{
+				StubDomains:         map[string][]string{"": {"1.1.1.1"}},
+				UpstreamNameservers: []string{"1.1.1.1", "2.2.2.2"},
+			},
+		},
+		{
+			name: "invalid config: FQDN stub domain",
+			config: Config{
+				StubDomains:         map[string][]string{"": {"cluster.local"}},
+				UpstreamNameservers: []string{"1.1.1.1", "2.2.2.2"},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid config: FQDN upstream name server",
+			config: Config{
+				StubDomains:         map[string][]string{"": {"1.1.1.1"}},
+				UpstreamNameservers: []string{"1.1.1.1", "cluster.local"},
+			},
+			wantError: true,
+		},
+	} {
+		err := tc.config.ValidateNodeLocalCacheConfig()
+		gotError := err != nil
+		if gotError != tc.wantError {
+			t.Fatalf("ValidateNodeLocalCacheConfig(%v) got error = %v, want = %v", tc.config, gotError, tc.wantError)
+		}
+	}
+}
