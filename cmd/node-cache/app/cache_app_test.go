@@ -246,7 +246,7 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	}
 	customConfig := &config.Config{StubDomains: map[string][]string{
 		"acme.local":   {"2001:db8:1:1:1::1"},
-		"google.local": {"8.8.8.8"},
+		"google.local": {"2001:4860:4860::8888"},
 		"widget.local": {"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"},
 	},
 		UpstreamNameservers: []string{"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"},

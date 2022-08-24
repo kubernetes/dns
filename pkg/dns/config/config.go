@@ -22,7 +22,6 @@ import (
 	"strconv"
 
 	"github.com/coredns/coredns/plugin/pkg/parse"
-
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
@@ -136,9 +135,9 @@ func (config *Config) validateUpstreamNameserver() error {
 // ValidateNodeLocalCacheConfig returns nil if the config can be compiled
 // to a valid Corefile.
 func (config *Config) ValidateNodeLocalCacheConfig() error {
-	for _, stubDomains := range config.StubDomains {
-		if err := validateForwardProxy(stubDomains...); err != nil {
-			return err
+	for domain, nameservers := range config.StubDomains {
+		if err := validateForwardProxy(nameservers...); err != nil {
+			return fmt.Errorf("invalid nameservers %s for the stub domain %s: %v", nameservers, domain, err)
 		}
 	}
 	if err := validateForwardProxy(config.UpstreamNameservers...); err != nil {

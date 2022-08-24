@@ -82,15 +82,15 @@ func getStubDomainStr(stubDomainMap map[string][]string, info *stubDomainInfo) s
 }
 
 func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
+	if err := dnsConfig.ValidateNodeLocalCacheConfig(); err != nil {
+		clog.Errorf("Invalid config: %v", err)
+		setupErrCount.WithLabelValues("configmap").Inc()
+		return
+	}
 	// construct part of the Corefile
 	baseConfig, err := ioutil.ReadFile(c.params.BaseCoreFile)
 	if err != nil {
 		clog.Errorf("Failed to read node-cache coreFile %s - %v", c.params.BaseCoreFile, err)
-		setupErrCount.WithLabelValues("configmap").Inc()
-		return
-	}
-	if err = dnsConfig.ValidateNodeLocalCacheConfig(); err != nil {
-		clog.Errorf("Invalid config: %v", err)
 		setupErrCount.WithLabelValues("configmap").Inc()
 		return
 	}
