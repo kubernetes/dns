@@ -141,7 +141,7 @@ func (config *Config) ValidateNodeLocalCacheConfig() error {
 		}
 	}
 	if err := validateForwardProxy(config.UpstreamNameservers...); err != nil {
-		return err
+		return fmt.Errorf("invalid upstream nameservers %s: %v", config.UpstreamNameservers, err)
 	}
 	return nil
 }
