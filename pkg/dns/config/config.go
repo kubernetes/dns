@@ -21,6 +21,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/coredns/coredns/plugin/pkg/parse"
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	fed "k8s.io/dns/pkg/dns/federation"
@@ -126,6 +127,42 @@ func (config *Config) validateUpstreamNameserver() error {
 	for _, nameServer := range config.UpstreamNameservers {
 		if _, _, err := util.ValidateNameserverIpAndPort(nameServer); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// ValidateNodeLocalCacheConfig returns nil if the config can be compiled
+// to a valid Corefile.
+func (config *Config) ValidateNodeLocalCacheConfig() error {
+	for domain, nameservers := range config.StubDomains {
+		if err := validateForwardProxy(nameservers...); err != nil {
+			return fmt.Errorf("invalid nameservers %s for the stub domain %s: %v", nameservers, domain, err)
+		}
+	}
+	if err := validateForwardProxy(config.UpstreamNameservers...); err != nil {
+		return fmt.Errorf("invalid upstream nameservers %s: %v", config.UpstreamNameservers, err)
+	}
+	return nil
+}
+
+// validateForwardProxy returns nil if the nameservers are valid proxy addresses
+// for the CoreDNS plugin forward.
+// The function is ported from coredns/plugin/forward:parseStanza
+func validateForwardProxy(nameservers ...string) error {
+	if len(nameservers) == 0 {
+		return nil
+	}
+	hosts, err := parse.HostPortOrFile(nameservers...)
+	if err != nil {
+		return err
+	}
+	for _, host := range hosts {
+		trans, _ := parse.Transport(host)
+		switch trans {
+		case "dns", "tls":
+		default:
+			return fmt.Errorf("unsupported transport %s of nameserver %s", trans, host)
 		}
 	}
 	return nil

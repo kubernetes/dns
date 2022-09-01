@@ -170,7 +170,7 @@ func TestUpdateCoreFile(t *testing.T) {
 	}
 	customConfig := &config.Config{StubDomains: map[string][]string{
 		"acme.local":   {"1.1.1.1"},
-		"google.local": {"google-public-dns-a.google.com"},
+		"google.local": {"8.8.8.8"},
 		"widget.local": {"2.2.2.2:10053", "3.3.3.3"},
 	},
 		UpstreamNameservers: []string{"2.2.2.2:10053", "3.3.3.3"},
@@ -246,7 +246,7 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	}
 	customConfig := &config.Config{StubDomains: map[string][]string{
 		"acme.local":   {"2001:db8:1:1:1::1"},
-		"google.local": {"google-public-dns-a.google.com"},
+		"google.local": {"2001:4860:4860::8888"},
 		"widget.local": {"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"},
 	},
 		UpstreamNameservers: []string{"[2001:db8:2:2:2::2]:10053", "2001:db8:3:3:3::3"},

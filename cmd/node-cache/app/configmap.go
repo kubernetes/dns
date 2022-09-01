@@ -82,6 +82,11 @@ func getStubDomainStr(stubDomainMap map[string][]string, info *stubDomainInfo) s
 }
 
 func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
+	if err := dnsConfig.ValidateNodeLocalCacheConfig(); err != nil {
+		clog.Errorf("Invalid config: %v", err)
+		setupErrCount.WithLabelValues("configmap").Inc()
+		return
+	}
 	// construct part of the Corefile
 	baseConfig, err := ioutil.ReadFile(c.params.BaseCoreFile)
 	if err != nil {
@@ -89,6 +94,7 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 		setupErrCount.WithLabelValues("configmap").Inc()
 		return
 	}
+
 	stubDomainStr := getStubDomainStr(dnsConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
 		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
 	upstreamServers := strings.Join(dnsConfig.UpstreamNameservers, " ")
