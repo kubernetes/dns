@@ -9,81 +9,91 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
-	//"github.com/miekg/dns"
+
+	"github.com/miekg/dns"
 )
 
+type ttlResponseRule struct {
+	TTL uint32
+}
+
+func (r *ttlResponseRule) RewriteResponse(rr dns.RR) {
+	rr.Header().Ttl = r.TTL
+}
+
+type ttlRuleBase struct {
+	nextAction string
+	response   ttlResponseRule
+}
+
+func newTTLRuleBase(nextAction string, ttl uint32) ttlRuleBase {
+	return ttlRuleBase{
+		nextAction: nextAction,
+		response:   ttlResponseRule{TTL: ttl},
+	}
+}
+
+func (rule *ttlRuleBase) responseRule(match bool) (ResponseRules, Result) {
+	if match {
+		return ResponseRules{&rule.response}, RewriteDone
+	}
+	return nil, RewriteIgnored
+}
+
+// Mode returns the processing nextAction
+func (rule *ttlRuleBase) Mode() string { return rule.nextAction }
+
 type exactTTLRule struct {
-	NextAction string
-	From       string
-	ResponseRule
+	ttlRuleBase
+	From string
 }
 
 type prefixTTLRule struct {
-	NextAction string
-	Prefix     string
-	ResponseRule
+	ttlRuleBase
+	Prefix string
 }
 
 type suffixTTLRule struct {
-	NextAction string
-	Suffix     string
-	ResponseRule
+	ttlRuleBase
+	Suffix string
 }
 
 type substringTTLRule struct {
-	NextAction string
-	Substring  string
-	ResponseRule
+	ttlRuleBase
+	Substring string
 }
 
 type regexTTLRule struct {
-	NextAction string
-	Pattern    *regexp.Regexp
-	ResponseRule
+	ttlRuleBase
+	Pattern *regexp.Regexp
 }
 
 // Rewrite rewrites the current request based upon exact match of the name
 // in the question section of the request.
-func (rule *exactTTLRule) Rewrite(ctx context.Context, state request.Request) Result {
-	if rule.From == state.Name() {
-		return RewriteDone
-	}
-	return RewriteIgnored
+func (rule *exactTTLRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+	return rule.responseRule(rule.From == state.Name())
 }
 
 // Rewrite rewrites the current request when the name begins with the matching string.
-func (rule *prefixTTLRule) Rewrite(ctx context.Context, state request.Request) Result {
-	if strings.HasPrefix(state.Name(), rule.Prefix) {
-		return RewriteDone
-	}
-	return RewriteIgnored
+func (rule *prefixTTLRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+	return rule.responseRule(strings.HasPrefix(state.Name(), rule.Prefix))
 }
 
 // Rewrite rewrites the current request when the name ends with the matching string.
-func (rule *suffixTTLRule) Rewrite(ctx context.Context, state request.Request) Result {
-	if strings.HasSuffix(state.Name(), rule.Suffix) {
-		return RewriteDone
-	}
-	return RewriteIgnored
+func (rule *suffixTTLRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+	return rule.responseRule(strings.HasSuffix(state.Name(), rule.Suffix))
 }
 
 // Rewrite rewrites the current request based upon partial match of the
 // name in the question section of the request.
-func (rule *substringTTLRule) Rewrite(ctx context.Context, state request.Request) Result {
-	if strings.Contains(state.Name(), rule.Substring) {
-		return RewriteDone
-	}
-	return RewriteIgnored
+func (rule *substringTTLRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+	return rule.responseRule(strings.Contains(state.Name(), rule.Substring))
 }
 
 // Rewrite rewrites the current request when the name in the question
 // section of the request matches a regular expression.
-func (rule *regexTTLRule) Rewrite(ctx context.Context, state request.Request) Result {
-	regexGroups := rule.Pattern.FindStringSubmatch(state.Name())
-	if len(regexGroups) == 0 {
-		return RewriteIgnored
-	}
-	return RewriteDone
+func (rule *regexTTLRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+	return rule.responseRule(len(rule.Pattern.FindStringSubmatch(state.Name())) != 0)
 }
 
 // newTTLRule creates a name matching rule based on exact, partial, or regex match
@@ -106,43 +116,23 @@ func newTTLRule(nextAction string, args ...string) (Rule, error) {
 		switch strings.ToLower(args[0]) {
 		case ExactMatch:
 			return &exactTTLRule{
-				nextAction,
+				newTTLRuleBase(nextAction, ttl),
 				plugin.Name(args[1]).Normalize(),
-				ResponseRule{
-					Active: true,
-					Type:   "ttl",
-					TTL:    ttl,
-				},
 			}, nil
 		case PrefixMatch:
 			return &prefixTTLRule{
-				nextAction,
+				newTTLRuleBase(nextAction, ttl),
 				plugin.Name(args[1]).Normalize(),
-				ResponseRule{
-					Active: true,
-					Type:   "ttl",
-					TTL:    ttl,
-				},
 			}, nil
 		case SuffixMatch:
 			return &suffixTTLRule{
-				nextAction,
+				newTTLRuleBase(nextAction, ttl),
 				plugin.Name(args[1]).Normalize(),
-				ResponseRule{
-					Active: true,
-					Type:   "ttl",
-					TTL:    ttl,
-				},
 			}, nil
 		case SubstringMatch:
 			return &substringTTLRule{
-				nextAction,
+				newTTLRuleBase(nextAction, ttl),
 				plugin.Name(args[1]).Normalize(),
-				ResponseRule{
-					Active: true,
-					Type:   "ttl",
-					TTL:    ttl,
-				},
 			}, nil
 		case RegexMatch:
 			regexPattern, err := regexp.Compile(args[1])
@@ -150,13 +140,8 @@ func newTTLRule(nextAction string, args ...string) (Rule, error) {
 				return nil, fmt.Errorf("invalid regex pattern in a ttl rule: %s", args[1])
 			}
 			return &regexTTLRule{
-				nextAction,
+				newTTLRuleBase(nextAction, ttl),
 				regexPattern,
-				ResponseRule{
-					Active: true,
-					Type:   "ttl",
-					TTL:    ttl,
-				},
 			}, nil
 		default:
 			return nil, fmt.Errorf("ttl rule supports only exact, prefix, suffix, substring, and regex name matching")
@@ -166,46 +151,9 @@ func newTTLRule(nextAction string, args ...string) (Rule, error) {
 		return nil, fmt.Errorf("many few arguments for a ttl rule")
 	}
 	return &exactTTLRule{
-		nextAction,
+		newTTLRuleBase(nextAction, ttl),
 		plugin.Name(args[0]).Normalize(),
-		ResponseRule{
-			Active: true,
-			Type:   "ttl",
-			TTL:    ttl,
-		},
 	}, nil
-}
-
-// Mode returns the processing nextAction
-func (rule *exactTTLRule) Mode() string     { return rule.NextAction }
-func (rule *prefixTTLRule) Mode() string    { return rule.NextAction }
-func (rule *suffixTTLRule) Mode() string    { return rule.NextAction }
-func (rule *substringTTLRule) Mode() string { return rule.NextAction }
-func (rule *regexTTLRule) Mode() string     { return rule.NextAction }
-
-// GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *exactTTLRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
-}
-
-// GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *prefixTTLRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
-}
-
-// GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *suffixTTLRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
-}
-
-// GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *substringTTLRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
-}
-
-// GetResponseRule return a rule to rewrite the response with.
-func (rule *regexTTLRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
 }
 
 // validTTL returns true if v is valid TTL value.

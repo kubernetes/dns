@@ -5,10 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-
-	"github.com/caddyserver/caddy"
 )
 
 func init() { plugin.Register("trace", setup) }
@@ -36,7 +35,9 @@ func traceParse(c *caddy.Controller) (*trace, error) {
 	)
 
 	cfg := dnsserver.GetConfig(c)
-	tr.serviceEndpoint = cfg.ListenHosts[0] + ":" + cfg.Port
+	if cfg.ListenHosts[0] != "" {
+		tr.serviceEndpoint = cfg.ListenHosts[0] + ":" + cfg.Port
+	}
 
 	for c.Next() { // trace
 		var err error
@@ -84,6 +85,21 @@ func traceParse(c *caddy.Controller) (*trace, error) {
 				if err != nil {
 					return nil, err
 				}
+			case "datadog_analytics_rate":
+				args := c.RemainingArgs()
+				if len(args) > 1 {
+					return nil, c.ArgErr()
+				}
+				tr.datadogAnalyticsRate = 0
+				if len(args) == 1 {
+					tr.datadogAnalyticsRate, err = strconv.ParseFloat(args[0], 64)
+				}
+				if err != nil {
+					return nil, err
+				}
+				if tr.datadogAnalyticsRate > 1 || tr.datadogAnalyticsRate < 0 {
+					return nil, fmt.Errorf("datadog analytics rate must be between 0 and 1, '%f' is not supported", tr.datadogAnalyticsRate)
+				}
 			}
 		}
 	}
@@ -101,7 +117,7 @@ func normalizeEndpoint(epType, ep string) (string, string, error) {
 
 	if epType == "zipkin" {
 		if !strings.Contains(ep, "http") {
-			ep = "http://" + ep + "/api/v1/spans"
+			ep = "http://" + ep + "/api/v2/spans"
 		}
 	}
 

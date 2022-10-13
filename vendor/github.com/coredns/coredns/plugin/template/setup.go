@@ -4,11 +4,11 @@ import (
 	"regexp"
 	gotmpl "text/template"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 
-	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 )
 
@@ -17,10 +17,6 @@ func init() { plugin.Register("template", setupTemplate) }
 func setupTemplate(c *caddy.Controller) error {
 	handler, err := templateParse(c)
 	if err != nil {
-		return plugin.Error("template", err)
-	}
-
-	if err := setupMetrics(c); err != nil {
 		return plugin.Error("template", err)
 	}
 
@@ -53,16 +49,8 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 			return handler, c.Errf("invalid RR class %s", c.Val())
 		}
 
-		zones := c.RemainingArgs()
-		if len(zones) == 0 {
-			zones = make([]string, len(c.ServerBlockKeys))
-			copy(zones, c.ServerBlockKeys)
-		}
-		for i, str := range zones {
-			zones[i] = plugin.Host(str).Normalize()
-		}
+		zones := plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), c.ServerBlockKeys)
 		handler.Zones = append(handler.Zones, zones...)
-
 		t := template{qclass: class, qtype: qtype, zones: zones}
 
 		t.regex = make([]*regexp.Regexp, 0)

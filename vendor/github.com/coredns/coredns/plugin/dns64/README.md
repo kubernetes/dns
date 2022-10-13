@@ -84,9 +84,8 @@ Not all features required by DNS64 are implemented, only basic AAAA synthesis.
 
 * Support "mapping of separate IPv4 ranges to separate IPv6 prefixes"
 * Resolve PTR records
-* Follow CNAME records
 * Make resolver DNSSEC aware. See: [RFC 6147 Section 3](https://tools.ietf.org/html/rfc6147#section-3)
 
-## Also See
+## See Also
 
 See [RFC 6147](https://tools.ietf.org/html/rfc6147) for more information on the DNS64 mechanism.

@@ -1,3 +1,5 @@
+// +build !windows
+
 package statsd
 
 import (
@@ -10,7 +12,7 @@ import (
 UDSTimeout holds the default timeout for UDS socket writes, as they can get
 blocking when the receiving buffer is full.
 */
-const defaultUDSTimeout = 1 * time.Millisecond
+const defaultUDSTimeout = 100 * time.Millisecond
 
 // udsWriter is an internal class wrapping around management of UDS connection
 type udsWriter struct {

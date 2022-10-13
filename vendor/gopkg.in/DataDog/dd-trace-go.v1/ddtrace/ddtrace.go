@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 // Package ddtrace contains the interfaces that specify the implementations of Datadog's
 // tracing library, as well as a set of sub-packages containing various implementations:
@@ -13,7 +13,10 @@
 // with by accessing the subdirectories of this package: https://godoc.org/gopkg.in/DataDog/dd-trace-go.v1/ddtrace#pkg-subdirectories.
 package ddtrace // import "gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Tracer specifies an implementation of the Datadog tracer which allows starting
 // and propagating spans. The official implementation if exposed as functions
@@ -30,8 +33,7 @@ type Tracer interface {
 	// Inject injects a span context into the given carrier.
 	Inject(context SpanContext, carrier interface{}) error
 
-	// Stop stops the active tracer and sets the global tracer to a no-op. Calls to
-	// Stop should be idempotent.
+	// Stop stops the tracer. Calls to Stop should be idempotent.
 	Stop()
 }
 
@@ -123,6 +125,9 @@ type StartSpanConfig struct {
 	// Force-set the SpanID, rather than use a random number. If no Parent SpanContext is present,
 	// then this will also set the TraceID to the same value.
 	SpanID uint64
+
+	// Context is the parent context where the span should be stored.
+	Context context.Context
 }
 
 // Logger implementations are able to log given messages that the tracer might output.

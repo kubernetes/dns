@@ -1,22 +1,28 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 package tracer
 
 import (
+	gocontext "context"
 	"os"
+	"runtime/pprof"
+	rt "runtime/trace"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/appsec"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/traceprof"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-agent/pkg/obfuscate"
 )
 
 var _ ddtrace.Tracer = (*tracer)(nil)
@@ -30,14 +36,22 @@ var _ ddtrace.Tracer = (*tracer)(nil)
 // channels. It additionally holds two buffers which accumulates error and trace
 // queues to be processed by the payload encoder.
 type tracer struct {
-	*config
-	*payload
+	config *config
 
-	// payloadChan receives traces to be added to the payload.
-	payloadChan chan []*span
+	// stats specifies the concentrator used to compute statistics, when client-side
+	// stats are enabled.
+	stats *concentrator
 
-	// climit limits the number of concurrent outgoing connections
-	climit chan struct{}
+	// traceWriter is responsible for sending finished traces to their
+	// destination, such as the Trace Agent or Datadog Forwarder.
+	traceWriter traceWriter
+
+	// out receives finishedTrace with spans  to be added to the payload.
+	out chan *finishedTrace
+
+	// flush receives a channel onto which it will confirm after a flush has been
+	// triggered and completed.
+	flush chan chan<- struct{}
 
 	// stop causes the tracer to shut down when closed.
 	stop chan struct{}
@@ -58,10 +72,21 @@ type tracer struct {
 	// finished, and dropped
 	spansStarted, spansFinished, tracesDropped int64
 
-	// rulesSampling holds an instance of the rules sampler. These are user-defined
+	// Records the number of dropped P0 traces and spans.
+	droppedP0Traces, droppedP0Spans uint64
+
+	// partialTrace the number of partially dropped traces.
+	partialTraces uint64
+
+	// rulesSampling holds an instance of the rules sampler used to apply either trace sampling,
+	// or single span sampling rules on spans. These are user-defined
 	// rules for applying a sampling rate to spans that match the designated service
 	// or operation name.
 	rulesSampling *rulesSampler
+
+	// obfuscator holds the obfuscator used to obfuscate resources in aggregated stats.
+	// obfuscator may be nil if disabled.
+	obfuscator *obfuscate.Obfuscator
 }
 
 const (
@@ -93,7 +118,14 @@ func Start(opts ...StartOption) {
 	if internal.Testing {
 		return // mock tracer active
 	}
-	internal.SetGlobalTracer(newTracer(opts...))
+	t := newTracer(opts...)
+	if !t.config.enabled {
+		return
+	}
+	internal.SetGlobalTracer(t)
+	if t.config.logStartup {
+		logStartup(t)
+	}
 }
 
 // Stop stops the started tracer. Subsequent calls are valid but become no-op.
@@ -127,46 +159,70 @@ func Inject(ctx ddtrace.SpanContext, carrier interface{}) error {
 	return internal.GetGlobalTracer().Inject(ctx, carrier)
 }
 
+// SetUser associates user information to the current trace which the
+// provided span belongs to. The options can be used to tune which user
+// bit of information gets monitored. In case of distributed traces,
+// the user id can be propagated across traces using the WithPropagation() option.
+// See https://docs.datadoghq.com/security_platform/application_security/setup_and_configure/?tab=set_user#add-user-information-to-traces
+func SetUser(s Span, id string, opts ...UserMonitoringOption) {
+	if s == nil {
+		return
+	}
+	sp, ok := s.(*span)
+	if !ok || sp.context == nil {
+		return
+	}
+	sp = sp.context.trace.root
+	var cfg UserMonitoringConfig
+	for _, fn := range opts {
+		fn(&cfg)
+	}
+	sp.setUser(id, cfg)
+}
+
 // payloadQueueSize is the buffer size of the trace channel.
 const payloadQueueSize = 1000
 
 func newUnstartedTracer(opts ...StartOption) *tracer {
-	c := new(config)
-	defaults(c)
-	for _, fn := range opts {
-		fn(c)
+	c := newConfig(opts...)
+	sampler := newPrioritySampler()
+	var writer traceWriter
+	if c.logToStdout {
+		writer = newLogTraceWriter(c)
+	} else {
+		writer = newAgentTraceWriter(c, sampler)
 	}
-	if c.transport == nil {
-		c.transport = newTransport(c.agentAddr, c.httpClient)
+	traces, spans, err := samplingRulesFromEnv()
+	if err != nil {
+		log.Warn("DIAGNOSTICS Error(s) parsing sampling rules: found errors:%s", err)
 	}
-	if c.propagator == nil {
-		c.propagator = NewPropagator(nil)
+	if traces != nil {
+		c.traceRules = traces
 	}
-	if c.logger != nil {
-		log.UseLogger(c.logger)
+	if spans != nil {
+		c.spanRules = spans
 	}
-	if c.debug {
-		log.SetLevel(log.LevelDebug)
-	}
-	if c.statsd == nil {
-		client, err := statsd.New(c.dogstatsdAddr, statsd.WithMaxMessagesPerPayload(40), statsd.WithTags(statsTags(c)))
-		if err != nil {
-			log.Warn("Runtime and health metrics disabled: %v", err)
-			c.statsd = &statsd.NoOpClient{}
-		} else {
-			c.statsd = client
-		}
-	}
-	return &tracer{
+	t := &tracer{
 		config:           c,
-		payload:          newPayload(),
-		payloadChan:      make(chan []*span, payloadQueueSize),
+		traceWriter:      writer,
+		out:              make(chan *finishedTrace, payloadQueueSize),
 		stop:             make(chan struct{}),
-		rulesSampling:    newRulesSampler(c.samplingRules),
-		climit:           make(chan struct{}, concurrentConnectionLimit),
-		prioritySampling: newPrioritySampler(),
+		flush:            make(chan chan<- struct{}),
+		rulesSampling:    newRulesSampler(c.traceRules, c.spanRules),
+		prioritySampling: sampler,
 		pid:              strconv.Itoa(os.Getpid()),
+		stats:            newConcentrator(c, defaultStatsBucketSize),
+		obfuscator: obfuscate.NewObfuscator(obfuscate.Config{
+			SQL: obfuscate.SQLConfig{
+				TableNames:       c.agent.HasFlag("table_names"),
+				ReplaceDigits:    c.agent.HasFlag("quantize_sql_tables") || c.agent.HasFlag("replace_sql_digits"),
+				KeepSQLAlias:     c.agent.HasFlag("keep_sql_alias"),
+				DollarQuotedFunc: c.agent.HasFlag("dollar_quoted_func"),
+				Cache:            c.agent.HasFlag("sql_cache"),
+			},
+		}),
 	}
+	return t
 }
 
 func newTracer(opts ...StartOption) *tracer {
@@ -192,28 +248,60 @@ func newTracer(opts ...StartOption) *tracer {
 		}
 		t.worker(tick)
 	}()
-
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
 		t.reportHealthMetrics(statsInterval)
 	}()
+	t.stats.Start()
+	appsec.Start()
 	return t
+}
+
+// Flush flushes any buffered traces. Flush is in effect only if a tracer
+// is started. Users do not have to call Flush in order to ensure that
+// traces reach Datadog. It is a convenience method dedicated to a specific
+// use case described below.
+//
+// Flush is of use in Lambda environments, where starting and stopping
+// the tracer on each invokation may create too much latency. In this
+// scenario, a tracer may be started and stopped by the parent process
+// whereas the invokation can make use of Flush to ensure any created spans
+// reach the agent.
+func Flush() {
+	if t, ok := internal.GetGlobalTracer().(*tracer); ok {
+		t.flushSync()
+	}
+}
+
+// flushSync triggers a flush and waits for it to complete.
+func (t *tracer) flushSync() {
+	done := make(chan struct{})
+	t.flush <- done
+	<-done
 }
 
 // worker receives finished traces to be added into the payload, as well
 // as periodically flushes traces to the transport.
 func (t *tracer) worker(tick <-chan time.Time) {
-	defer t.config.statsd.Close()
-
 	for {
 		select {
-		case trace := <-t.payloadChan:
-			t.pushPayload(trace)
-
+		case trace := <-t.out:
+			t.sampleFinishedTrace(trace)
+			if len(trace.spans) != 0 {
+				t.traceWriter.add(trace.spans)
+			}
 		case <-tick:
 			t.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:scheduled"}, 1)
-			t.flush()
+			t.traceWriter.flush()
+
+		case done := <-t.flush:
+			t.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:invoked"}, 1)
+			t.traceWriter.flush()
+			// TODO(x): In reality, the traceWriter.flush() call is not synchronous
+			// when using the agent traceWriter. However, this functionnality is used
+			// in Lambda so for that purpose this mechanism should suffice.
+			done <- struct{}{}
 
 		case <-t.stop:
 		loop:
@@ -221,30 +309,62 @@ func (t *tracer) worker(tick <-chan time.Time) {
 			// before the final flush to ensure no traces are lost (see #526)
 			for {
 				select {
-				case trace := <-t.payloadChan:
-					t.pushPayload(trace)
+				case trace := <-t.out:
+					t.sampleFinishedTrace(trace)
+					if len(trace.spans) != 0 {
+						t.traceWriter.add(trace.spans)
+					}
 				default:
 					break loop
 				}
 			}
-			t.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:shutdown"}, 1)
-			t.flush()
-			t.config.statsd.Incr("datadog.tracer.stopped", nil, 1)
 			return
 		}
 	}
 }
 
-func (t *tracer) pushTrace(trace []*span) {
+// finishedTrace holds information about a trace that has finished, including its spans.
+type finishedTrace struct {
+	spans    []*span
+	decision samplingDecision
+}
+
+// sampleFinishedTrace applies single-span sampling to the provided trace, which is considered to be finished.
+func (t *tracer) sampleFinishedTrace(info *finishedTrace) {
+	if info.decision == decisionKeep {
+		return
+	}
+	if !t.rulesSampling.HasSpanRules() {
+		info.spans = nil
+		return
+	}
+	// if trace sampling decision is drop, we still want to send single spans
+	// unless there are no single span sampling rules defined
+	var kept []*span
+	for _, span := range info.spans {
+		if t.rulesSampling.SampleSpan(span) {
+			kept = append(kept, span)
+		}
+	}
+	atomic.AddUint64(&t.droppedP0Spans, uint64(len(info.spans)-len(kept)))
+	info.spans = kept
+	if len(kept) == 0 {
+		atomic.AddUint64(&t.droppedP0Traces, 1)
+		return // no spans matched the rules and were sampled
+	}
+	atomic.AddUint64(&t.partialTraces, 1)
+}
+
+func (t *tracer) pushTrace(trace *finishedTrace) {
 	select {
 	case <-t.stop:
 		return
 	default:
 	}
 	select {
-	case t.payloadChan <- trace:
+	case t.out <- trace:
 	default:
-		log.Error("payload queue full, dropping %d traces", len(trace))
+		log.Error("payload queue full, dropping %d traces", len(trace.spans))
 	}
 }
 
@@ -261,10 +381,29 @@ func (t *tracer) StartSpan(operationName string, options ...ddtrace.StartSpanOpt
 		startTime = opts.StartTime.UnixNano()
 	}
 	var context *spanContext
+	// The default pprof context is taken from the start options and is
+	// not nil when using StartSpanFromContext()
+	pprofContext := opts.Context
 	if opts.Parent != nil {
 		if ctx, ok := opts.Parent.(*spanContext); ok {
 			context = ctx
+			if pprofContext == nil && ctx.span != nil {
+				// Inherit the context.Context from parent span if it was propagated
+				// using ChildOf() rather than StartSpanFromContext(), see
+				// applyPPROFLabels() below.
+				pprofContext = ctx.span.pprofCtxActive
+			}
 		}
+	}
+	if pprofContext == nil {
+		// For root span's without context, there is no pprofContext, but we need
+		// one to avoid a panic() in pprof.WithLabels(). Using context.Background()
+		// is not ideal here, as it will cause us to remove all labels from the
+		// goroutine when the span finishes. However, the alternatives of not
+		// applying labels for such spans or to leave the endpoint/hotspot labels
+		// on the goroutine after it finishes are even less appealing. We'll have
+		// to properly document this for users.
+		pprofContext = gocontext.Background()
 	}
 	id := opts.SpanID
 	if id == 0 {
@@ -272,13 +411,17 @@ func (t *tracer) StartSpan(operationName string, options ...ddtrace.StartSpanOpt
 	}
 	// span defaults
 	span := &span{
-		Name:     operationName,
-		Service:  t.config.serviceName,
-		Resource: operationName,
-		SpanID:   id,
-		TraceID:  id,
-		Start:    startTime,
-		taskEnd:  startExecutionTracerTask(operationName),
+		Name:         operationName,
+		Service:      t.config.serviceName,
+		Resource:     operationName,
+		SpanID:       id,
+		TraceID:      id,
+		Start:        startTime,
+		taskEnd:      startExecutionTracerTask(operationName),
+		noDebugStack: t.config.noDebugStack,
+	}
+	if t.config.hostname != "" {
+		span.setMeta(keyHostname, t.config.hostname)
 	}
 	if context != nil {
 		// this is a child span
@@ -304,9 +447,6 @@ func (t *tracer) StartSpan(operationName string, options ...ddtrace.StartSpanOpt
 	if context == nil || context.span == nil {
 		// this is either a root span or it has a remote parent, we should add the PID.
 		span.setMeta(ext.Pid, t.pid)
-		if t.hostname != "" {
-			span.setMeta(keyHostname, t.hostname)
-		}
 		if _, ok := opts.Tags[ext.ServiceName]; !ok && t.config.runtimeMetrics {
 			// this is a root span in the global service; runtime metrics should
 			// be linked to it:
@@ -321,22 +461,87 @@ func (t *tracer) StartSpan(operationName string, options ...ddtrace.StartSpanOpt
 	for k, v := range t.config.globalTags {
 		span.SetTag(k, v)
 	}
-	if t.config.version != "" && span.Service == t.config.serviceName {
-		span.SetTag(ext.Version, t.config.version)
+	if t.config.serviceMappings != nil {
+		if newSvc, ok := t.config.serviceMappings[span.Service]; ok {
+			span.Service = newSvc
+		}
 	}
-	if context == nil {
-		// this is a brand new trace, sample it
+	if context == nil || context.span == nil || context.span.Service != span.Service {
+		span.setMetric(keyTopLevel, 1)
+		// all top level spans are measured. So the measured tag is redundant.
+		delete(span.Metrics, keyMeasured)
+	}
+	if t.config.version != "" {
+		if t.config.universalVersion || (!t.config.universalVersion && span.Service == t.config.serviceName) {
+			span.setMeta(ext.Version, t.config.version)
+		}
+	}
+	if t.config.env != "" {
+		span.setMeta(ext.Environment, t.config.env)
+	}
+	if _, ok := span.context.samplingPriority(); !ok {
+		// if not already sampled or a brand new trace, sample it
 		t.sample(span)
 	}
+	if t.config.profilerHotspots || t.config.profilerEndpoints {
+		t.applyPPROFLabels(pprofContext, span)
+	}
+	if t.config.serviceMappings != nil {
+		if newSvc, ok := t.config.serviceMappings[span.Service]; ok {
+			span.Service = newSvc
+		}
+	}
+	if log.DebugEnabled() {
+		// avoid allocating the ...interface{} argument if debug logging is disabled
+		log.Debug("Started Span: %v, Operation: %s, Resource: %s, Tags: %v, %v",
+			span, span.Name, span.Resource, span.Meta, span.Metrics)
+	}
 	return span
+}
+
+// applyPPROFLabels applies pprof labels for the profiler's code hotspots and
+// endpoint filtering feature to span. When span finishes, any pprof labels
+// found in ctx are restored.
+func (t *tracer) applyPPROFLabels(ctx gocontext.Context, span *span) {
+	var labels []string
+	if t.config.profilerHotspots {
+		labels = append(labels, traceprof.SpanID, strconv.FormatUint(span.SpanID, 10))
+	}
+	// nil checks might not be needed, but better be safe than sorry
+	if span.context.trace != nil && span.context.trace.root != nil {
+		localRootSpan := span.context.trace.root
+		if t.config.profilerHotspots {
+			labels = append(labels, traceprof.LocalRootSpanID, strconv.FormatUint(localRootSpan.SpanID, 10))
+		}
+		if t.config.profilerEndpoints && spanResourcePIISafe(localRootSpan) {
+			labels = append(labels, traceprof.TraceEndpoint, localRootSpan.Resource)
+		}
+	}
+	if len(labels) > 0 {
+		span.pprofCtxRestore = ctx
+		span.pprofCtxActive = pprof.WithLabels(ctx, pprof.Labels(labels...))
+		pprof.SetGoroutineLabels(span.pprofCtxActive)
+	}
+}
+
+// spanResourcePIISafe returns true if s.Resource can be considered to not
+// include PII with reasonable confidence. E.g. SQL queries may contain PII,
+// but http, rpc or custom (s.Type == "") span resource names generally do not.
+func spanResourcePIISafe(s *span) bool {
+	return s.Type == ext.SpanTypeWeb || s.Type == ext.AppTypeRPC || s.Type == ""
 }
 
 // Stop stops the tracer.
 func (t *tracer) Stop() {
 	t.stopOnce.Do(func() {
 		close(t.stop)
+		t.config.statsd.Incr("datadog.tracer.stopped", nil, 1)
 	})
+	t.stats.Stop()
 	t.wg.Wait()
+	t.traceWriter.stop()
+	t.config.statsd.Close()
+	appsec.Stop()
 }
 
 // Inject uses the configured or default TextMap Propagator.
@@ -347,49 +552,6 @@ func (t *tracer) Inject(ctx ddtrace.SpanContext, carrier interface{}) error {
 // Extract uses the configured or default TextMap Propagator.
 func (t *tracer) Extract(carrier interface{}) (ddtrace.SpanContext, error) {
 	return t.config.propagator.Extract(carrier)
-}
-
-// flush will push any currently buffered traces to the server.
-func (t *tracer) flush() {
-	if t.payload.itemCount() == 0 {
-		return
-	}
-	t.wg.Add(1)
-	t.climit <- struct{}{}
-	go func(p *payload) {
-		defer func(start time.Time) {
-			<-t.climit
-			t.wg.Done()
-			t.config.statsd.Timing("datadog.tracer.flush_duration", time.Since(start), nil, 1)
-		}(time.Now())
-		size, count := p.size(), p.itemCount()
-		log.Debug("Sending payload: size: %d traces: %d\n", size, count)
-		rc, err := t.config.transport.send(p)
-		if err != nil {
-			t.config.statsd.Count("datadog.tracer.traces_dropped", int64(count), []string{"reason:send_failed"}, 1)
-			log.Error("lost %d traces: %v", count, err)
-		} else {
-			t.config.statsd.Count("datadog.tracer.flush_bytes", int64(size), nil, 1)
-			t.config.statsd.Count("datadog.tracer.flush_traces", int64(count), nil, 1)
-			if err := t.prioritySampling.readRatesJSON(rc); err != nil {
-				t.config.statsd.Incr("datadog.tracer.decode_error", nil, 1)
-			}
-		}
-	}(t.payload)
-	t.payload = newPayload()
-}
-
-// pushPayload pushes the trace onto the payload. If the payload becomes
-// larger than the threshold as a result, it sends a flush request.
-func (t *tracer) pushPayload(trace []*span) {
-	if err := t.payload.push(trace); err != nil {
-		t.config.statsd.Incr("datadog.tracer.traces_dropped", []string{"reason:encoding_error"}, 1)
-		log.Error("error encoding msgpack: %v", err)
-	}
-	if t.payload.size() > payloadSizeLimit {
-		t.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:size"}, 1)
-		t.flush()
-	}
 }
 
 // sampleRateMetricKey is the metric key holding the applied sample rate. Has to be the same as the Agent.
@@ -403,14 +565,22 @@ func (t *tracer) sample(span *span) {
 	}
 	sampler := t.config.sampler
 	if !sampler.Sample(span) {
-		span.context.drop = true
+		span.context.trace.drop()
 		return
 	}
 	if rs, ok := sampler.(RateSampler); ok && rs.Rate() < 1 {
 		span.setMetric(sampleRateMetricKey, rs.Rate())
 	}
-	if t.rulesSampling.apply(span) {
+	if t.rulesSampling.SampleTrace(span) {
 		return
 	}
 	t.prioritySampling.apply(span)
+}
+
+func startExecutionTracerTask(name string) func() {
+	if !rt.IsEnabled() {
+		return func() {}
+	}
+	_, task := rt.NewTask(gocontext.TODO(), name)
+	return task.End
 }

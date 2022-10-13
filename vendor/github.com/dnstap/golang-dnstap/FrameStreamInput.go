@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 by Farsight Security, Inc.
+ * Copyright (c) 2013-2019 by Farsight Security, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,8 @@ package dnstap
 
 import (
 	"io"
-	"log"
 	"os"
 	"time"
-
-	"github.com/farsightsec/golang-framestream"
 )
 
 // MaxPayloadSize sets the upper limit on input Dnstap payload sizes. If an Input
@@ -40,9 +37,9 @@ var MaxPayloadSize uint32 = 96 * 1024
 
 // A FrameStreamInput reads dnstap data from an io.ReadWriter.
 type FrameStreamInput struct {
-	wait    chan bool
-	decoder *framestream.Decoder
-	timeout time.Duration
+	wait   chan bool
+	reader Reader
+	log    Logger
 }
 
 // NewFrameStreamInput creates a FrameStreamInput reading data from the given
@@ -56,19 +53,20 @@ func NewFrameStreamInput(r io.ReadWriter, bi bool) (input *FrameStreamInput, err
 // given io.ReadWriter with a timeout applied to reading and (for bidirectional
 // inputs) writing control messages.
 func NewFrameStreamInputTimeout(r io.ReadWriter, bi bool, timeout time.Duration) (input *FrameStreamInput, err error) {
-	input = new(FrameStreamInput)
-	decoderOptions := framestream.DecoderOptions{
-		MaxPayloadSize: MaxPayloadSize,
-		ContentType:    FSContentType,
-		Bidirectional:  bi,
-		Timeout:        timeout,
-	}
-	input.decoder, err = framestream.NewDecoder(r, &decoderOptions)
+	reader, err := NewReader(r, &ReaderOptions{
+		Bidirectional: bi,
+		Timeout:       timeout,
+	})
+
 	if err != nil {
-		return
+		return nil, err
 	}
-	input.wait = make(chan bool)
-	return
+
+	return &FrameStreamInput{
+		wait:   make(chan bool),
+		reader: reader,
+		log:    nullLogger{},
+	}, nil
 }
 
 // NewFrameStreamInputFromFilename creates a FrameStreamInput reading from
@@ -78,25 +76,33 @@ func NewFrameStreamInputFromFilename(fname string) (input *FrameStreamInput, err
 	if err != nil {
 		return nil, err
 	}
-	input, err = NewFrameStreamInput(file, false)
-	return
+	return NewFrameStreamInput(file, false)
+}
+
+// SetLogger configures a logger for FrameStreamInput read error reporting.
+func (input *FrameStreamInput) SetLogger(logger Logger) {
+	input.log = logger
 }
 
 // ReadInto reads data from the FrameStreamInput into the output channel.
 //
 // ReadInto satisfies the dnstap Input interface.
 func (input *FrameStreamInput) ReadInto(output chan []byte) {
+	buf := make([]byte, MaxPayloadSize)
 	for {
-		buf, err := input.decoder.Decode()
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("framestream.Decoder.Decode() failed: %s\n", err)
-			}
-			break
+		n, err := input.reader.ReadFrame(buf)
+		if err == nil {
+			newbuf := make([]byte, n)
+			copy(newbuf, buf)
+			output <- newbuf
+			continue
 		}
-		newbuf := make([]byte, len(buf))
-		copy(newbuf, buf)
-		output <- newbuf
+
+		if err != io.EOF {
+			input.log.Printf("FrameStreamInput: Read error: %v", err)
+		}
+
+		break
 	}
 	close(input.wait)
 }

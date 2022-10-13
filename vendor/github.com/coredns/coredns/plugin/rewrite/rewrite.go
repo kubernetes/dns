@@ -31,39 +31,34 @@ const (
 
 // Rewrite is a plugin to rewrite requests internally before being handled.
 type Rewrite struct {
-	Next     plugin.Handler
-	Rules    []Rule
-	noRevert bool
+	Next  plugin.Handler
+	Rules []Rule
+	RevertPolicy
 }
 
 // ServeDNS implements the plugin.Handler interface.
 func (rw Rewrite) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	wr := NewResponseReverter(w, r)
+	if rw.RevertPolicy == nil {
+		rw.RevertPolicy = NewRevertPolicy(false, false)
+	}
+	wr := NewResponseReverter(w, r, rw.RevertPolicy)
 	state := request.Request{W: w, Req: r}
 
 	for _, rule := range rw.Rules {
-		switch result := rule.Rewrite(ctx, state); result {
-		case RewriteDone:
+		respRules, result := rule.Rewrite(ctx, state)
+		if result == RewriteDone {
 			if _, ok := dns.IsDomainName(state.Req.Question[0].Name); !ok {
 				err := fmt.Errorf("invalid name after rewrite: %s", state.Req.Question[0].Name)
 				state.Req.Question[0] = wr.originalQuestion
 				return dns.RcodeServerFailure, err
 			}
-			respRule := rule.GetResponseRule()
-			if respRule.Active {
-				wr.ResponseRewrite = true
-				wr.ResponseRules = append(wr.ResponseRules, respRule)
-			}
+			wr.ResponseRules = append(wr.ResponseRules, respRules...)
 			if rule.Mode() == Stop {
-				if rw.noRevert {
-					return plugin.NextOrFailure(rw.Name(), rw.Next, ctx, w, r)
-				}
-				return plugin.NextOrFailure(rw.Name(), rw.Next, ctx, wr, r)
+				break
 			}
-		case RewriteIgnored:
 		}
 	}
-	if rw.noRevert || len(wr.ResponseRules) == 0 {
+	if !rw.RevertPolicy.DoRevert() || len(wr.ResponseRules) == 0 {
 		return plugin.NextOrFailure(rw.Name(), rw.Next, ctx, w, r)
 	}
 	return plugin.NextOrFailure(rw.Name(), rw.Next, ctx, wr, r)
@@ -75,11 +70,9 @@ func (rw Rewrite) Name() string { return "rewrite" }
 // Rule describes a rewrite rule.
 type Rule interface {
 	// Rewrite rewrites the current request.
-	Rewrite(ctx context.Context, state request.Request) Result
+	Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result)
 	// Mode returns the processing mode stop or continue.
 	Mode() string
-	// GetResponseRule returns the rule to rewrite response with, if any.
-	GetResponseRule() ResponseRule
 }
 
 func newRule(args ...string) (Rule, error) {

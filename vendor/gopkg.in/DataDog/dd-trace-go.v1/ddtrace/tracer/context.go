@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 package tracer
 
@@ -39,9 +39,24 @@ func SpanFromContext(ctx context.Context) (Span, bool) {
 // is found in the context, it will be used as the parent of the resulting span. If the ChildOf
 // option is passed, the span from context will take precedence over it as the parent span.
 func StartSpanFromContext(ctx context.Context, operationName string, opts ...StartSpanOption) (Span, context.Context) {
-	if s, ok := SpanFromContext(ctx); ok {
-		opts = append(opts, ChildOf(s.Context()))
+	// copy opts in case the caller reuses the slice in parallel
+	// we will add at least 1, at most 2 items
+	optsLocal := make([]StartSpanOption, len(opts), len(opts)+2)
+	copy(optsLocal, opts)
+
+	if ctx == nil {
+		// default to context.Background() to avoid panics on Go >= 1.15
+		ctx = context.Background()
+	} else if s, ok := SpanFromContext(ctx); ok {
+		optsLocal = append(optsLocal, ChildOf(s.Context()))
 	}
-	s := StartSpan(operationName, opts...)
+	optsLocal = append(optsLocal, withContext(ctx))
+	s := StartSpan(operationName, optsLocal...)
+	if span, ok := s.(*span); ok && span.pprofCtxActive != nil {
+		// If pprof labels were applied for this span, use the derived ctx that
+		// includes them. Otherwise a child of this span wouldn't be able to
+		// correctly restore the labels of its parent when it finishes.
+		ctx = span.pprofCtxActive
+	}
 	return s, ContextWithSpan(ctx, s)
 }

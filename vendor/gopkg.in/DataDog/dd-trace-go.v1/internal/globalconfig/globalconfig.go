@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 // Package globalconfig stores configuration which applies globally to both the tracer
 // and integrations.
@@ -10,16 +10,20 @@ package globalconfig
 import (
 	"math"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 var cfg = &config{
 	analyticsRate: math.NaN(),
+	runtimeID:     uuid.New().String(),
 }
 
 type config struct {
 	mu            sync.RWMutex
 	analyticsRate float64
 	serviceName   string
+	runtimeID     string
 }
 
 // AnalyticsRate returns the sampling rate at which events should be marked. It uses
@@ -50,4 +54,11 @@ func SetServiceName(name string) {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	cfg.serviceName = name
+}
+
+// RuntimeID returns this process's unique runtime id.
+func RuntimeID() string {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	return cfg.runtimeID
 }
