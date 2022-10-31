@@ -13,11 +13,14 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/debug"
+	"github.com/coredns/coredns/plugin/dnstap"
+	"github.com/coredns/coredns/plugin/metadata"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
+	otext "github.com/opentracing/opentracing-go/ext"
 )
 
 var log = clog.NewWithPlugin("forward")
@@ -46,12 +49,14 @@ type Forward struct {
 	// the maximum allowed (maxConcurrent)
 	ErrLimitExceeded error
 
+	tapPlugin *dnstap.Dnstap // when the dnstap plugin is loaded, we use to this to send messages out.
+
 	Next plugin.Handler
 }
 
 // New returns a new Forward.
 func New() *Forward {
-	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: ".", hcInterval: hcInterval, opts: options{forceTCP: false, preferUDP: false, hcRecursionDesired: true}}
+	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: ".", hcInterval: hcInterval, opts: options{forceTCP: false, preferUDP: false, hcRecursionDesired: true, hcDomain: "."}}
 	return f
 }
 
@@ -69,7 +74,6 @@ func (f *Forward) Name() string { return "forward" }
 
 // ServeDNS implements plugin.Handler.
 func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-
 	state := request.Request{W: w, Req: r}
 	if !f.match(state) {
 		return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
@@ -80,7 +84,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		defer atomic.AddInt64(&(f.concurrent), -1)
 		if count > f.maxConcurrent {
 			MaxConcurrentRejectCount.Add(1)
-			return dns.RcodeServerFailure, f.ErrLimitExceeded
+			return dns.RcodeRefused, f.ErrLimitExceeded
 		}
 	}
 
@@ -116,8 +120,13 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 
 		if span != nil {
 			child = span.Tracer().StartSpan("connect", ot.ChildOf(span.Context()))
+			otext.PeerAddress.Set(child, proxy.addr)
 			ctx = ot.ContextWithSpan(ctx, child)
 		}
+
+		metadata.SetValueFunc(ctx, "forward/upstream", func() string {
+			return proxy.addr
+		})
 
 		var (
 			ret *dns.Msg
@@ -140,7 +149,10 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		if child != nil {
 			child.Finish()
 		}
-		taperr := toDnstap(ctx, proxy.addr, f, state, ret, start)
+
+		if f.tapPlugin != nil {
+			toDnstap(f, proxy.addr, state, opts, ret, start)
+		}
 
 		upstreamErr = err
 
@@ -163,11 +175,11 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			formerr := new(dns.Msg)
 			formerr.SetRcode(state.Req, dns.RcodeFormatError)
 			w.WriteMsg(formerr)
-			return 0, taperr
+			return 0, nil
 		}
 
 		w.WriteMsg(ret)
-		return 0, taperr
+		return 0, nil
 	}
 
 	if upstreamErr != nil {
@@ -205,7 +217,7 @@ func (f *Forward) ForceTCP() bool { return f.opts.forceTCP }
 func (f *Forward) PreferUDP() bool { return f.opts.preferUDP }
 
 // List returns a set of proxies to be used for this client depending on the policy in f.
-func (f *Forward) List() []*Proxy {return f.p.List(f.proxies)}
+func (f *Forward) List() []*Proxy { return f.p.List(f.proxies) }
 
 var (
 	// ErrNoHealthy means no healthy proxies left.
@@ -221,6 +233,7 @@ type options struct {
 	forceTCP           bool
 	preferUDP          bool
 	hcRecursionDesired bool
+	hcDomain           string
 }
 
-const defaultTimeout = 5 * time.Second
+var defaultTimeout = 5 * time.Second

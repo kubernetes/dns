@@ -4,14 +4,13 @@ import (
 	"net"
 	"runtime"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/coremain"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics/vars"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/uniq"
-
-	"github.com/caddyserver/caddy"
 )
 
 var (
@@ -40,7 +39,7 @@ func setup(c *caddy.Controller) error {
 		for _, h := range conf.ListenHosts {
 			addrstr := conf.Transport + "://" + net.JoinHostPort(h, conf.Port)
 			for _, p := range conf.Handlers() {
-				vars.PluginEnabled.WithLabelValues(addrstr, conf.Zone, p.Name()).Set(1)
+				vars.PluginEnabled.WithLabelValues(addrstr, conf.Zone, conf.ViewName, p.Name()).Set(1)
 			}
 		}
 		return nil
@@ -50,7 +49,7 @@ func setup(c *caddy.Controller) error {
 		for _, h := range conf.ListenHosts {
 			addrstr := conf.Transport + "://" + net.JoinHostPort(h, conf.Port)
 			for _, p := range conf.Handlers() {
-				vars.PluginEnabled.WithLabelValues(addrstr, conf.Zone, p.Name()).Set(1)
+				vars.PluginEnabled.WithLabelValues(addrstr, conf.Zone, conf.ViewName, p.Name()).Set(1)
 			}
 		}
 		return nil
@@ -81,8 +80,9 @@ func parse(c *caddy.Controller) (*Metrics, error) {
 		}
 		i++
 
-		for _, z := range c.ServerBlockKeys {
-			met.AddZone(plugin.Host(z).Normalize())
+		zones := plugin.OriginsFromArgsOrServerBlock(nil /* args */, c.ServerBlockKeys)
+		for _, z := range zones {
+			met.AddZone(z)
 		}
 		args := c.RemainingArgs()
 

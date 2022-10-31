@@ -3,11 +3,10 @@ package loadbalance
 import (
 	"fmt"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-
-	"github.com/caddyserver/caddy"
 )
 
 var log = clog.NewWithPlugin("loadbalance")
@@ -36,7 +35,6 @@ func parse(c *caddy.Controller) error {
 		case 1:
 			if args[0] != "round_robin" {
 				return fmt.Errorf("unknown policy: %s", args[0])
-
 			}
 			return nil
 		}

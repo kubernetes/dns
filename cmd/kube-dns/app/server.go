@@ -19,21 +19,20 @@ package app
 import (
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"syscall"
 
-	"github.com/skynetservices/skydns/metrics"
-	"github.com/skynetservices/skydns/server"
 	"github.com/spf13/pflag"
+	"k8s.io/dns/third_party/forked/skydns/metrics"
+	"k8s.io/dns/third_party/forked/skydns/server"
 
 	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/dns/pkg/dns"
 	dnsconfig "k8s.io/dns/pkg/dns/config"
-
-	_ "net/http/pprof"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"

@@ -29,7 +29,7 @@ func NewProxy(addr, trans string) *Proxy {
 		probe:     up.New(),
 		transport: newTransport(addr),
 	}
-	p.health = NewHealthChecker(trans, true)
+	p.health = NewHealthChecker(trans, true, ".")
 	runtime.SetFinalizer(p, (*Proxy).finalizer)
 	return p
 }
@@ -77,5 +77,6 @@ func (p *Proxy) start(duration time.Duration) {
 
 const (
 	maxTimeout = 2 * time.Second
-	hcInterval = 500 * time.Millisecond
 )
+
+var hcInterval = 500 * time.Millisecond

@@ -3,18 +3,13 @@ package dns64
 import (
 	"net"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
-
-	"github.com/caddyserver/caddy"
 )
 
 const pluginName = "dns64"
-
-var log = clog.NewWithPlugin(pluginName)
 
 func init() { plugin.Register(pluginName, setup) }
 
@@ -27,12 +22,6 @@ func setup(c *caddy.Controller) error {
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		dns64.Next = next
 		return dns64
-	})
-
-	// Register all metrics.
-	c.OnStartup(func() error {
-		metrics.MustRegister(c, RequestsTranslatedCount)
-		return nil
 	})
 
 	return nil
@@ -74,6 +63,8 @@ func dns64Parse(c *caddy.Controller) (*DNS64, error) {
 				dns64.Prefix = pref
 			case "translate_all":
 				dns64.TranslateAll = true
+			case "allow_ipv4":
+				dns64.AllowIPv4 = true
 			default:
 				return nil, c.Errf("unknown property '%s'", c.Val())
 			}

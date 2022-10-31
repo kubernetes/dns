@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	skymsg "github.com/skynetservices/skydns/msg"
+	skymsg "k8s.io/dns/third_party/forked/skydns/msg"
 )
 
 type TreeCache interface {

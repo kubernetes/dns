@@ -1,12 +1,14 @@
 package dnsserver
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
-
-	"github.com/caddyserver/caddy"
+	"github.com/coredns/coredns/request"
 )
 
 // Config configuration for a single server.
@@ -28,17 +30,31 @@ type Config struct {
 	// Debug controls the panic/recover mechanism that is enabled by default.
 	Debug bool
 
+	// Stacktrace controls including stacktrace as part of log from recover mechanism, it is disabled by default.
+	Stacktrace bool
+
 	// The transport we implement, normally just "dns" over TCP/UDP, but could be
 	// DNS-over-TLS or DNS-over-gRPC.
 	Transport string
 
-	// If this function is not nil it will be used to further filter access
-	// to this handler. The primary use is to limit access to a reverse zone
+	// If this function is not nil it will be used to inspect and validate
+	// HTTP requests. Although this isn't referenced in-tree, external plugins
+	// may depend on it.
+	HTTPRequestValidateFunc func(*http.Request) bool
+
+	// FilterFuncs is used to further filter access
+	// to this handler. E.g. to limit access to a reverse zone
 	// on a non-octet boundary, i.e. /17
-	FilterFunc func(string) bool
+	FilterFuncs []FilterFunc
+
+	// ViewName is the name of the Viewer PLugin defined in the Config
+	ViewName string
 
 	// TLSConfig when listening for encrypted connections (gRPC, DNS-over-TLS).
 	TLSConfig *tls.Config
+
+	// TSIG secrets, [name]key.
+	TsigSecret map[string]string
 
 	// Plugin stack.
 	Plugin []plugin.Plugin
@@ -50,9 +66,19 @@ type Config struct {
 	// on them should register themselves here. The name should be the name as return by the
 	// Handler's Name method.
 	registry map[string]plugin.Handler
+
+	// firstConfigInBlock is used to reference the first config in a server block, for the
+	// purpose of sharing single instance of each plugin among all zones in a server block.
+	firstConfigInBlock *Config
+
+	// metaCollector references the first MetadataCollector plugin, if one exists
+	metaCollector MetadataCollector
 }
 
-// keyForConfig build a key for identifying the configs during setup time
+// FilterFunc is a function that filters requests from the Config
+type FilterFunc func(context.Context, *request.Request) bool
+
+// keyForConfig builds a key for identifying the configs during setup time
 func keyForConfig(blocIndex int, blocKeyIndex int) string {
 	return fmt.Sprintf("%d:%d", blocIndex, blocKeyIndex)
 }

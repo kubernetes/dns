@@ -1,13 +1,16 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 package ext
 
 const (
 	// CassandraQuery is the tag name used for cassandra queries.
 	CassandraQuery = "cassandra.query"
+
+	// CassandraBatch is the tag name used for cassandra batches.
+	CassandraBatch = "cassandra.batch"
 
 	// CassandraConsistencyLevel is the tag name to set for consitency level.
 	CassandraConsistencyLevel = "cassandra.consistency_level"
