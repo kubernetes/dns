@@ -86,7 +86,7 @@ func appendValue(b []byte, state request.Request, rr *dnstest.Recorder, label st
 		return strconv.AppendInt(b, int64(state.Size()), 10)
 	// Recorded replacements.
 	case "{rcode}":
-		if rr == nil {
+		if rr == nil || rr.Msg == nil {
 			return append(b, EmptyValue...)
 		}
 		if rcode := dns.RcodeToString[rr.Rcode]; rcode != "" {
@@ -271,6 +271,7 @@ func (r replacer) Replace(ctx context.Context, state request.Request, rr *dnstes
 		}
 	}
 	s := string(b)
+	//nolint:staticcheck
 	bufPool.Put(b[:0])
 	return s
 }

@@ -28,12 +28,12 @@ import (
 	"testing"
 	"time"
 
-	etcd "github.com/coreos/etcd/client"
 	"github.com/miekg/dns"
-	skymsg "github.com/skynetservices/skydns/msg"
-	skyserver "github.com/skynetservices/skydns/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	etcd "go.etcd.io/etcd/client/v2"
+	skymsg "k8s.io/dns/third_party/forked/skydns/msg"
+	skyserver "k8s.io/dns/third_party/forked/skydns/server"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

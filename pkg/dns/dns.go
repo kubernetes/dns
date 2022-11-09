@@ -36,10 +36,10 @@ import (
 	"k8s.io/dns/pkg/dns/treecache"
 	"k8s.io/dns/pkg/dns/util"
 
-	etcd "github.com/coreos/etcd/client"
 	"github.com/miekg/dns"
-	skymsg "github.com/skynetservices/skydns/msg"
-	"github.com/skynetservices/skydns/server"
+	etcd "go.etcd.io/etcd/client/v2"
+	skymsg "k8s.io/dns/third_party/forked/skydns/msg"
+	"k8s.io/dns/third_party/forked/skydns/server"
 	"k8s.io/klog/v2"
 )
 
@@ -866,16 +866,16 @@ func (kd *KubeDNS) getPodIP(path []string) (string, error) {
 // isFederationQuery checks if the given query `path` matches the federated service query pattern.
 // The conjunction of the following conditions forms the test for the federated service query
 // pattern:
-//   1. `path` has exactly 4+len(domainPath) segments: mysvc.myns.myfederation.svc.domain.path.
-//   2. Service name component must be a valid RFC 1035 name.
-//   3. Namespace component must be a valid RFC 1123 name.
-//   4. Federation component must also be a valid RFC 1123 name.
-//   5. Fourth segment is exactly "svc"
-//   6. The remaining segments match kd.domainPath.
-//   7. And federation must be one of the listed federations in the config.
-//   Note: Because of the above conditions, this method will treat wildcard queries such as
-//   *.mysvc.myns.myfederation.svc.domain.path as non-federation queries.
-//   We can add support for wildcard queries later, if needed.
+//  1. `path` has exactly 4+len(domainPath) segments: mysvc.myns.myfederation.svc.domain.path.
+//  2. Service name component must be a valid RFC 1035 name.
+//  3. Namespace component must be a valid RFC 1123 name.
+//  4. Federation component must also be a valid RFC 1123 name.
+//  5. Fourth segment is exactly "svc"
+//  6. The remaining segments match kd.domainPath.
+//  7. And federation must be one of the listed federations in the config.
+//     Note: Because of the above conditions, this method will treat wildcard queries such as
+//     *.mysvc.myns.myfederation.svc.domain.path as non-federation queries.
+//     We can add support for wildcard queries later, if needed.
 func (kd *KubeDNS) isFederationQuery(path []string) bool {
 	if len(path) != 4+len(kd.domainPath) {
 		klog.V(4).Infof("Not a federation query: len(%q) != 4+len(%q)", path, kd.domainPath)

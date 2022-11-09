@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 package ext
 
@@ -10,7 +10,7 @@ package ext
 
 const (
 	// PriorityUserReject informs the backend that a trace should be rejected and not stored.
-	// This should be used by user code overriding default priority.
+	// This should be used by user code or configuration overriding default priority
 	PriorityUserReject = -1
 
 	// PriorityAutoReject informs the backend that a trace should be rejected and not stored.
@@ -22,6 +22,6 @@ const (
 	PriorityAutoKeep = 1
 
 	// PriorityUserKeep informs the backend that a trace should be kept and not stored.
-	// This should be used by user code overriding default priority.
+	// This should be used by user code or configuration overriding default priority
 	PriorityUserKeep = 2
 )

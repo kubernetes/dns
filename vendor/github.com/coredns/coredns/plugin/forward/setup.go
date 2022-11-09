@@ -1,45 +1,67 @@
 package forward
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
+	"github.com/coredns/coredns/plugin/dnstap"
 	"github.com/coredns/coredns/plugin/pkg/parse"
 	pkgtls "github.com/coredns/coredns/plugin/pkg/tls"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
-	"github.com/caddyserver/caddy"
+	"github.com/miekg/dns"
 )
 
 func init() { plugin.Register("forward", setup) }
 
 func setup(c *caddy.Controller) error {
-	f, err := parseForward(c)
+	fs, err := parseForward(c)
 	if err != nil {
 		return plugin.Error("forward", err)
 	}
-	if f.Len() > max {
-		return plugin.Error("forward", fmt.Errorf("more than %d TOs configured: %d", max, f.Len()))
+	for i := range fs {
+		f := fs[i]
+		if f.Len() > max {
+			return plugin.Error("forward", fmt.Errorf("more than %d TOs configured: %d", max, f.Len()))
+		}
+
+		if i == len(fs)-1 {
+			// last forward: point next to next plugin
+			dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
+				f.Next = next
+				return f
+			})
+		} else {
+			// middle forward: point next to next forward
+			nextForward := fs[i+1]
+			dnsserver.GetConfig(c).AddPlugin(func(plugin.Handler) plugin.Handler {
+				f.Next = nextForward
+				return f
+			})
+		}
+
+		c.OnStartup(func() error {
+			return f.OnStartup()
+		})
+		c.OnStartup(func() error {
+			if taph := dnsserver.GetConfig(c).Handler("dnstap"); taph != nil {
+				if tapPlugin, ok := taph.(dnstap.Dnstap); ok {
+					f.tapPlugin = &tapPlugin
+				}
+			}
+			return nil
+		})
+
+		c.OnShutdown(func() error {
+			return f.OnShutdown()
+		})
 	}
-
-	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		f.Next = next
-		return f
-	})
-
-	c.OnStartup(func() error {
-		metrics.MustRegister(c, RequestCount, RcodeCount, RequestDuration, HealthcheckFailureCount, SocketGauge, MaxConcurrentRejectCount)
-		return f.OnStartup()
-	})
-
-	c.OnShutdown(func() error {
-		return f.OnShutdown()
-	})
 
 	return nil
 }
@@ -60,23 +82,16 @@ func (f *Forward) OnShutdown() error {
 	return nil
 }
 
-func parseForward(c *caddy.Controller) (*Forward, error) {
-	var (
-		f   *Forward
-		err error
-		i   int
-	)
+func parseForward(c *caddy.Controller) ([]*Forward, error) {
+	var fs = []*Forward{}
 	for c.Next() {
-		if i > 0 {
-			return nil, plugin.ErrOnce
-		}
-		i++
-		f, err = parseStanza(c)
+		f, err := parseStanza(c)
 		if err != nil {
 			return nil, err
 		}
+		fs = append(fs, f)
 	}
-	return f, nil
+	return fs, nil
 }
 
 func parseStanza(c *caddy.Controller) (*Forward, error) {
@@ -85,7 +100,16 @@ func parseStanza(c *caddy.Controller) (*Forward, error) {
 	if !c.Args(&f.from) {
 		return f, c.ArgErr()
 	}
-	f.from = plugin.Host(f.from).Normalize()
+	origFrom := f.from
+	zones := plugin.Host(f.from).NormalizeExact()
+	if len(zones) == 0 {
+		return f, fmt.Errorf("unable to normalize '%s'", f.from)
+	}
+	f.from = zones[0] // there can only be one here, won't work with non-octet reverse
+
+	if len(zones) > 1 {
+		log.Warningf("Unsupported CIDR notation: '%s' expands to multiple zones. Using only '%s'.", origFrom, f.from)
+	}
 
 	to := c.RemainingArgs()
 	if len(to) == 0 {
@@ -119,6 +143,11 @@ func parseStanza(c *caddy.Controller) (*Forward, error) {
 	if f.tlsServerName != "" {
 		f.tlsConfig.ServerName = f.tlsServerName
 	}
+
+	// Initialize ClientSessionCache in tls.Config. This may speed up a TLS handshake
+	// in upcoming connections to the same TLS server.
+	f.tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(len(f.proxies))
+
 	for i := range f.proxies {
 		// Only set this for proxies that need it.
 		if transports[i] == transport.TLS {
@@ -126,6 +155,11 @@ func parseStanza(c *caddy.Controller) (*Forward, error) {
 		}
 		f.proxies[i].SetExpire(f.expire)
 		f.proxies[i].health.SetRecursionDesired(f.opts.hcRecursionDesired)
+		// when TLS is used, checks are set to tcp-tls
+		if f.opts.forceTCP && transports[i] != transport.TLS {
+			f.proxies[i].health.SetTCPTransport()
+		}
+		f.proxies[i].health.SetDomain(f.opts.hcDomain)
 	}
 
 	return f, nil
@@ -139,19 +173,15 @@ func parseBlock(c *caddy.Controller, f *Forward) error {
 			return c.ArgErr()
 		}
 		for i := 0; i < len(ignore); i++ {
-			ignore[i] = plugin.Host(ignore[i]).Normalize()
+			f.ignored = append(f.ignored, plugin.Host(ignore[i]).NormalizeExact()...)
 		}
-		f.ignored = ignore
 	case "max_fails":
 		if !c.NextArg() {
 			return c.ArgErr()
 		}
-		n, err := strconv.Atoi(c.Val())
+		n, err := strconv.ParseUint(c.Val(), 10, 32)
 		if err != nil {
 			return err
-		}
-		if n < 0 {
-			return fmt.Errorf("max_fails can't be negative: %d", n)
 		}
 		f.maxfails = uint32(n)
 	case "health_check":
@@ -166,11 +196,21 @@ func parseBlock(c *caddy.Controller, f *Forward) error {
 			return fmt.Errorf("health_check can't be negative: %d", dur)
 		}
 		f.hcInterval = dur
+		f.opts.hcDomain = "."
 
 		for c.NextArg() {
 			switch hcOpts := c.Val(); hcOpts {
 			case "no_rec":
 				f.opts.hcRecursionDesired = false
+			case "domain":
+				if !c.NextArg() {
+					return c.ArgErr()
+				}
+				hcDomain := c.Val()
+				if _, ok := dns.IsDomainName(hcDomain); !ok {
+					return fmt.Errorf("health_check: invalid domain name %s", hcDomain)
+				}
+				f.opts.hcDomain = plugin.Name(hcDomain).Normalize()
 			default:
 				return fmt.Errorf("health_check: unknown option %s", hcOpts)
 			}

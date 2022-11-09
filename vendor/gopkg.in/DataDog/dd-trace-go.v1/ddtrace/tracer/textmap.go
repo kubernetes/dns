@@ -1,11 +1,13 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016 Datadog, Inc.
 
 package tracer
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +16,7 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/samplernames"
 )
 
 // HTTPHeadersCarrier wraps an http.Header as a TextMapWriter and TextMapReader, allowing
@@ -89,6 +92,12 @@ const (
 // It is used with the Synthetics product and usually has the value "synthetics".
 const originHeader = "x-datadog-origin"
 
+// traceTagsHeader holds the propagated trace tags
+const traceTagsHeader = "x-datadog-tags"
+
+// propagationExtractMaxSize limits the total size of incoming propagated tags to parse
+const propagationExtractMaxSize = 512
+
 // PropagatorConfig defines the configuration for initializing a propagator.
 type PropagatorConfig struct {
 	// BaggagePrefix specifies the prefix that will be used to store baggage
@@ -104,14 +113,22 @@ type PropagatorConfig struct {
 	ParentHeader string
 
 	// PriorityHeader specifies the map key that will be used to store the sampling priority.
-	// It deafults to DefaultPriorityHeader.
+	// It defaults to DefaultPriorityHeader.
 	PriorityHeader string
+
+	// MaxTagsHeaderLen specifies the maximum length of trace tags header value.
+	// It defaults to defaultMaxTagsHeaderLen, a value of 0 disables propagation of tags.
+	MaxTagsHeaderLen int
+
+	// B3 specifies if B3 headers should be added for trace propagation.
+	// See https://github.com/openzipkin/b3-propagation
+	B3 bool
 }
 
 // NewPropagator returns a new propagator which uses TextMap to inject
 // and extract values. It propagates trace and span IDs and baggage.
 // To use the defaults, nil may be provided in place of the config.
-func NewPropagator(cfg *PropagatorConfig) Propagator {
+func NewPropagator(cfg *PropagatorConfig, propagators ...Propagator) Propagator {
 	if cfg == nil {
 		cfg = new(PropagatorConfig)
 	}
@@ -126,6 +143,12 @@ func NewPropagator(cfg *PropagatorConfig) Propagator {
 	}
 	if cfg.PriorityHeader == "" {
 		cfg.PriorityHeader = DefaultPriorityHeader
+	}
+	if len(propagators) > 0 {
+		return &chainedPropagator{
+			injectors:  propagators,
+			extractors: propagators,
+		}
 	}
 	return &chainedPropagator{
 		injectors:  getPropagators(cfg, headerPropagationStyleInject),
@@ -142,28 +165,39 @@ type chainedPropagator struct {
 }
 
 // getPropagators returns a list of propagators based on the list found in the
-// given environment variable. If the list doesn't contain a value or has invalid
-// values, the default propagator will be returned.
+// given environment variable. If the list doesn't contain any valid values the
+// default propagator will be returned. Any invalid values in the list will log
+// a warning and be ignored.
 func getPropagators(cfg *PropagatorConfig, env string) []Propagator {
 	dd := &propagator{cfg}
 	ps := os.Getenv(env)
+	defaultPs := []Propagator{dd}
+	if cfg.B3 {
+		defaultPs = append(defaultPs, &propagatorB3{})
+	}
 	if ps == "" {
-		return []Propagator{dd}
+		return defaultPs
 	}
 	var list []Propagator
+	if cfg.B3 {
+		list = append(list, &propagatorB3{})
+	}
 	for _, v := range strings.Split(ps, ",") {
 		switch strings.ToLower(v) {
 		case "datadog":
 			list = append(list, dd)
 		case "b3":
-			list = append(list, &propagatorB3{})
+			if !cfg.B3 {
+				// propagatorB3 hasn't already been added, add a new one.
+				list = append(list, &propagatorB3{})
+			}
 		default:
 			log.Warn("unrecognized propagator: %s\n", v)
 		}
 	}
 	if len(list) == 0 {
 		// return the default
-		return []Propagator{dd}
+		return defaultPs
 	}
 	return list
 }
@@ -187,6 +221,7 @@ func (p *chainedPropagator) Extract(carrier interface{}) (ddtrace.SpanContext, e
 		ctx, err := v.Extract(carrier)
 		if ctx != nil {
 			// first extractor returns
+			log.Debug("Extracted span context: %#v", ctx)
 			return ctx, nil
 		}
 		if err == ErrSpanContextNotFound {
@@ -230,7 +265,43 @@ func (p *propagator) injectTextMap(spanCtx ddtrace.SpanContext, writer TextMapWr
 	for k, v := range ctx.baggage {
 		writer.Set(p.cfg.BaggagePrefix+k, v)
 	}
+	if p.cfg.MaxTagsHeaderLen <= 0 {
+		return nil
+	}
+	if s := p.marshalPropagatingTags(ctx); len(s) > 0 {
+		writer.Set(traceTagsHeader, s)
+	}
 	return nil
+}
+
+// marshalPropagatingTags marshals all propagating tags included in ctx to a comma separated string
+func (p *propagator) marshalPropagatingTags(ctx *spanContext) string {
+	var sb strings.Builder
+	if ctx.trace == nil {
+		return ""
+	}
+	ctx.trace.mu.Lock()
+	defer ctx.trace.mu.Unlock()
+	for k, v := range ctx.trace.propagatingTags {
+		if err := isValidPropagatableTag(k, v); err != nil {
+			log.Warn("Won't propagate tag '%s': %v", k, err.Error())
+			ctx.trace.setTag(keyPropagationError, "encoding_error")
+			continue
+		}
+		if sb.Len()+len(k)+len(v) > p.cfg.MaxTagsHeaderLen {
+			sb.Reset()
+			log.Warn("Won't propagate tag: maximum trace tags header len (%d) reached.", p.cfg.MaxTagsHeaderLen)
+			ctx.trace.setTag(keyPropagationError, "inject_max_size")
+			break
+		}
+		if sb.Len() > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(k)
+		sb.WriteByte('=')
+		sb.WriteString(v)
+	}
+	return sb.String()
 }
 
 func (p *propagator) Extract(carrier interface{}) (ddtrace.SpanContext, error) {
@@ -263,9 +334,11 @@ func (p *propagator) extractTextMap(reader TextMapReader) (ddtrace.SpanContext, 
 			if err != nil {
 				return ErrSpanContextCorrupted
 			}
-			ctx.setSamplingPriority(priority)
+			ctx.setSamplingPriority(priority, samplernames.Upstream, math.NaN())
 		case originHeader:
 			ctx.origin = v
+		case traceTagsHeader:
+			unmarshalPropagatingTags(&ctx, v)
 		default:
 			if strings.HasPrefix(key, p.cfg.BaggagePrefix) {
 				ctx.setBaggageItem(strings.TrimPrefix(key, p.cfg.BaggagePrefix), v)
@@ -276,10 +349,30 @@ func (p *propagator) extractTextMap(reader TextMapReader) (ddtrace.SpanContext, 
 	if err != nil {
 		return nil, err
 	}
-	if ctx.traceID == 0 || ctx.spanID == 0 {
+	if ctx.traceID == 0 || (ctx.spanID == 0 && ctx.origin != "synthetics") {
 		return nil, ErrSpanContextNotFound
 	}
 	return &ctx, nil
+}
+
+// unmarshalPropagatingTags unmarshals tags from v into ctx
+func unmarshalPropagatingTags(ctx *spanContext, v string) {
+	if ctx.trace == nil {
+		ctx.trace = newTrace()
+	}
+	ctx.trace.mu.Lock()
+	defer ctx.trace.mu.Unlock()
+	if len(v) > propagationExtractMaxSize {
+		log.Warn("Did not extract %s, size limit exceeded: %d. Incoming tags will not be propagated further.", traceTagsHeader, propagationExtractMaxSize)
+		ctx.trace.setTag(keyPropagationError, "extract_max_size")
+		return
+	}
+	var err error
+	ctx.trace.propagatingTags, err = parsePropagatableTraceTags(v)
+	if err != nil {
+		log.Warn("Did not extract %s: %v. Incoming tags will not be propagated further.", traceTagsHeader, err.Error())
+		ctx.trace.setTag(keyPropagationError, "decoding_error")
+	}
 }
 
 const (
@@ -306,8 +399,8 @@ func (*propagatorB3) injectTextMap(spanCtx ddtrace.SpanContext, writer TextMapWr
 	if !ok || ctx.traceID == 0 || ctx.spanID == 0 {
 		return ErrInvalidSpanContext
 	}
-	writer.Set(b3TraceIDHeader, strconv.FormatUint(ctx.traceID, 16))
-	writer.Set(b3SpanIDHeader, strconv.FormatUint(ctx.spanID, 16))
+	writer.Set(b3TraceIDHeader, fmt.Sprintf("%016x", ctx.traceID))
+	writer.Set(b3SpanIDHeader, fmt.Sprintf("%016x", ctx.spanID))
 	if p, ok := ctx.samplingPriority(); ok {
 		if p >= ext.PriorityAutoKeep {
 			writer.Set(b3SampledHeader, "1")
@@ -334,6 +427,9 @@ func (*propagatorB3) extractTextMap(reader TextMapReader) (ddtrace.SpanContext, 
 		key := strings.ToLower(k)
 		switch key {
 		case b3TraceIDHeader:
+			if len(v) > 16 {
+				v = v[len(v)-16:]
+			}
 			ctx.traceID, err = strconv.ParseUint(v, 16, 64)
 			if err != nil {
 				return ErrSpanContextCorrupted
@@ -348,7 +444,7 @@ func (*propagatorB3) extractTextMap(reader TextMapReader) (ddtrace.SpanContext, 
 			if err != nil {
 				return ErrSpanContextCorrupted
 			}
-			ctx.setSamplingPriority(priority)
+			ctx.setSamplingPriority(priority, samplernames.Upstream, math.NaN())
 		default:
 		}
 		return nil

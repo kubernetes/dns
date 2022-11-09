@@ -12,6 +12,7 @@ import (
 type ResponseWriter struct {
 	TCP      bool // if TCP is true we return an TCP connection instead of an UDP one.
 	RemoteIP string
+	Zone     string
 }
 
 // LocalAddr returns the local address, 127.0.0.1:53 (UDP, TCP if t.TCP is true).
@@ -33,27 +34,27 @@ func (t *ResponseWriter) RemoteAddr() net.Addr {
 	ip := net.ParseIP(remoteIP)
 	port := 40212
 	if t.TCP {
-		return &net.TCPAddr{IP: ip, Port: port, Zone: ""}
+		return &net.TCPAddr{IP: ip, Port: port, Zone: t.Zone}
 	}
-	return &net.UDPAddr{IP: ip, Port: port, Zone: ""}
+	return &net.UDPAddr{IP: ip, Port: port, Zone: t.Zone}
 }
 
-// WriteMsg implement dns.ResponseWriter interface.
+// WriteMsg implements dns.ResponseWriter interface.
 func (t *ResponseWriter) WriteMsg(m *dns.Msg) error { return nil }
 
-// Write implement dns.ResponseWriter interface.
+// Write implements dns.ResponseWriter interface.
 func (t *ResponseWriter) Write(buf []byte) (int, error) { return len(buf), nil }
 
-// Close implement dns.ResponseWriter interface.
+// Close implements dns.ResponseWriter interface.
 func (t *ResponseWriter) Close() error { return nil }
 
-// TsigStatus implement dns.ResponseWriter interface.
+// TsigStatus implements dns.ResponseWriter interface.
 func (t *ResponseWriter) TsigStatus() error { return nil }
 
-// TsigTimersOnly implement dns.ResponseWriter interface.
+// TsigTimersOnly implements dns.ResponseWriter interface.
 func (t *ResponseWriter) TsigTimersOnly(bool) {}
 
-// Hijack implement dns.ResponseWriter interface.
+// Hijack implements dns.ResponseWriter interface.
 func (t *ResponseWriter) Hijack() {}
 
 // ResponseWriter6 returns fixed client and remote address in IPv6.  The remote

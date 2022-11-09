@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 by Farsight Security, Inc.
+ * Copyright (c) 2014,2019 by Farsight Security, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,33 +18,33 @@ package dnstap
 
 import (
 	"io"
-	"log"
 	"os"
-
-	"github.com/farsightsec/golang-framestream"
 )
 
 // FrameStreamOutput implements a dnstap Output to an io.Writer.
 type FrameStreamOutput struct {
 	outputChannel chan []byte
 	wait          chan bool
-	enc           *framestream.Encoder
+	w             Writer
+	log           Logger
 }
 
 // NewFrameStreamOutput creates a FrameStreamOutput writing dnstap data to
 // the given io.Writer.
 func NewFrameStreamOutput(w io.Writer) (o *FrameStreamOutput, err error) {
-	o = new(FrameStreamOutput)
-	o.outputChannel = make(chan []byte, outputChannelSize)
-	o.enc, err = framestream.NewEncoder(w, &framestream.EncoderOptions{ContentType: FSContentType})
+	ow, err := NewWriter(w, nil)
 	if err != nil {
-		return
+		return nil, err
 	}
-	o.wait = make(chan bool)
-	return
+	return &FrameStreamOutput{
+		outputChannel: make(chan []byte, outputChannelSize),
+		wait:          make(chan bool),
+		w:             ow,
+		log:           nullLogger{},
+	}, nil
 }
 
-// NewFrameStreamOutputFromFilename creates a file with the namee fname,
+// NewFrameStreamOutputFromFilename creates a file with the name fname,
 // truncates it if it exists, and returns a FrameStreamOutput writing to
 // the newly created or truncated file.
 func NewFrameStreamOutputFromFilename(fname string) (o *FrameStreamOutput, err error) {
@@ -58,6 +58,12 @@ func NewFrameStreamOutputFromFilename(fname string) (o *FrameStreamOutput, err e
 	return NewFrameStreamOutput(w)
 }
 
+// SetLogger sets an alternate logger for the FrameStreamOutput. The default
+// is no logging.
+func (o *FrameStreamOutput) SetLogger(logger Logger) {
+	o.log = logger
+}
+
 // GetOutputChannel returns the channel on which the FrameStreamOutput accepts
 // data.
 //
@@ -69,14 +75,15 @@ func (o *FrameStreamOutput) GetOutputChannel() chan []byte {
 // RunOutputLoop processes data received on the channel returned by
 // GetOutputChannel, returning after the CLose method is called.
 // If there is an error writing to the Output's writer, RunOutputLoop()
-// logs a fatal error exits the program.
+// returns, logging an error if a logger is configured with SetLogger()
 //
 // RunOutputLoop satisfies the dnstap Output interface.
 func (o *FrameStreamOutput) RunOutputLoop() {
 	for frame := range o.outputChannel {
-		if _, err := o.enc.Write(frame); err != nil {
-			log.Fatalf("framestream.Encoder.Write() failed: %s\n", err)
-			break
+		if _, err := o.w.WriteFrame(frame); err != nil {
+			o.log.Printf("FrameStreamOutput: Write error: %v, returning", err)
+			close(o.wait)
+			return
 		}
 	}
 	close(o.wait)
@@ -89,6 +96,5 @@ func (o *FrameStreamOutput) RunOutputLoop() {
 func (o *FrameStreamOutput) Close() {
 	close(o.outputChannel)
 	<-o.wait
-	o.enc.Flush()
-	o.enc.Close()
+	o.w.Close()
 }

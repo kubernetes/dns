@@ -35,6 +35,8 @@ func main() {
 	config := options.NewKubeDNSConfig()
 	config.AddFlags(pflag.CommandLine)
 
+	pflag.CommandLine.SetNormalizeFunc(flag.WordSepNormalizeFunc)
+	logs.AddFlags(pflag.CommandLine)
 	flag.InitFlags()
 	// Convinces goflags that we have called Parse() to avoid noisy logs.
 	// OSS Issue: kubernetes/kubernetes#17162.

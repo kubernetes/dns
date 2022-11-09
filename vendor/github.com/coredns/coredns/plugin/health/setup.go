@@ -5,10 +5,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/metrics"
-
-	"github.com/caddyserver/caddy"
 )
 
 func init() { plugin.Register("health", setup) }
@@ -19,15 +17,10 @@ func setup(c *caddy.Controller) error {
 		return plugin.Error("health", err)
 	}
 
-	h := &health{Addr: addr, stop: make(chan bool), lameduck: lame}
-
-	c.OnStartup(func() error {
-		metrics.MustRegister(c, HealthDuration)
-		return nil
-	})
+	h := &health{Addr: addr, lameduck: lame}
 
 	c.OnStartup(h.OnStartup)
-	c.OnRestart(h.OnFinalShutdown)
+	c.OnRestart(h.OnReload)
 	c.OnFinalShutdown(h.OnFinalShutdown)
 	c.OnRestartFailed(h.OnStartup)
 

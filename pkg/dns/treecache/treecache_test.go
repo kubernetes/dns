@@ -19,7 +19,7 @@ package treecache
 import (
 	"testing"
 
-	"github.com/skynetservices/skydns/msg"
+	"k8s.io/dns/third_party/forked/skydns/msg"
 )
 
 func TestTreeCache(t *testing.T) {

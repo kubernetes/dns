@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/skynetservices/skydns/msg"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/dns/third_party/forked/skydns/msg"
 	"k8s.io/klog/v2"
 )
 
