@@ -19,7 +19,6 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,7 +98,7 @@ func (syncSource *kubeFileSyncSource) load() (syncResult, error) {
 		if strings.HasPrefix(filename, ".") {
 			return nil
 		}
-		filedata, err := ioutil.ReadFile(path)
+		filedata, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}

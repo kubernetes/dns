@@ -18,7 +18,6 @@ package dns
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -836,10 +835,8 @@ func TestConfigSyncInitialMap(t *testing.T) {
 }
 
 func TestUpdateConfig(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "test")
+	tmpdir := t.TempDir()
 	defaultResolvFile = filepath.Join(tmpdir, "resolv.conf")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
 
 	kd := newKubeDNS()
 	kd.SkyDNSConfig = new(skyserver.Config)
@@ -849,7 +846,7 @@ func TestUpdateConfig(t *testing.T) {
 	assert.NotEqual(t, nextConfig, kd.config)
 	assert.Equal(t, []string{}, kd.SkyDNSConfig.Nameservers)
 
-	err = ioutil.WriteFile(defaultResolvFile, []byte("nameserver 127.0.0.1"), 0666)
+	err := os.WriteFile(defaultResolvFile, []byte("nameserver 127.0.0.1"), 0666)
 	require.NoError(t, err)
 
 	kd.updateConfig(nextConfig)

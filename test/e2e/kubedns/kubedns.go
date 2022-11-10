@@ -18,7 +18,6 @@ package kubedns
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -79,17 +78,17 @@ var _ = Describe("kube-dns", func() {
 		if err := os.MkdirAll(configDir, 0744); err == nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
-		if err := ioutil.WriteFile(configDir+"/upstreamNameservers", []byte("[\"127.0.0.1:10054\"]"), 0744); err != nil {
+		if err := os.WriteFile(configDir+"/upstreamNameservers", []byte("[\"127.0.0.1:10054\"]"), 0744); err != nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
 		dnsmasqConfigDir := workDir + "/dnsmasq-config"
 		if err := os.MkdirAll(dnsmasqConfigDir, 0744); err != nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
-		if err := ioutil.WriteFile(dnsmasqConfigDir+"/dnsmasq.conf", []byte("user=root\naddn-hosts=/etc/dnsmasq-hosts"), 0744); err != nil {
+		if err := os.WriteFile(dnsmasqConfigDir+"/dnsmasq.conf", []byte("user=root\naddn-hosts=/etc/dnsmasq-hosts"), 0744); err != nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
-		if err := ioutil.WriteFile(dnsmasqConfigDir+"/dnsmasq-hosts", []byte("192.0.2.123 my.test"), 0744); err != nil {
+		if err := os.WriteFile(dnsmasqConfigDir+"/dnsmasq-hosts", []byte("192.0.2.123 my.test"), 0744); err != nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
 		fr.Docker.Pull(fr.Options.DnsmasqImage)
@@ -127,7 +126,7 @@ var _ = Describe("kube-dns", func() {
 			fr.Docker.Kill(dnsmasq)
 		}()
 		By("Configuring upstream nameserver")
-		if err := ioutil.WriteFile(configDir+"/upstreamNameservers", []byte("[\"127.0.0.1:10055\"]"), 0744); err != nil {
+		if err := os.WriteFile(configDir+"/upstreamNameservers", []byte("[\"127.0.0.1:10055\"]"), 0744); err != nil {
 			om.Expect(err).NotTo(om.HaveOccurred())
 		}
 

@@ -6,7 +6,7 @@ package server
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
@@ -29,7 +29,7 @@ func scrape(t *testing.T, key string) int {
 		return -1
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return -1
 	}

@@ -15,7 +15,6 @@ package app
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -88,7 +87,7 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 		return
 	}
 	// construct part of the Corefile
-	baseConfig, err := ioutil.ReadFile(c.params.BaseCoreFile)
+	baseConfig, err := os.ReadFile(c.params.BaseCoreFile)
 	if err != nil {
 		clog.Errorf("Failed to read node-cache coreFile %s - %v", c.params.BaseCoreFile, err)
 		setupErrCount.WithLabelValues("configmap").Inc()
@@ -126,7 +125,7 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	newConfig := bytes.Buffer{}
 	newConfig.WriteString(string(baseConfig))
 	newConfig.WriteString(stubDomainStr)
-	if err := ioutil.WriteFile(c.params.CoreFile, newConfig.Bytes(), 0666); err != nil {
+	if err := os.WriteFile(c.params.CoreFile, newConfig.Bytes(), 0666); err != nil {
 		clog.Errorf("Failed to write config file %s - err %v", c.params.CoreFile, err)
 		setupErrCount.WithLabelValues("configmap").Inc()
 		return
