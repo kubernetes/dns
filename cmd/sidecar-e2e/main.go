@@ -19,7 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -211,7 +210,7 @@ func (h *harness) runTests() {
 func (h *harness) validate() int {
 	var errors []error
 
-	text, err := ioutil.ReadFile(h.tmpDir + "/metrics.log")
+	text, err := os.ReadFile(h.tmpDir + "/metrics.log")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -416,7 +415,7 @@ func (t *test) waitForMetrics() {
 			}
 
 			defer response.Body.Close()
-			buf, err := ioutil.ReadAll(response.Body)
+			buf, err := io.ReadAll(response.Body)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -455,7 +454,7 @@ func (t *test) getMetrics() {
 	}
 
 	defer response.Body.Close()
-	buf, err := ioutil.ReadAll(response.Body)
+	buf, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -467,7 +466,7 @@ func (t *test) dump() {
 	defer t.lock.Unlock()
 
 	dumpOutput := func(name string, output string) {
-		err := ioutil.WriteFile(
+		err := os.WriteFile(
 			fmt.Sprintf("%v/%v.log", opts.outputDir, name),
 			[]byte(output), 0644)
 		if err != nil {
@@ -500,7 +499,7 @@ func main() {
 
 	switch opts.mode {
 	case "harness":
-		tmpdir, err := ioutil.TempDir("", "k8s-dns-sidecar-e2e")
+		tmpdir, err := os.MkdirTemp("", "k8s-dns-sidecar-e2e")
 		if err != nil {
 			log.Fatal(err)
 		}

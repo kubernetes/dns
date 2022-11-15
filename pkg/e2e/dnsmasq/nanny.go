@@ -18,7 +18,6 @@ package dnsmasq
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -50,7 +49,7 @@ func (h *Harness) Configure(stubDomains string, upstreamNameservers string) {
 			if err := os.Remove(filename); err != nil {
 				panic(err)
 			}
-		} else if err := ioutil.WriteFile(filename, []byte(value), 0644); err != nil {
+		} else if err := os.WriteFile(filename, []byte(value), 0644); err != nil {
 			panic(err)
 		}
 	}
@@ -60,7 +59,7 @@ func (h *Harness) Configure(stubDomains string, upstreamNameservers string) {
 }
 
 func (h *Harness) readOutput() []string {
-	bytes, err := ioutil.ReadFile(h.TmpDir + "/args.txt")
+	bytes, err := os.ReadFile(h.TmpDir + "/args.txt")
 	if err != nil {
 		return []string{}
 	}

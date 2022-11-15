@@ -17,27 +17,19 @@ limitations under the License.
 package config
 
 import (
+	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
-	"os"
-
-	"crypto/sha256"
-
 	"k8s.io/apimachinery/pkg/util/clock"
 )
 
 func TestSyncFile(t *testing.T) {
-
-	testParentDir, err := ioutil.TempDir("", "test.filesyncsource")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { os.RemoveAll(testParentDir) }()
+	testParentDir := t.TempDir()
 
 	testDir := filepath.Join(testParentDir, "datadir")
 
@@ -66,10 +58,10 @@ func TestSyncFile(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(testDir, "subdir"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(testDir, "subdir", "subdirfile"), []byte("test"), os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, "subdir", "subdirfile"), []byte("test"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(testDir, ".hiddenfile"), []byte("test"), os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, ".hiddenfile"), []byte("test"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
 	result, err = source.Once()
@@ -82,7 +74,7 @@ func TestSyncFile(t *testing.T) {
 
 	// should return error if non-utf8 data is encountered
 	// https://en.wikipedia.org/wiki/UTF-8#Codepage_layout
-	if err := ioutil.WriteFile(filepath.Join(testDir, "binary"), []byte{192}, os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, "binary"), []byte{192}, os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
 	result, err = source.Once()
@@ -93,10 +85,10 @@ func TestSyncFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(testDir, "file1"), []byte("data1"), os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, "file1"), []byte("data1"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(testDir, "file2"), []byte("data2"), os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, "file2"), []byte("data2"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
 	result, err = source.Once()
@@ -146,7 +138,7 @@ func TestSyncFile(t *testing.T) {
 	if err := os.Remove(filepath.Join(testDir, "file1")); err != nil {
 		t.Fatal(err)
 	}
-	if err := ioutil.WriteFile(filepath.Join(testDir, "file3"), []byte("data3"), os.FileMode(0755)); err != nil {
+	if err := os.WriteFile(filepath.Join(testDir, "file3"), []byte("data3"), os.FileMode(0755)); err != nil {
 		t.Fatal(err)
 	}
 	expectedResult = syncResult{

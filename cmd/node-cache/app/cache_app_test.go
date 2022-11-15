@@ -15,7 +15,6 @@ package app
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -66,7 +65,7 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 	if stubDomainBlob, err := json.Marshal(c.StubDomains); err != nil {
 		t.Errorf("Failed to marshal stubdomains info, err %v", err)
 	} else {
-		if err := ioutil.WriteFile(filepath.Join(p.KubednsCMPath, stubDomainFileName), stubDomainBlob, os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(p.KubednsCMPath, stubDomainFileName), stubDomainBlob, os.ModePerm); err != nil {
 			t.Errorf("Failed to write stubDomains file - %s, err %v", stubDomainFileName, err)
 		}
 	}
@@ -74,7 +73,7 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 	if upstreamBlob, err := json.Marshal(c.UpstreamNameservers); err != nil {
 		t.Errorf("Failed to marshal upstream nameservers info, err %v", err)
 	} else {
-		if err = ioutil.WriteFile(filepath.Join(p.KubednsCMPath, upstreamServerFileName), upstreamBlob, os.ModePerm); err != nil {
+		if err = os.WriteFile(filepath.Join(p.KubednsCMPath, upstreamServerFileName), upstreamBlob, os.ModePerm); err != nil {
 			t.Errorf("Failed to write stubDomains file - %s, err %v", upstreamServerFileName, err)
 		}
 	}
@@ -82,13 +81,13 @@ func updateStubDomainsAndUpstreamServers(t *testing.T, p *ConfigParams, c *confi
 }
 
 func updateBaseFile(t *testing.T, p *ConfigParams, newContents []byte) {
-	if err := ioutil.WriteFile(p.BaseCoreFile, []byte(newContents), os.ModePerm); err != nil {
+	if err := os.WriteFile(p.BaseCoreFile, []byte(newContents), os.ModePerm); err != nil {
 		t.Fatalf("Failed to update template config file - %v", err)
 	}
 }
 
 func createBaseFiles(t *testing.T, p *ConfigParams) {
-	if err := ioutil.WriteFile(p.BaseCoreFile, []byte(templateCoreFileContents), os.ModePerm); err != nil {
+	if err := os.WriteFile(p.BaseCoreFile, []byte(templateCoreFileContents), os.ModePerm); err != nil {
 		t.Fatalf("Failed to write template config file - %v", err)
 	}
 	if err := os.Mkdir(p.KubednsCMPath, os.ModePerm); err != nil {
@@ -97,7 +96,7 @@ func createBaseFiles(t *testing.T, p *ConfigParams) {
 }
 
 func compareFileContents(filename, contents string, t *testing.T) (string, int) {
-	out, err := ioutil.ReadFile(filename)
+	out, err := os.ReadFile(filename)
 	if err != nil {
 		t.Errorf("Failed to read file %s , err %v", filename, err)
 		return "", -1
@@ -125,13 +124,9 @@ func stubDomainsEqual(str1, str2 string, t *testing.T) bool {
 }
 
 func TestUpdateCoreFile(t *testing.T) {
-	baseDir, err := ioutil.TempDir("", "dnstest")
-	if err != nil {
-		t.Fatalf("Failed to obtain temp directory for testing, err %v", err)
-	}
+	baseDir := t.TempDir()
 	envName := strings.ToUpper(strings.Replace(UpstreamClusterDNS, "-", "_", -1)) + "_SERVICE_HOST"
 	os.Setenv(envName, "9.10.11.12")
-	defer func() { os.RemoveAll(baseDir) }()
 	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "169.254.20.10,10.0.0.10",
 		LocalPort:       "53",
 		BaseCoreFile:    filepath.Join(baseDir, templateCoreFileName),
@@ -201,13 +196,9 @@ func TestUpdateCoreFile(t *testing.T) {
 }
 
 func TestUpdateIPv6CoreFile(t *testing.T) {
-	baseDir, err := ioutil.TempDir("", "dnstest")
-	if err != nil {
-		t.Fatalf("Failed to obtain temp directory for testing, err %v", err)
-	}
+	baseDir := t.TempDir()
 	envName := strings.ToUpper(strings.Replace(UpstreamClusterDNS, "-", "_", -1)) + "_SERVICE_HOST"
 	os.Setenv(envName, "2001:db8::1")
-	defer func() { os.RemoveAll(baseDir) }()
 	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "fe80:169:254::1,fd00:1:2:3::5",
 		LocalPort:       "53",
 		BaseCoreFile:    filepath.Join(baseDir, templateCoreFileName),
