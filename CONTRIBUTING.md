@@ -27,6 +27,5 @@ to accept your pull requests.
 
 ### Adding dependencies
 
-If your patch depends on new packages, add that package with
-[`godep`](https://github.com/tools/godep). Follow the [instructions to add a
-dependency](https://github.com/kubernetes/dns/blob/master/docs/go-dependencies.md).
+Repo uses go.mod for the dependency management.
+To ensure the `vendor` dir is synced, run `go mod tidy && go mod vendor`.
