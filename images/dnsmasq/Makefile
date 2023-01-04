@@ -15,7 +15,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty)
 REGISTRY ?= gcr.io/k8s-staging-dns
 ARCH ?= amd64
-DNSMASQ_VERSION ?= dnsmasq-2.87
+DNSMASQ_VERSION ?= dnsmasq-2.88
 CONTAINER_PREFIX ?= k8s-dns
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
@@ -52,14 +52,14 @@ DNSMASQ_URL := http://www.thekelleys.org.uk/dnsmasq/$(DNSMASQ_VERSION).tar.xz
 # SHA-256 computed from GPG-verified download:
 # $ gpg --recv 15CDDA6AE19135A2
 # ...
-# $ gpg --verify dnsmasq-2.86.tar.xz.asc dnsmasq-2.86.tar.xz
-# gpg: Signature made Sun 25 Sep 2022 09:37:28 PM UTC
+# $ gpg --verify dnsmasq-2.88.tar.xz.asc dnsmasq-2.88.tar.xz
+# gpg: Signature made Sun 04 Dec 2022 10:04:50 PM UTC
 # gpg:                using RSA key D6EACBD6EE46B834248D111215CDDA6AE19135A2
 # gpg: Good signature from "Simon Kelley <simon@thekelleys.org.uk>" [unknown]
 # gpg:                 aka "Simon Kelley <srk@debian.org>" [unknown]
 # ...
-# $ sha256sum dnsmasq-2.87.tar.xz
-DNSMASQ_SHA256 := 0228c0364a7f2356fd7e7f1549937cbf3099a78d3b2eb1ba5bb0c31e2b89de7a
+# $ sha256sum dnsmasq-2.88.tar.xz
+DNSMASQ_SHA256 := 23544deda10340c053bea6f15a93fed6ea7f5aaa85316bfc671ffa6d22fbc1b3
 DNSMASQ_ARCHIVE := $(OUTPUT_DIR)/dnsmasq.tar.xz
 
 MULTIARCH_CONTAINER := multiarch/qemu-user-static:register
