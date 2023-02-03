@@ -8,6 +8,8 @@ other protocols and mechanisms, DNS is very commonly used and is a
 highly recommended add-on. The actual DNS service itself need not
 be provided by the default Kube-DNS implementation. This document
 is intended to provide a baseline for commonality between implementations.
+All the implementations must adhere to the corresponding RFCs specifications,
+specifically the [RFC1035 Domain names - Implementation and specification](https://www.rfc-editor.org/rfc/rfc1035)
 
 ## 1 - Schema Version
 
