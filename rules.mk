@@ -32,9 +32,7 @@ ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Multiarch image
 # Uploaded: Jun 6, 2022, 7:19:10 PM
 BASEIMAGE ?= gcr.io/distroless/static-debian11@sha256:d6fa9db9548b5772860fecddb11d84f9ebd7e0321c0cb3c02870402680cc315f
-
-# v0.2.0-gke.2
-IPTIMAGE ?= gcr.io/gke-release/distroless-iptables@sha256:43929c06cad5cd1dcc91da5268160cfb6990f96409bc11f4f66891f0529dbc36
+IPTIMAGE ?= gcr.io/gke-release/distroless-iptables:v0.2.0-gke.2@sha256:43929c06cad5cd1dcc91da5268160cfb6990f96409bc11f4f66891f0529dbc36
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
