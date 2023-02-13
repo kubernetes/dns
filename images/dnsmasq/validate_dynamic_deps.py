@@ -34,23 +34,31 @@ def relative_to_root(path: pathlib.Path) -> pathlib.Path:
 
 def detect_architecture(cwd: pathlib.Path, target_binary: pathlib.Path) -> str:
     """Read the architecture of the ELF file target_binary using the file command"""
+    print(target_binary)
     result = subprocess.run(['file', target_binary],
                             capture_output=True,
                             text=True,
                             cwd=cwd)
+    print(result.stdout)
     return result.stdout.split(",")[1].strip()
 
 
 def untar_container_image(image_ref: str, output_dir: pathlib.Path):
     """Create a docker container using image_ref use tar to extract the filesystem to output_dir."""
     container_name = replace_img_special_chars(image_ref)
-    subprocess.run(['docker', 'create', '--name', container_name, image_ref],
+    out = subprocess.run(['docker', 'create', '--name', container_name, image_ref],
                    capture_output=True)
-    subprocess.run(f'docker export {container_name} | tar x',
+    print(out.stdout)
+    print(out.stderr)
+    out = subprocess.run(f'docker export {container_name} | tar x',
                    shell=True,
                    cwd=output_dir,
                    capture_output=True)
-    subprocess.run(['docker', 'rm', container_name], capture_output=True)
+    print(out.stdout)
+    print(out.stderr)
+    out = subprocess.run(['docker', 'rm', container_name], capture_output=True)
+    print(out.stdout)
+    print(out.stderr)
 
 
 def detect_dependencies(cwd: pathlib.Path,
@@ -105,6 +113,8 @@ def main(image_ref: str, target_binary: str, clean=True):
     output_dir = pathlib.Path(IMAGE_DIR, container_name)
     target_binary = relative_to_root(pathlib.Path(target_binary))
 
+    print(container_name)
+    print(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     untar_container_image(image_ref, output_dir)
     target_binary_arch = detect_architecture(output_dir, target_binary)
