@@ -38,7 +38,7 @@ def detect_architecture(cwd: pathlib.Path, target_binary: pathlib.Path) -> str:
                             capture_output=True,
                             text=True,
                             cwd=cwd)
-    if len(result.stdout.split(",")) == 0:
+    if len(result.stdout.split(",")) <= 1:
         # File not found
         return ""
     return result.stdout.split(",")[1].strip()
