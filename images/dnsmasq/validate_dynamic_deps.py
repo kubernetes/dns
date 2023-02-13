@@ -28,6 +28,7 @@ def replace_img_special_chars(image_ref: str) -> str:
 
 
 def relative_to_root(path: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(path)
     return path.relative_to(path.anchor)
 
 
