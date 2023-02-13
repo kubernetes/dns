@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Builds the docker container for the e2e test.
-FROM k8s.gcr.io/kube-dnsmasq-amd64:1.4
+FROM registry.k8s.io/kube-dnsmasq-amd64:1.4
 MAINTAINER Bowei Du <bowei@google.com>
 
 COPY bin/amd64/sidecar /sidecar

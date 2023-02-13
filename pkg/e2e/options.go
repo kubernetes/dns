@@ -18,8 +18,8 @@ package e2e
 
 const (
 	etcdImage      = "quay.io/coreos/etcd:v3.0.14"
-	hyperkubeImage = "k8s.gcr.io/hyperkube:v1.5.1"
-	dnsmasqImage   = "k8s.gcr.io/k8s-dns-dnsmasq-amd64:1.14.5"
+	hyperkubeImage = "registry.k8s.io/hyperkube:v1.5.1"
+	dnsmasqImage   = "registry.k8s.io/k8s-dns-dnsmasq-amd64:1.14.5"
 )
 
 type Options struct {
