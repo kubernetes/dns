@@ -40,6 +40,7 @@ def detect_architecture(cwd: pathlib.Path, target_binary: pathlib.Path) -> str:
                             cwd=cwd)
     if len(result.stdout.split(",")) <= 1:
         # File not found
+        print("file %s not found" % target_binary)
         return ""
     return result.stdout.split(",")[1].strip()
 
@@ -135,6 +136,9 @@ def main(image_ref: str, target_binary: str, clean=True):
                 dep_path = resolve_container_link(output_dir, dep_path)
 
             dep_arch = detect_architecture(output_dir, dep_path)
+            if dep_arch == "":
+                # Dependency not found
+                continue
 
             if dep_arch != target_binary_arch:
                 wrong_arch[dep_path] = dep_arch
