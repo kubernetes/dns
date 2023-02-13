@@ -65,6 +65,6 @@ Follow these steps to make changes and release a new binary.
    The image SHAs should be added to [`images/k8s-staging-dns/images.yaml`](https://github.com/kubernetes/k8s.io/blob/main/k8s.gcr.io/images/k8s-staging-dns/images.yaml).
    The SHAs can be obtained by running the command `python parse-image-sha.py <TAG>`
    This will return the SHAs for kube-dns as well as node-cache images. Node-cache images are always promoted, kube-dns images are promoted if there is a change to kubedns/vulnerability fix.
-6. Images will be available in the repo k8s.gcr.io/dns/. The node-cache image with tag 1.15.14 can be found at k8s.gcr.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at k8s.gcr.io/k8s-dns-node-cache:<TAG>
+6. Images will be available in the repo registry.k8s.io/dns/. The node-cache image with tag 1.15.14 can be found at registry.k8s.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at registry.k8s.io/k8s-dns-node-cache:<TAG>
 7. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189
