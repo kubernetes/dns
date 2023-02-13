@@ -10,7 +10,7 @@
     "containers": [
       {
         "name": "controller-manager",
-        "image": "k8s.gcr.io/hyperkube-amd64:v1.5.1",
+        "image": "registry.k8s.io/hyperkube-amd64:v1.5.1",
         "command": [
           "/hyperkube",
           "controller-manager",
@@ -30,7 +30,7 @@
       },
       {
         "name": "scheduler",
-        "image": "k8s.gcr.io/hyperkube-amd64:v1.5.1",
+        "image": "registry.k8s.io/hyperkube-amd64:v1.5.1",
         "command": [
           "/hyperkube",
           "scheduler",
@@ -41,7 +41,7 @@
       },
       {
         "name": "setup",
-        "image": "k8s.gcr.io/hyperkube-amd64:v1.5.1",
+        "image": "registry.k8s.io/hyperkube-amd64:v1.5.1",
         "command": [
           "/setup-files.sh",
           "IP:10.0.0.1,DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.cluster.local"

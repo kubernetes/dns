@@ -21,7 +21,7 @@ CONTAINER_PREFIX ?= k8s-dns
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 MANIFEST_IMAGE := $(REGISTRY)/$(CONTAINER_PREFIX)-dnsmasq
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
-COMPILE_IMAGE := k8s.gcr.io/kube-cross:v1.7.6-k8s1.6-0
+COMPILE_IMAGE := registry.k8s.io/kube-cross:v1.7.6-k8s1.6-0
 OUTPUT_DIR := _output/$(ARCH)
 
 # Ensure that the docker command line supports the manifest images
@@ -31,7 +31,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 # Uploaded: Feb 10, 2023, 11:04:43 PM
 BASEIMAGE ?= gcr.io/distroless/base-debian11@sha256:5d40383d8cc15830334f30f4a19e2af16923e02ceeca275f0acc39bdf3a1c577
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := k8s.gcr.io/build-image/debian-base-$(ARCH):bullseye-v1.4.1
+	COMPILE_IMAGE := registry.k8s.io/build-image/debian-base-$(ARCH):bullseye-v1.4.1
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
