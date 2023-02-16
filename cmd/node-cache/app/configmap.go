@@ -33,7 +33,7 @@ const (
     bind {{.LocalIP}}
     forward . {{.UpstreamServers}}
 }
-`  // cache TTL is 30s by default
+` // cache TTL is 30s by default
 	defaultTTL       = 30
 	upstreamTCPBlock = `
     forward . __PILLAR__UPSTREAM__SERVERS__ {
