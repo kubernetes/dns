@@ -1,6 +1,6 @@
 module k8s.io/dns
 
-go 1.18
+go 1.20
 
 require (
 	github.com/coredns/caddy v1.1.1
