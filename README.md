@@ -68,3 +68,7 @@ Follow these steps to make changes and release a new binary.
 6. Images will be available in the repo registry.k8s.io/dns/. The node-cache image with tag 1.15.14 can be found at registry.k8s.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at registry.k8s.io/k8s-dns-node-cache:<TAG>
 7. Submit a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189
+   
+## Version compatibility
+
+There is no version compatibility requirements with Kubernetes releases. Version numbers in this repo are not related to Kubernetes versions.
