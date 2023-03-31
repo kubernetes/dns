@@ -8,7 +8,7 @@ This is the repository for [Kubernetes DNS](http://kubernetes.io/docs/admin/dns/
 
 ## Images
 
-* [kube-dns](http://kubernetes.io/docs/admin/dns/)
+* [kube-dns](https://kubernetes.io/docs/tasks/access-application-cluster/configure-dns-cluster/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
 * [node-cache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
