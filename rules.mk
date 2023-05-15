@@ -30,9 +30,9 @@ SRC_DIRS := cmd pkg
 
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Multiarch image
-# Uploaded: Jun 6, 2022, 7:19:10 PM
-BASEIMAGE ?= gcr.io/distroless/static-debian11@sha256:d6fa9db9548b5772860fecddb11d84f9ebd7e0321c0cb3c02870402680cc315f
-IPTIMAGE ?= gcr.io/gke-release/distroless-iptables:v0.2.1-gke.1@sha256:8a531ccf814724529d9f9dace8eeb9a20581a700c2bcd83101840b1b515982ae
+# Uploaded: May 9, 2023, 4:20:43 PM
+BASEIMAGE ?= gcr.io/distroless/static-debian11@sha256:7198a357ff3a8ef750b041324873960cf2153c11cc50abb9d8d5f8bb089f6b4e
+IPTIMAGE ?= gcr.io/gke-release/distroless-iptables:v0.2.4-gke.0@sha256:877188d625b0110d68c31376d9aad0e8d4deacc6e56a5ff57577255667411397
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.
