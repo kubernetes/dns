@@ -59,7 +59,7 @@ Follow these steps to make changes and release a new binary.
    `k8s.io/test-infra/.../k8s-staging-dns.yaml`. A manual cloud build can be submitted via
    `gcloud builds submit --config cloudbuild.yaml`, but this requires owner permissions in k8s-staging-dns project.
    The automated job pushes images for all architectures and makes them available in `gcr.io/k8s-staging-dns`.
-   Status for build jobs can be checked at - https://k8s-testgrid.appspot.com/sig-network-dns#dns-push-images
+   Status for build jobs can be checked at - https://testgrid.k8s.io/sig-network-dns#dns-push-images
 5. Promote the images to `gcr.io/k8s-artifacts-prod` using the process described
    in [this](https://github.com/kubernetes/k8s.io/tree/main/k8s.gcr.io#image-promoter) link.
    The image SHAs should be added to [`images/k8s-staging-dns/images.yaml`](https://github.com/kubernetes/k8s.io/blob/main/k8s.gcr.io/images/k8s-staging-dns/images.yaml).
