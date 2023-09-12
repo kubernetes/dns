@@ -146,17 +146,6 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6c463ff0ea9cac4e7ad09f636bbd61393ac6179ba9b78a11a4227ead4131181c"
-  name = "golang.org/x/crypto"
-  packages = [
-    "ed25519",
-    "ed25519/internal/edwards25519",
-  ]
-  pruneopts = "UT"
-  revision = "5119cf507ed5294cc409c092980c7497ee5d6fd2"
-
-[[projects]]
-  branch = "master"
   digest = "1:5791cf3cb703a908aa3b75ff98d1f20afd4cd9352af032b49ac39bfa17a056a6"
   name = "golang.org/x/net"
   packages = [
