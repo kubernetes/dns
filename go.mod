@@ -115,12 +115,9 @@ require (
 
 replace (
 	// pinned latest version for vulnerability fixes
-	// this one is used by coredns
+    // this one is used by coredns
 	// if coredns starts using >= v0.14.0 this pinned version can be removed
 	github.com/apache/thrift => github.com/apache/thrift v0.14.0
-
-	// pinned latest version for vulnerability fixes, upgrade if there are newer versions
-	golang.org/x/crypto => golang.org/x/crypto v0.1.0
 
 	k8s.io/api => k8s.io/api v0.24.7
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.7
