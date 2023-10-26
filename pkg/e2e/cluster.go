@@ -53,7 +53,6 @@ func (cl *Cluster) SetUp() {
 
 	cl.StartEtcd()
 	cl.StartApiServer()
-	cl.StartKubelet()
 
 	cl.WaitForApiServer()
 }
@@ -62,7 +61,6 @@ func (cl *Cluster) SetUp() {
 func (cl *Cluster) TearDown() {
 	Log.Logf("Teardown")
 
-	cl.StopKubelet()
 	cl.StopApiServer()
 	cl.StopEtcd()
 }
