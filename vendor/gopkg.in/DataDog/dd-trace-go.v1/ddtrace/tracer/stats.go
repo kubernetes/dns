@@ -52,12 +52,13 @@ type concentrator struct {
 	buckets map[int64]*rawBucket
 
 	// stopped reports whether the concentrator is stopped (when non-zero)
-	stopped uint64
+	stopped uint32
 
-	wg         sync.WaitGroup // waits for any active goroutines
-	bucketSize int64          // the size of a bucket in nanoseconds
-	stop       chan struct{}  // closing this channel triggers shutdown
-	cfg        *config        // tracer startup configuration
+	wg           sync.WaitGroup // waits for any active goroutines
+	bucketSize   int64          // the size of a bucket in nanoseconds
+	stop         chan struct{}  // closing this channel triggers shutdown
+	cfg          *config        // tracer startup configuration
+	statsdClient statsdClient   // statsd client for sending metrics.
 }
 
 // newConcentrator creates a new concentrator using the given tracer
@@ -79,7 +80,7 @@ func alignTs(ts, bucketSize int64) int64 { return ts - ts%bucketSize }
 // Start starts the concentrator. A started concentrator needs to be stopped
 // in order to gracefully shut down, using Stop.
 func (c *concentrator) Start() {
-	if atomic.SwapUint64(&c.stopped, 0) == 0 {
+	if atomic.SwapUint32(&c.stopped, 0) == 0 {
 		// already running
 		log.Warn("(*concentrator).Start called more than once. This is likely a programming error.")
 		return
@@ -113,10 +114,10 @@ func (c *concentrator) runFlusher(tick <-chan time.Time) {
 
 // statsd returns any tracer configured statsd client, or a no-op.
 func (c *concentrator) statsd() statsdClient {
-	if c.cfg.statsd == nil {
+	if c.statsdClient == nil {
 		return &statsd.NoOpClient{}
 	}
-	return c.cfg.statsd
+	return c.statsdClient
 }
 
 // runIngester runs the loop which accepts incoming data on the concentrator's In
@@ -149,7 +150,7 @@ func (c *concentrator) add(s *aggregableSpan) {
 
 // Stop stops the concentrator and blocks until the operation completes.
 func (c *concentrator) Stop() {
-	if atomic.SwapUint64(&c.stopped, 1) > 0 {
+	if atomic.SwapUint32(&c.stopped, 1) > 0 {
 		return
 	}
 	close(c.stop)
