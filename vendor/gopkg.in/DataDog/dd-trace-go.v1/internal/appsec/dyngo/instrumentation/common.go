@@ -11,17 +11,34 @@ import (
 	"fmt"
 	"sync"
 
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/samplernames"
 )
 
-// TagsHolder wraps a map holding tags. The purpose of this struct is to be used by composition in an Operation
-// to allow said operation to handle tags addition/retrieval. See httpsec/http.go and grpcsec/grpc.go.
-type TagsHolder struct {
-	tags map[string]interface{}
-	mu   sync.Mutex
-}
+// BlockedRequestTag used to convey whether a request is blocked
+const BlockedRequestTag = "appsec.blocked"
+
+type (
+	// TagSetter is the interface needed to set a span tag.
+	TagSetter interface {
+		SetTag(string, interface{})
+	}
+	// TagsHolder wraps a map holding tags. The purpose of this struct is to be used by composition in an Operation
+	// to allow said operation to handle tags addition/retrieval. See httpsec/http.go and grpcsec/grpc.go.
+	TagsHolder struct {
+		tags map[string]interface{}
+		mu   sync.Mutex
+	}
+	// SecurityEventsHolder is a wrapper around a thread safe security events slice. The purpose of this struct is to be
+	// used by composition in an Operation to allow said operation to handle security events addition/retrieval.
+	// See httpsec/http.go and grpcsec/grpc.go.
+	SecurityEventsHolder struct {
+		events []json.RawMessage
+		mu     sync.RWMutex
+	}
+	// ContextKey is used as a key to store operations in the request's context (gRPC/HTTP)
+	ContextKey struct{}
+)
 
 // NewTagsHolder returns a new instance of a TagsHolder struct.
 func NewTagsHolder() TagsHolder {
@@ -40,14 +57,6 @@ func (m *TagsHolder) Tags() map[string]interface{} {
 	return m.tags
 }
 
-// SecurityEventsHolder is a wrapper around a thread safe security events slice. The purpose of this struct is to be
-// used by composition in an Operation to allow said operation to handle security events addition/retrieval.
-// See httpsec/http.go and grpcsec/grpc.go.
-type SecurityEventsHolder struct {
-	events []json.RawMessage
-	mu     sync.Mutex
-}
-
 // AddSecurityEvents adds the security events to the collected events list.
 // Thread safe.
 func (s *SecurityEventsHolder) AddSecurityEvents(events ...json.RawMessage) {
@@ -58,18 +67,42 @@ func (s *SecurityEventsHolder) AddSecurityEvents(events ...json.RawMessage) {
 
 // Events returns the list of stored events.
 func (s *SecurityEventsHolder) Events() []json.RawMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.events
 }
 
+// ClearEvents clears the list of stored events
+func (s *SecurityEventsHolder) ClearEvents() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = s.events[0:0]
+}
+
 // SetTags fills the span tags using the key/value pairs found in `tags`
-func SetTags(span ddtrace.Span, tags map[string]interface{}) {
+func SetTags(span TagSetter, tags map[string]interface{}) {
 	for k, v := range tags {
 		span.SetTag(k, v)
 	}
 }
 
+// SetStringTags fills the span tags using the key/value pairs of strings found
+// in `tags`
+func SetStringTags(span TagSetter, tags map[string]string) {
+	for k, v := range tags {
+		span.SetTag(k, v)
+	}
+}
+
+// SetAppSecEnabledTags sets the AppSec-specific span tags that are expected to be in
+// the web service entry span (span of type `web`) when AppSec is enabled.
+func SetAppSecEnabledTags(span TagSetter) {
+	span.SetTag("_dd.appsec.enabled", 1)
+	span.SetTag("_dd.runtime_family", "go")
+}
+
 // SetEventSpanTags sets the security event span tags into the service entry span.
-func SetEventSpanTags(span ddtrace.Span, events []json.RawMessage) error {
+func SetEventSpanTags(span TagSetter, events []json.RawMessage) error {
 	// Set the appsec event span tag
 	val, err := makeEventTagValue(events)
 	if err != nil {
@@ -91,9 +124,11 @@ func SetEventSpanTags(span ddtrace.Span, events []json.RawMessage) error {
 
 // Create the value of the security event tag.
 // TODO(Julio-Guerra): a future libddwaf version should return something
-//   avoiding us the following events concatenation logic which currently
-//   involves unserializing the top-level JSON arrays to concatenate them
-//   together.
+//
+//	avoiding us the following events concatenation logic which currently
+//	involves unserializing the top-level JSON arrays to concatenate them
+//	together.
+//
 // TODO(Julio-Guerra): avoid serializing the json in the request hot path
 func makeEventTagValue(events []json.RawMessage) (json.RawMessage, error) {
 	var v interface{}

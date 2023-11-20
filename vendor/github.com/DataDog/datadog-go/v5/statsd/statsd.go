@@ -10,11 +10,14 @@ statsd is based on go-statsd-client.
 */
 package statsd
 
+//go:generate mockgen -source=statsd.go -destination=mocks/statsd.go
+
 import (
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -69,15 +72,29 @@ const (
 	defaultUDPPort      = "8125"
 )
 
+const (
+	// ddEntityID specifies client-side user-specified entity ID injection.
+	// This env var can be set to the Pod UID on Kubernetes via the downward API.
+	// Docs: https://docs.datadoghq.com/developers/dogstatsd/?tab=kubernetes#origin-detection-over-udp
+	ddEntityID = "DD_ENTITY_ID"
+
+	// ddEntityIDTag specifies the tag name for the client-side entity ID injection
+	// The Agent expects this tag to contain a non-prefixed Kubernetes Pod UID.
+	ddEntityIDTag = "dd.internal.entity_id"
+
+	// originDetectionEnabled specifies the env var to enable/disable sending the container ID field.
+	originDetectionEnabled = "DD_ORIGIN_DETECTION_ENABLED"
+)
+
 /*
 ddEnvTagsMapping is a mapping of each "DD_" prefixed environment variable
 to a specific tag name. We use a slice to keep the order and simplify tests.
 */
 var ddEnvTagsMapping = []struct{ envName, tagName string }{
-	{"DD_ENTITY_ID", "dd.internal.entity_id"}, // Client-side entity ID injection for container tagging.
-	{"DD_ENV", "env"},                         // The name of the env in which the service runs.
-	{"DD_SERVICE", "service"},                 // The name of the running service.
-	{"DD_VERSION", "version"},                 // The current version of the running service.
+	{ddEntityID, ddEntityIDTag}, // Client-side entity ID injection for container tagging.
+	{"DD_ENV", "env"},           // The name of the env in which the service runs.
+	{"DD_SERVICE", "service"},   // The name of the running service.
+	{"DD_VERSION", "version"},   // The current version of the running service.
 }
 
 type metricType int
@@ -184,6 +201,12 @@ type ClientInterface interface {
 
 	// Flush forces a flush of all the queued dogstatsd payloads.
 	Flush() error
+
+	// IsClosed returns if the client has been closed.
+	IsClosed() bool
+
+	// GetTelemetry return the telemetry metrics for the client since it started.
+	GetTelemetry() Telemetry
 }
 
 // A Client is a handle for sending messages to dogstatsd.  It is safe to
@@ -208,6 +231,7 @@ type Client struct {
 	aggExtended     *aggregator
 	options         []Option
 	addrOption      string
+	isClosed        bool
 }
 
 // statsdTelemetry contains telemetry metrics about the client
@@ -319,11 +343,20 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 		tags:      o.tags,
 		telemetry: &statsdTelemetry{},
 	}
+
+	hasEntityID := false
 	// Inject values of DD_* environment variables as global tags.
 	for _, mapping := range ddEnvTagsMapping {
 		if value := os.Getenv(mapping.envName); value != "" {
+			if mapping.envName == ddEntityID {
+				hasEntityID = true
+			}
 			c.tags = append(c.tags, fmt.Sprintf("%s:%s", mapping.tagName, value))
 		}
+	}
+
+	if !hasEntityID {
+		initContainerID(o.containerID, isOriginDetectionEnabled(o, hasEntityID))
 	}
 
 	if o.maxBytesPerPayload == 0 {
@@ -444,6 +477,13 @@ func (c *Client) Flush() error {
 	// worker and senders
 	c.sender.flush()
 	return nil
+}
+
+// IsClosed returns if the client has been closed.
+func (c *Client) IsClosed() bool {
+	c.closerLock.Lock()
+	defer c.closerLock.Unlock()
+	return c.isClosed
 }
 
 func (c *Client) flushTelemetryMetrics(t *Telemetry) {
@@ -628,6 +668,10 @@ func (c *Client) Close() error {
 	c.closerLock.Lock()
 	defer c.closerLock.Unlock()
 
+	if c.isClosed {
+		return nil
+	}
+
 	// Notify all other threads that they should stop
 	select {
 	case <-c.stop:
@@ -654,5 +698,39 @@ func (c *Client) Close() error {
 	c.wg.Wait()
 
 	c.Flush()
+
+	c.isClosed = true
 	return c.sender.close()
+}
+
+// isOriginDetectionEnabled returns whether the clients should fill the container field.
+//
+// If DD_ENTITY_ID is set, we don't send the container ID
+// If a user-defined container ID is provided, we don't ignore origin detection
+// as dd.internal.entity_id is prioritized over the container field for backward compatibility.
+// If DD_ENTITY_ID is not set, we try to fill the container field automatically unless
+// DD_ORIGIN_DETECTION_ENABLED is explicitly set to false.
+func isOriginDetectionEnabled(o *Options, hasEntityID bool) bool {
+	if !o.originDetection || hasEntityID || o.containerID != "" {
+		// originDetection is explicitly disabled
+		// or DD_ENTITY_ID was found
+		// or a user-defined container ID was provided
+		return false
+	}
+
+	envVarValue := os.Getenv(originDetectionEnabled)
+	if envVarValue == "" {
+		// DD_ORIGIN_DETECTION_ENABLED is not set
+		// default to true
+		return true
+	}
+
+	enabled, err := strconv.ParseBool(envVarValue)
+	if err != nil {
+		// Error due to an unsupported DD_ORIGIN_DETECTION_ENABLED value
+		// default to true
+		return true
+	}
+
+	return enabled
 }

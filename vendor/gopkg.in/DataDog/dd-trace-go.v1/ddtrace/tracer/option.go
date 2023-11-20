@@ -12,9 +12,12 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -24,11 +27,72 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/namingschema"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/normalizer"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/traceprof"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 )
+
+var contribIntegrations = map[string]struct {
+	name     string // user readable name for startup logs
+	imported bool   // true if the user has imported the integration
+}{
+	"github.com/99designs/gqlgen":                   {"gqlgen", false},
+	"github.com/aws/aws-sdk-go":                     {"AWS SDK", false},
+	"github.com/aws/aws-sdk-go-v2":                  {"AWS SDK v2", false},
+	"github.com/bradfitz/gomemcache":                {"Memcache", false},
+	"cloud.google.com/go/pubsub.v1":                 {"Pub/Sub", false},
+	"github.com/confluentinc/confluent-kafka-go":    {"Kafka (confluent)", false},
+	"github.com/confluentinc/confluent-kafka-go/v2": {"Kafka (confluent) v2", false},
+	"database/sql":                                  {"SQL", false},
+	"github.com/dimfeld/httptreemux/v5":             {"HTTP Treemux", false},
+	"github.com/elastic/go-elasticsearch/v6":        {"Elasticsearch v6", false},
+	"github.com/emicklei/go-restful":                {"go-restful", false},
+	"github.com/emicklei/go-restful/v3":             {"go-restful v3", false},
+	"github.com/garyburd/redigo":                    {"Redigo (dep)", false},
+	"github.com/gin-gonic/gin":                      {"Gin", false},
+	"github.com/globalsign/mgo":                     {"MongoDB (mgo)", false},
+	"github.com/go-chi/chi":                         {"chi", false},
+	"github.com/go-chi/chi/v5":                      {"chi v5", false},
+	"github.com/go-pg/pg/v10":                       {"go-pg v10", false},
+	"github.com/go-redis/redis":                     {"Redis", false},
+	"github.com/go-redis/redis/v7":                  {"Redis v7", false},
+	"github.com/go-redis/redis/v8":                  {"Redis v8", false},
+	"go.mongodb.org/mongo-driver":                   {"MongoDB", false},
+	"github.com/gocql/gocql":                        {"Cassandra", false},
+	"github.com/gofiber/fiber/v2":                   {"Fiber", false},
+	"github.com/gomodule/redigo":                    {"Redigo", false},
+	"google.golang.org/api":                         {"Google API", false},
+	"google.golang.org/grpc":                        {"gRPC", false},
+	"google.golang.org/grpc/v12":                    {"gRPC v12", false},
+	"gopkg.in/jinzhu/gorm.v1":                       {"Gorm (gopkg)", false},
+	"github.com/gorilla/mux":                        {"Gorilla Mux", false},
+	"gorm.io/gorm.v1":                               {"Gorm v1", false},
+	"github.com/graph-gophers/graphql-go":           {"GraphQL", false},
+	"github.com/hashicorp/consul/api":               {"Consul", false},
+	"github.com/hashicorp/vault/api":                {"Vault", false},
+	"github.com/jinzhu/gorm":                        {"Gorm", false},
+	"github.com/jmoiron/sqlx":                       {"SQLx", false},
+	"github.com/julienschmidt/httprouter":           {"HTTP Router", false},
+	"k8s.io/client-go/kubernetes":                   {"Kubernetes", false},
+	"github.com/labstack/echo":                      {"echo", false},
+	"github.com/labstack/echo/v4":                   {"echo v4", false},
+	"github.com/miekg/dns":                          {"miekg/dns", false},
+	"net/http":                                      {"HTTP", false},
+	"gopkg.in/olivere/elastic.v5":                   {"Elasticsearch v5", false},
+	"gopkg.in/olivere/elastic.v3":                   {"Elasticsearch v3", false},
+	"github.com/redis/go-redis/v9":                  {"Redis v9", false},
+	"github.com/segmentio/kafka-go":                 {"Kafka v0", false},
+	"github.com/Shopify/sarama":                     {"Kafka (sarama)", false},
+	"github.com/sirupsen/logrus":                    {"Logrus", false},
+	"github.com/syndtr/goleveldb":                   {"LevelDB", false},
+	"github.com/tidwall/buntdb":                     {"BuntDB", false},
+	"github.com/twitchtv/twirp":                     {"Twirp", false},
+	"github.com/urfave/negroni":                     {"Negroni", false},
+	"github.com/zenazn/goji":                        {"Goji", false},
+}
 
 var (
 	// defaultSocketAPM specifies the socket path to use for connecting to the trace-agent.
@@ -52,12 +116,20 @@ type config struct {
 	// of the behaviour of the tracer.
 	agent agentFeatures
 
+	// integrations reports if the user has instrumented a Datadog integration and
+	// if they have a version of the library available to integrate.
+	integrations map[string]integrationConfig
+
 	// featureFlags specifies any enabled feature flags.
 	featureFlags map[string]struct{}
 
 	// logToStdout reports whether we should log all traces to the standard
 	// output instead of using the agent. This is used in Lambda environments.
 	logToStdout bool
+
+	// sendRetries is the number of times a trace payload send is retried upon
+	// failure.
+	sendRetries int
 
 	// logStartup, when true, causes various startup info to be written
 	// when the tracer starts.
@@ -79,9 +151,8 @@ type config struct {
 	// sampler specifies the sampler that will be used for sampling traces.
 	sampler Sampler
 
-	// agentAddr specifies the hostname and port of the agent where the traces
-	// are sent to.
-	agentAddr string
+	// agentURL is the agent URL that receives traces from the tracer.
+	agentURL *url.URL
 
 	// serviceMappings holds a set of service mappings to dynamically rename services
 	serviceMappings map[string]string
@@ -115,15 +186,16 @@ type config struct {
 	// combination of the environment variables DD_AGENT_HOST and DD_DOGSTATSD_PORT.
 	dogstatsdAddr string
 
-	// statsd is used for tracking metrics associated with the runtime and the tracer.
-	statsd statsdClient
+	// statsdClient is set when a user provides a custom statsd client for tracking metrics
+	// associated with the runtime and the tracer.
+	statsdClient statsdClient
 
 	// spanRules contains user-defined rules to determine the sampling rate to apply
-	// to trace spans.
+	// to a single span without affecting the entire trace
 	spanRules []SamplingRule
 
 	// traceRules contains user-defined rules to determine the sampling rate to apply
-	// to individual spans.
+	// to the entire trace if any spans satisfy the criteria
 	traceRules []SamplingRule
 
 	// tickChan specifies a channel which will receive the time every time the tracer must flush.
@@ -142,6 +214,27 @@ type config struct {
 
 	// enabled reports whether tracing is enabled.
 	enabled bool
+
+	// enableHostnameDetection specifies whether the tracer should enable hostname detection.
+	enableHostnameDetection bool
+
+	// spanAttributeSchemaVersion holds the selected DD_TRACE_SPAN_ATTRIBUTE_SCHEMA version.
+	spanAttributeSchemaVersion int
+
+	// peerServiceDefaultsEnabled indicates whether the peer.service tag calculation is enabled or not.
+	peerServiceDefaultsEnabled bool
+
+	// peerServiceMappings holds a set of service mappings to dynamically rename peer.service values.
+	peerServiceMappings map[string]string
+
+	// partialFlushMinSpans is the number of finished spans in a single trace to trigger a
+	// partial flush, or 0 if partial flushing is disabled.
+	// Value from DD_TRACE_PARTIAL_FLUSH_MIN_SPANS, default 1000.
+	partialFlushMinSpans int
+
+	// partialFlushEnabled specifices whether the tracer should enable partial flushing. Value
+	// from DD_TRACE_PARTIAL_FLUSH_ENABLED, default false.
+	partialFlushEnabled bool
 }
 
 // HasFeature reports whether feature f is enabled.
@@ -153,43 +246,17 @@ func (c *config) HasFeature(f string) bool {
 // StartOption represents a function that can be provided as a parameter to Start.
 type StartOption func(*config)
 
-// forEachStringTag runs fn on every key:val pair encountered in str.
-// str may contain multiple key:val pairs separated by either space
-// or comma (but not a mixture of both).
-func forEachStringTag(str string, fn func(key string, val string)) {
-	sep := " "
-	if strings.Index(str, ",") > -1 {
-		// falling back to comma as separator
-		sep = ","
-	}
-	for _, tag := range strings.Split(str, sep) {
-		tag = strings.TrimSpace(tag)
-		if tag == "" {
-			continue
-		}
-		kv := strings.SplitN(tag, ":", 2)
-		key := strings.TrimSpace(kv[0])
-		if key == "" {
-			continue
-		}
-		var val string
-		if len(kv) == 2 {
-			val = strings.TrimSpace(kv[1])
-		}
-		fn(key, val)
-	}
-}
-
 // maxPropagatedTagsLength limits the size of DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH to prevent HTTP 413 responses.
 const maxPropagatedTagsLength = 512
+
+// partialFlushMinSpansDefault is the default number of spans for partial flushing, if enabled.
+const partialFlushMinSpansDefault = 1000
 
 // newConfig renders the tracer configuration based on defaults, environment variables
 // and passed user opts.
 func newConfig(opts ...StartOption) *config {
 	c := new(config)
 	c.sampler = NewAllSampler()
-	c.agentAddr = resolveAgentAddr()
-	c.httpClient = defaultHTTPClient()
 
 	if internal.BoolEnv("DD_TRACE_ANALYTICS_ENABLED", false) {
 		globalconfig.SetAnalyticsRate(1.0)
@@ -220,10 +287,17 @@ func newConfig(opts ...StartOption) *config {
 		c.version = ver
 	}
 	if v := os.Getenv("DD_SERVICE_MAPPING"); v != "" {
-		forEachStringTag(v, func(key, val string) { WithServiceMapping(key, val)(c) })
+		internal.ForEachStringTag(v, func(key, val string) { WithServiceMapping(key, val)(c) })
+	}
+	if v := os.Getenv("DD_TRACE_HEADER_TAGS"); v != "" {
+		WithHeaderTags(strings.Split(v, ","))(c)
 	}
 	if v := os.Getenv("DD_TAGS"); v != "" {
-		forEachStringTag(v, func(key, val string) { WithGlobalTag(key, val)(c) })
+		tags := internal.ParseTagString(v)
+		internal.CleanGitMetadataTags(tags)
+		for key, val := range tags {
+			WithGlobalTag(key, val)(c)
+		}
 	}
 	if _, ok := os.LookupEnv("AWS_LAMBDA_FUNCTION_NAME"); ok {
 		// AWS_LAMBDA_FUNCTION_NAME being set indicates that we're running in an AWS Lambda environment.
@@ -236,9 +310,63 @@ func newConfig(opts ...StartOption) *config {
 	c.enabled = internal.BoolEnv("DD_TRACE_ENABLED", true)
 	c.profilerEndpoints = internal.BoolEnv(traceprof.EndpointEnvVar, true)
 	c.profilerHotspots = internal.BoolEnv(traceprof.CodeHotspotsEnvVar, true)
+	c.enableHostnameDetection = internal.BoolEnv("DD_CLIENT_HOSTNAME_ENABLED", true)
+	c.partialFlushEnabled = internal.BoolEnv("DD_TRACE_PARTIAL_FLUSH_ENABLED", false)
+	c.partialFlushMinSpans = internal.IntEnv("DD_TRACE_PARTIAL_FLUSH_MIN_SPANS", partialFlushMinSpansDefault)
+	if c.partialFlushMinSpans <= 0 {
+		log.Warn("DD_TRACE_PARTIAL_FLUSH_MIN_SPANS=%d is not a valid value, setting to default %d", c.partialFlushMinSpans, partialFlushMinSpansDefault)
+		c.partialFlushMinSpans = partialFlushMinSpansDefault
+	} else if c.partialFlushMinSpans >= traceMaxSize {
+		log.Warn("DD_TRACE_PARTIAL_FLUSH_MIN_SPANS=%d is above the max number of spans that can be kept in memory for a single trace (%d spans), so partial flushing will never trigger, setting to default %d", c.partialFlushMinSpans, traceMaxSize, partialFlushMinSpansDefault)
+		c.partialFlushMinSpans = partialFlushMinSpansDefault
+	}
+	// TODO(partialFlush): consider logging a warning if DD_TRACE_PARTIAL_FLUSH_MIN_SPANS
+	// is set, but DD_TRACE_PARTIAL_FLUSH_ENABLED is not true. Or just assume it should be enabled
+	// if it's explicitly set, and don't require both variables to be configured.
+
+	schemaVersionStr := os.Getenv("DD_TRACE_SPAN_ATTRIBUTE_SCHEMA")
+	if v, ok := namingschema.ParseVersion(schemaVersionStr); ok {
+		namingschema.SetVersion(v)
+		c.spanAttributeSchemaVersion = int(v)
+	} else {
+		v := namingschema.SetDefaultVersion()
+		c.spanAttributeSchemaVersion = int(v)
+		log.Warn("DD_TRACE_SPAN_ATTRIBUTE_SCHEMA=%s is not a valid value, setting to default of v%d", schemaVersionStr, v)
+	}
+	// Allow DD_TRACE_SPAN_ATTRIBUTE_SCHEMA=v0 users to disable default integration (contrib AKA v0) service names.
+	// These default service names are always disabled for v1 onwards.
+	namingschema.SetUseGlobalServiceName(internal.BoolEnv("DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED", false))
+
+	// peer.service tag default calculation is enabled by default if using attribute schema >= 1
+	c.peerServiceDefaultsEnabled = true
+	if c.spanAttributeSchemaVersion == int(namingschema.SchemaV0) {
+		c.peerServiceDefaultsEnabled = internal.BoolEnv("DD_TRACE_PEER_SERVICE_DEFAULTS_ENABLED", false)
+	}
+	c.peerServiceMappings = make(map[string]string)
+	if v := os.Getenv("DD_TRACE_PEER_SERVICE_MAPPING"); v != "" {
+		internal.ForEachStringTag(v, func(key, val string) { c.peerServiceMappings[key] = val })
+	}
 
 	for _, fn := range opts {
 		fn(c)
+	}
+	if c.agentURL == nil {
+		c.agentURL = resolveAgentAddr()
+		if url := internal.AgentURLFromEnv(); url != nil {
+			c.agentURL = url
+		}
+	}
+	if c.agentURL.Scheme == "unix" {
+		// If we're connecting over UDS we can just rely on the agent to provide the hostname
+		log.Debug("connecting to agent over unix, do not set hostname on any traces")
+		c.enableHostnameDetection = false
+		c.httpClient = udsClient(c.agentURL.Path)
+		c.agentURL = &url.URL{
+			Scheme: "http",
+			Host:   fmt.Sprintf("UDS_%s", strings.NewReplacer(":", "_", "/", "_", `\`, "_").Replace(c.agentURL.Path)),
+		}
+	} else if c.httpClient == nil {
+		c.httpClient = defaultClient
 	}
 	WithGlobalTag(ext.RuntimeID, globalconfig.RuntimeID())(c)
 	if c.env == "" {
@@ -266,7 +394,7 @@ func newConfig(opts ...StartOption) *config {
 		}
 	}
 	if c.transport == nil {
-		c.transport = newHTTPTransport(c.agentAddr, c.httpClient)
+		c.transport = newHTTPTransport(c.agentURL.String(), c.httpClient)
 	}
 	if c.propagator == nil {
 		envKey := "DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH"
@@ -290,7 +418,13 @@ func newConfig(opts ...StartOption) *config {
 		log.SetLevel(log.LevelDebug)
 	}
 	c.loadAgentFeatures()
-	if c.statsd == nil {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		c.loadContribIntegrations([]*debug.Module{})
+	} else {
+		c.loadContribIntegrations(info.Deps)
+	}
+	if c.statsdClient == nil {
 		// configure statsd client
 		addr := c.dogstatsdAddr
 		if addr == "" {
@@ -311,15 +445,21 @@ func newConfig(opts ...StartOption) *config {
 			// not a valid TCP address, leave it as it is (could be a socket connection)
 		}
 		c.dogstatsdAddr = addr
-		client, err := statsd.New(addr, statsd.WithMaxMessagesPerPayload(40), statsd.WithTags(statsTags(c)))
-		if err != nil {
-			log.Warn("Runtime and health metrics disabled: %v", err)
-			c.statsd = &statsd.NoOpClient{}
-		} else {
-			c.statsd = client
-		}
 	}
+
 	return c
+}
+
+func newStatsdClient(c *config) (statsdClient, error) {
+	if c.statsdClient != nil {
+		return c.statsdClient, nil
+	}
+
+	client, err := statsd.New(c.dogstatsdAddr, statsd.WithMaxMessagesPerPayload(40), statsd.WithTags(statsTags(c)))
+	if err != nil {
+		return &statsd.NoOpClient{}, err
+	}
+	return client, nil
 }
 
 // defaultHTTPClient returns the default http.Client to start the tracer with.
@@ -368,6 +508,12 @@ func defaultDogstatsdAddr() string {
 	return net.JoinHostPort(host, port)
 }
 
+type integrationConfig struct {
+	Instrumented bool   `json:"instrumented"`      // indicates if the user has imported and used the integration
+	Available    bool   `json:"available"`         // indicates if the user is using a library that can be used with DataDog integrations
+	Version      string `json:"available_version"` // if available, indicates the version of the library the user has
+}
+
 // agentFeatures holds information about the trace-agent's capabilities.
 // When running WithLambdaMode, a zero-value of this struct will be used
 // as features.
@@ -402,7 +548,7 @@ func (c *config) loadAgentFeatures() {
 		// there is no agent; all features off
 		return
 	}
-	resp, err := c.httpClient.Get(fmt.Sprintf("http://%s/info", c.agentAddr))
+	resp, err := c.httpClient.Get(fmt.Sprintf("%s/info", c.agentURL))
 	if err != nil {
 		log.Error("Loading features: %v", err)
 		return
@@ -435,6 +581,55 @@ func (c *config) loadAgentFeatures() {
 	for _, flag := range info.FeatureFlags {
 		c.agent.featureFlags[flag] = struct{}{}
 	}
+}
+
+// MarkIntegrationImported labels the given integration as imported
+func MarkIntegrationImported(integration string) bool {
+	s, ok := contribIntegrations[integration]
+	if !ok {
+		return false
+	}
+	s.imported = true
+	contribIntegrations[integration] = s
+	return true
+}
+
+func (c *config) loadContribIntegrations(deps []*debug.Module) {
+	integrations := map[string]integrationConfig{}
+	for _, s := range contribIntegrations {
+		integrations[s.name] = integrationConfig{
+			Instrumented: s.imported,
+		}
+	}
+	for _, d := range deps {
+		p := d.Path
+		// special use case, since gRPC does not update version number
+		if p == "google.golang.org/grpc" {
+			re := regexp.MustCompile(`v(\d.\d)\d*`)
+			match := re.FindStringSubmatch(d.Version)
+			if match == nil {
+				log.Warn("Unable to parse version of GRPC %v", d.Version)
+				continue
+			}
+			ver, err := strconv.ParseFloat(match[1], 32)
+			if err != nil {
+				log.Warn("Unable to parse version of GRPC %v as a float", d.Version)
+				continue
+			}
+			if ver <= 1.2 {
+				p = p + "/v12"
+			}
+		}
+		s, ok := contribIntegrations[p]
+		if !ok {
+			continue
+		}
+		conf := integrations[s.name]
+		conf.Available = true
+		conf.Version = d.Version
+		integrations[s.name] = conf
+	}
+	c.integrations = integrations
 }
 
 func (c *config) canComputeStats() bool {
@@ -471,7 +666,7 @@ func statsTags(c *config) []string {
 // withNoopStats is used for testing to disable statsd client
 func withNoopStats() StartOption {
 	return func(c *config) {
-		c.statsd = &statsd.NoOpClient{}
+		c.statsdClient = &statsd.NoOpClient{}
 	}
 }
 
@@ -525,9 +720,20 @@ func WithDebugMode(enabled bool) StartOption {
 }
 
 // WithLambdaMode enables lambda mode on the tracer, for use with AWS Lambda.
+// This option is only required if the the Datadog Lambda Extension is not
+// running.
 func WithLambdaMode(enabled bool) StartOption {
 	return func(c *config) {
 		c.logToStdout = enabled
+	}
+}
+
+// WithSendRetries enables re-sending payloads that are not successfully
+// submitted to the agent.  This will cause the tracer to retry the send at
+// most `retries` times.
+func WithSendRetries(retries int) StartOption {
+	return func(c *config) {
+		c.sendRetries = retries
 	}
 }
 
@@ -561,11 +767,22 @@ func WithService(name string) StartOption {
 	}
 }
 
+// WithGlobalServiceName causes contrib libraries to use the global service name and not any locally defined service name.
+// This is synonymous with `DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED`.
+func WithGlobalServiceName(enabled bool) StartOption {
+	return func(_ *config) {
+		namingschema.SetUseGlobalServiceName(enabled)
+	}
+}
+
 // WithAgentAddr sets the address where the agent is located. The default is
 // localhost:8126. It should contain both host and port.
 func WithAgentAddr(addr string) StartOption {
 	return func(c *config) {
-		c.agentAddr = addr
+		c.agentURL = &url.URL{
+			Scheme: "http",
+			Host:   addr,
+		}
 	}
 }
 
@@ -585,6 +802,24 @@ func WithServiceMapping(from, to string) StartOption {
 			c.serviceMappings = make(map[string]string)
 		}
 		c.serviceMappings[from] = to
+	}
+}
+
+// WithPeerServiceDefaults sets default calculation for peer.service.
+func WithPeerServiceDefaults(enabled bool) StartOption {
+	// TODO: add link to public docs
+	return func(c *config) {
+		c.peerServiceDefaultsEnabled = enabled
+	}
+}
+
+// WithPeerServiceMapping determines the value of the peer.service tag "from" to be renamed to service "to".
+func WithPeerServiceMapping(from, to string) StartOption {
+	return func(c *config) {
+		if c.peerServiceMappings == nil {
+			c.peerServiceMappings = make(map[string]string)
+		}
+		c.peerServiceMappings[from] = to
 	}
 }
 
@@ -625,7 +860,12 @@ func WithHTTPClient(client *http.Client) StartOption {
 
 // WithUDS configures the HTTP client to dial the Datadog Agent via the specified Unix Domain Socket path.
 func WithUDS(socketPath string) StartOption {
-	return WithHTTPClient(udsClient(socketPath))
+	return func(c *config) {
+		c.agentURL = &url.URL{
+			Scheme: "unix",
+			Path:   socketPath,
+		}
+	}
 }
 
 // WithAnalytics allows specifying whether Trace Search & Analytics should be enabled
@@ -661,9 +901,10 @@ func WithRuntimeMetrics() StartOption {
 // WithDogstatsdAddress specifies the address to connect to for sending metrics to the Datadog
 // Agent. It should be a "host:port" string, or the path to a unix domain socket.If not set, it
 // attempts to determine the address of the statsd service according to the following rules:
-//   1. Look for /var/run/datadog/dsd.socket and use it if present. IF NOT, continue to #2.
-//   2. The host is determined by DD_AGENT_HOST, and defaults to "localhost"
-//   3. The port is retrieved from the agent. If not present, it is determined by DD_DOGSTATSD_PORT, and defaults to 8125
+//  1. Look for /var/run/datadog/dsd.socket and use it if present. IF NOT, continue to #2.
+//  2. The host is determined by DD_AGENT_HOST, and defaults to "localhost"
+//  3. The port is retrieved from the agent. If not present, it is determined by DD_DOGSTATSD_PORT, and defaults to 8125
+//
 // This option is in effect when WithRuntimeMetrics is enabled.
 func WithDogstatsdAddress(addr string) StartOption {
 	return func(cfg *config) {
@@ -748,6 +989,20 @@ func WithProfilerCodeHotspots(enabled bool) StartOption {
 func WithProfilerEndpoints(enabled bool) StartOption {
 	return func(c *config) {
 		c.profilerEndpoints = enabled
+	}
+}
+
+// WithPartialFlushing enables flushing of partially finished traces.
+// This is done after "numSpans" have finished in a single local trace at
+// which point all finished spans in that trace will be flushed, freeing up
+// any memory they were consuming. This can also be configured by setting
+// DD_TRACE_PARTIAL_FLUSH_ENABLED to true, which will default to 1000 spans
+// unless overriden with DD_TRACE_PARTIAL_FLUSH_MIN_SPANS. Partial flushing
+// is disabled by default.
+func WithPartialFlushing(numSpans int) StartOption {
+	return func(c *config) {
+		c.partialFlushEnabled = true
+		c.partialFlushMinSpans = numSpans
 	}
 }
 
@@ -875,52 +1130,78 @@ func StackFrames(n, skip uint) FinishOption {
 	}
 }
 
+// WithHeaderTags enables the integration to attach HTTP request headers as span tags.
+// Warning:
+// Using this feature can risk exposing sensitive data such as authorization tokens to Datadog.
+// Special headers can not be sub-selected. E.g., an entire Cookie header would be transmitted, without the ability to choose specific Cookies.
+func WithHeaderTags(headerAsTags []string) StartOption {
+	return func(c *config) {
+		globalconfig.ClearHeaderTags()
+		for _, h := range headerAsTags {
+			if strings.HasPrefix(h, "x-datadog-") {
+				continue
+			}
+			header, tag := normalizer.HeaderTag(h)
+			globalconfig.SetHeaderTag(header, tag)
+		}
+	}
+}
+
 // UserMonitoringConfig is used to configure what is used to identify a user.
 // This configuration can be set by combining one or several UserMonitoringOption with a call to SetUser().
 type UserMonitoringConfig struct {
-	propagateID bool
-	email       string
-	name        string
-	role        string
-	sessionID   string
-	scope       string
+	PropagateID bool
+	Email       string
+	Name        string
+	Role        string
+	SessionID   string
+	Scope       string
+	Metadata    map[string]string
 }
 
 // UserMonitoringOption represents a function that can be provided as a parameter to SetUser.
 type UserMonitoringOption func(*UserMonitoringConfig)
 
+// WithUserMetadata returns the option setting additional metadata of the authenticated user.
+// This can be used multiple times and the given data will be tracked as `usr.{key}=value`.
+func WithUserMetadata(key, value string) UserMonitoringOption {
+	return func(cfg *UserMonitoringConfig) {
+		cfg.Metadata[key] = value
+	}
+}
+
 // WithUserEmail returns the option setting the email of the authenticated user.
 func WithUserEmail(email string) UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.email = email
+		cfg.Email = email
 	}
 }
 
 // WithUserName returns the option setting the name of the authenticated user.
 func WithUserName(name string) UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.name = name
+		cfg.Name = name
 	}
 }
 
 // WithUserSessionID returns the option setting the session ID of the authenticated user.
 func WithUserSessionID(sessionID string) UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.sessionID = sessionID
+		cfg.SessionID = sessionID
 	}
 }
 
 // WithUserRole returns the option setting the role of the authenticated user.
 func WithUserRole(role string) UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.role = role
+		cfg.Role = role
 	}
 }
 
 // WithUserScope returns the option setting the scope (authorizations) of the authenticated user.
 func WithUserScope(scope string) UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.scope = scope
+		cfg.Scope = scope
 	}
 }
 
@@ -930,6 +1211,6 @@ func WithUserScope(scope string) UserMonitoringOption {
 // personal identifiable information or any kind of sensitive data, as it will be leaked to other services.
 func WithPropagation() UserMonitoringOption {
 	return func(cfg *UserMonitoringConfig) {
-		cfg.propagateID = true
+		cfg.PropagateID = true
 	}
 }
