@@ -8,6 +8,8 @@ package internal
 import (
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 )
@@ -40,4 +42,53 @@ func IntEnv(key string, def int) int {
 		return def
 	}
 	return v
+}
+
+// DurationEnv returns the parsed duration value of an environment variable, or
+// def otherwise.
+func DurationEnv(key string, def time.Duration) time.Duration {
+	vv, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	v, err := time.ParseDuration(vv)
+	if err != nil {
+		log.Warn("Non-duration value for env var %s, defaulting to %d. Parse failed with error: %v", key, def, err)
+		return def
+	}
+	return v
+}
+
+// ForEachStringTag runs fn on every key:val pair encountered in str.
+// str may contain multiple key:val pairs separated by either space
+// or comma (but not a mixture of both).
+func ForEachStringTag(str string, fn func(key string, val string)) {
+	sep := " "
+	if strings.Index(str, ",") > -1 {
+		// falling back to comma as separator
+		sep = ","
+	}
+	for _, tag := range strings.Split(str, sep) {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		kv := strings.SplitN(tag, ":", 2)
+		key := strings.TrimSpace(kv[0])
+		if key == "" {
+			continue
+		}
+		var val string
+		if len(kv) == 2 {
+			val = strings.TrimSpace(kv[1])
+		}
+		fn(key, val)
+	}
+}
+
+// ParseTagString returns tags parsed from string as map
+func ParseTagString(str string) map[string]string {
+	res := make(map[string]string)
+	ForEachStringTag(str, func(key, val string) { res[key] = val })
+	return res
 }

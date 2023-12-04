@@ -37,7 +37,7 @@ func SpanFromContext(ctx context.Context) (Span, bool) {
 
 // StartSpanFromContext returns a new span with the given operation name and options. If a span
 // is found in the context, it will be used as the parent of the resulting span. If the ChildOf
-// option is passed, the span from context will take precedence over it as the parent span.
+// option is passed, it will only be used as the parent if there is no span found in `ctx`.
 func StartSpanFromContext(ctx context.Context, operationName string, opts ...StartSpanOption) (Span, context.Context) {
 	// copy opts in case the caller reuses the slice in parallel
 	// we will add at least 1, at most 2 items
