@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/samplernames"
+
+	"golang.org/x/time/rate"
 )
 
 // rulesSampler holds instances of trace sampler and single span sampler, that are configured with the given set of rules.
@@ -270,15 +270,15 @@ func (rs *traceRulesSampler) apply(span *span) bool {
 func (rs *traceRulesSampler) applyRule(span *span, rate float64, now time.Time) {
 	span.SetTag(keyRulesSamplerAppliedRate, rate)
 	if !sampledByRate(span.TraceID, rate) {
-		span.setSamplingPriority(ext.PriorityUserReject, samplernames.RuleRate, rate)
+		span.setSamplingPriority(ext.PriorityUserReject, samplernames.RuleRate)
 		return
 	}
 
 	sampled, rate := rs.limiter.allowOne(now)
 	if sampled {
-		span.setSamplingPriority(ext.PriorityUserKeep, samplernames.RuleRate, rate)
+		span.setSamplingPriority(ext.PriorityUserKeep, samplernames.RuleRate)
 	} else {
-		span.setSamplingPriority(ext.PriorityUserReject, samplernames.RuleRate, rate)
+		span.setSamplingPriority(ext.PriorityUserReject, samplernames.RuleRate)
 	}
 	span.SetTag(keyRulesSamplerLimiterRate, rate)
 }
@@ -355,18 +355,16 @@ func (rs *singleSpanRulesSampler) apply(span *span) bool {
 			rate := rule.Rate
 			span.setMetric(keyRulesSamplerAppliedRate, rate)
 			if !sampledByRate(span.SpanID, rate) {
-				span.setSamplingPriority(ext.PriorityUserReject, samplernames.RuleRate, rate)
 				return false
 			}
 			var sampled bool
 			if rule.limiter != nil {
-				sampled, rate = rule.limiter.allowOne(time.Now())
+				sampled, rate = rule.limiter.allowOne(nowTime())
 				if !sampled {
 					return false
 				}
 			}
-			span.setSamplingPriority(ext.PriorityUserKeep, samplernames.RuleRate, rate)
-			span.setMetric(keySpanSamplingMechanism, samplingMechanismSingleSpan)
+			span.setMetric(keySpanSamplingMechanism, float64(samplernames.SingleSpan))
 			span.setMetric(keySingleSpanSamplingRuleRate, rate)
 			if rule.MaxPerSecond != 0 {
 				span.setMetric(keySingleSpanSamplingMPS, rule.MaxPerSecond)
@@ -510,8 +508,12 @@ func unmarshalSamplingRules(b []byte, spanType SamplingRuleType) ([]SamplingRule
 	var errs []string
 	for i, v := range jsonRules {
 		if v.Rate == "" {
-			errs = append(errs, fmt.Sprintf("at index %d: rate not provided", i))
-			continue
+			if spanType == SamplingRuleSpan {
+				v.Rate = "1"
+			} else {
+				errs = append(errs, fmt.Sprintf("at index %d: rate not provided", i))
+				continue
+			}
 		}
 		rate, err := v.Rate.Float64()
 		if err != nil {
@@ -524,10 +526,6 @@ func unmarshalSamplingRules(b []byte, spanType SamplingRuleType) ([]SamplingRule
 		}
 		switch spanType {
 		case SamplingRuleSpan:
-			if v.Service == "" && v.Name == "" {
-				errs = append(errs, fmt.Sprintf("at index %d: ignoring rule %+v: service name and operation name are not provided", i, v))
-				continue
-			}
 			rules = append(rules, SamplingRule{
 				Service:      globMatch(v.Service),
 				Name:         globMatch(v.Name),
@@ -537,6 +535,20 @@ func unmarshalSamplingRules(b []byte, spanType SamplingRuleType) ([]SamplingRule
 				ruleType:     SamplingRuleSpan,
 			})
 		case SamplingRuleTrace:
+			if v.Rate == "" {
+				errs = append(errs, fmt.Sprintf("at index %d: rate not provided", i))
+				continue
+			}
+			rate, err := v.Rate.Float64()
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("at index %d: %v", i, err))
+				continue
+			}
+			if rate < 0.0 || rate > 1.0 {
+				errs = append(errs, fmt.Sprintf("at index %d: ignoring rule %+v: rate is out of [0.0, 1.0] range", i, v))
+				continue
+			}
+
 			switch {
 			case v.Service != "" && v.Name != "":
 				rules = append(rules, NameServiceRule(v.Name, v.Service, rate))

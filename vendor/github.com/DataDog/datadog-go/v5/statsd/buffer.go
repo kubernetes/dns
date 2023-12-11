@@ -4,11 +4,15 @@ import (
 	"strconv"
 )
 
-type bufferFullError string
+// MessageTooLongError is an error returned when a sample, event or service check is too large once serialized. See
+// WithMaxBytesPerPayload option for more details.
+type MessageTooLongError struct{}
 
-func (e bufferFullError) Error() string { return string(e) }
+func (e MessageTooLongError) Error() string {
+	return "message too long. See 'WithMaxBytesPerPayload' documentation."
+}
 
-const errBufferFull = bufferFullError("statsd buffer is full")
+var errBufferFull = MessageTooLongError{}
 
 type partialWriteError string
 
@@ -107,6 +111,7 @@ func (b *statsdBuffer) writeAggregated(metricSymbol []byte, namespace string, gl
 	b.buffer = append(b.buffer, '|')
 	b.buffer = append(b.buffer, metricSymbol...)
 	b.buffer = appendTagsAggregated(b.buffer, globalTags, tags)
+	b.buffer = appendContainerID(b.buffer)
 	b.writeSeparator()
 	b.elementCount++
 

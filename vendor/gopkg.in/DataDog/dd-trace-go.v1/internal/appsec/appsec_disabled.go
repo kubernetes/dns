@@ -16,14 +16,14 @@ func Enabled() bool {
 	return false
 }
 
-// Start AppSec when enabled is enabled by both using the appsec build tag and
+// Start AppSec when enabled by both using the appsec build tag and
 // setting the environment variable DD_APPSEC_ENABLED to true.
-func Start() {
-	if enabled, err := isEnabled(); err != nil {
+func Start(...StartOption) {
+	if enabled, _, err := isEnabled(); err != nil {
 		// Something went wrong while checking the DD_APPSEC_ENABLED configuration
 		log.Error("appsec: error while checking if appsec is enabled: %v", err)
 	} else if enabled {
-		// The user is willing to enabled appsec but didn't have the build tag
+		// The user is willing to enable appsec but didn't use the build tag
 		log.Info("appsec: enabled by the configuration but has not been activated during the compilation: please add the go build tag `appsec` to your build options to enable it")
 	} else {
 		// The user is not willing to start appsec, a simple debug log is enough
@@ -35,4 +35,4 @@ func Start() {
 func Stop() {}
 
 // Static rule stubs when disabled.
-const staticRecommendedRule = ""
+const staticRecommendedRules = ""

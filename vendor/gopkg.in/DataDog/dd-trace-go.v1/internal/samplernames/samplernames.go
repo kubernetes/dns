@@ -5,18 +5,14 @@
 
 package samplernames
 
-import "math"
-
 // SamplerName specifies the name of a sampler which was
 // responsible for a certain sampling decision.
 type SamplerName int8
 
 const (
-	// Upstream specifies that the sampling decision was made in an upstream service
-	// and no sampling needs to be done.
-	Upstream SamplerName = math.MinInt8
 	// Unknown specifies that the span was sampled
 	// but, the tracer was unable to identify the sampler.
+	// No sampling decision maker will be propagated.
 	Unknown SamplerName = -1
 	// Default specifies that the span was sampled without any sampler.
 	Default SamplerName = 0
@@ -35,4 +31,7 @@ const (
 	// RemoteUserRate specifies that the span was sampled
 	// with a user specified remote rate.
 	RemoteUserRate SamplerName = 6
+	// SingleSpan specifies that the span was sampled by single
+	// span sampling rules.
+	SingleSpan SamplerName = 8
 )

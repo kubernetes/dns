@@ -9,22 +9,25 @@
 // tracer, simply call the start method along with an optional set of options.
 // By default, the trace agent is considered to be found at "localhost:8126". In a
 // setup where this would be different (let's say 127.0.0.1:1234), we could do:
-// 	tracer.Start(tracer.WithAgentAddr("127.0.0.1:1234"))
-// 	defer tracer.Stop()
+//
+//	tracer.Start(tracer.WithAgentAddr("127.0.0.1:1234"))
+//	defer tracer.Stop()
 //
 // The tracing client can perform trace sampling. While the trace agent
 // already samples traces to reduce bandwidth usage, client sampling reduces
 // performance overhead. To make use of it, the package comes with a ready-to-use
 // rate sampler that can be passed to the tracer. To use it and keep only 30% of the
 // requests, one would do:
-//   s := tracer.NewRateSampler(0.3)
-//   tracer.Start(tracer.WithSampler(s))
+//
+//	s := tracer.NewRateSampler(0.3)
+//	tracer.Start(tracer.WithSampler(s))
 //
 // More precise control of sampling rates can be configured using sampling rules.
 // This can be applied based on span name, service or both, and is used to determine
 // the sampling rate to apply. MaxPerSecond specifies max number of spans per second
 // that can be sampled per the rule and applies only to sampling rules of type
 // tracer.SamplingRuleSpan. If MaxPerSecond is not specified, the default is no limit.
+//
 //	rules := []tracer.SamplingRule{
 //	      // sample 10% of traces with the span name "web.request"
 //	      tracer.NameRule("web.request", 0.1),
@@ -35,9 +38,9 @@
 //	      tracer.NameServiceRule("db.query", "postgres.db", 0.3),
 //	      // sample 100% of traces when service and name match these regular expressions
 //	      {Service: regexp.MustCompile("^test-"), Name: regexp.MustCompile("http\\..*"), Rate: 1.0},
-//	      // sample 50% of traces when service and name match these glob patterns with no limit on the number of spans
+//	      // sample 50% of spans when service and name match these glob patterns with no limit on the number of spans
 //	      tracer.SpanNameServiceRule("^test-", "http\\..*", 0.5),
-//	      // sample 50% of traces when service and name match these glob patterns up to 100 spans per second
+//	      // sample 50% of spans when service and name match these glob patterns up to 100 spans per second
 //	      tracer.SpanNameServiceMPSRule("^test-", "http\\..*", 0.5, 100),
 //	}
 //	tracer.Start(tracer.WithSamplingRules(rules))
@@ -45,11 +48,14 @@
 //
 // Sampling rules can also be configured at runtime using the DD_TRACE_SAMPLING_RULES and
 // DD_SPAN_SAMPLING_RULES environment variables. When set, it overrides rules set by tracer.WithSamplingRules.
-// The value is a JSON array of objects. All rule objects must have a "sample_rate".
-// For trace sampling rules the "name" and "service" fields are optional.
-// For span sampling rules, at least one of the fields must be specified and must be a valid glob pattern,
-// i.e. a string where "*" matches any contiguous substring, even the empty string,
+// The value is a JSON array of objects.
+// For trace sampling rules, the "sample_rate" field is required, the "name" and "service" fields are optional.
+// For span sampling rules, the "name" and "service", if specified, must be a valid glob pattern,
+// i.e. a string where "*" matches any contiguous substring, even an empty string,
 // and "?" character matches exactly one of any character.
+// The "sample_rate" field is optional, and if not specified, defaults to "1.0", sampling 100% of the spans.
+// The "max_per_second" field is optional, and if not specified, defaults to 0, keeping all the previously sampled spans.
+//
 //	export DD_TRACE_SAMPLING_RULES='[{"name": "web.request", "sample_rate": 1.0}]'
 //	export DD_SPAN_SAMPLING_RULES='[{"service":"test.?","name": "web.*", "sample_rate": 1.0, "max_per_second":100}]'
 //
@@ -79,16 +85,21 @@
 // with our propagation algorithm as long as they implement the TextMapReader and TextMapWriter
 // interfaces. An example alternate implementation is the MDCarrier in our gRPC integration.
 //
-// As an example, injecting a span's context into an HTTP request would look like this:
-//  req, err := http.NewRequest("GET", "http://example.com", nil)
-//  // ...
-//  err := tracer.Inject(span.Context(), tracer.HTTPHeadersCarrier(req.Header))
-//  // ...
-//  http.DefaultClient.Do(req)
+// As an example, injecting a span's context into an HTTP request would look like this.
+// (See the net/http contrib package for more examples https://pkg.go.dev/gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http):
+//
+//	req, err := http.NewRequest("GET", "http://example.com", nil)
+//	// ...
+//	err := tracer.Inject(span.Context(), tracer.HTTPHeadersCarrier(req.Header))
+//	// ...
+//	http.DefaultClient.Do(req)
+//
 // Then, on the server side, to continue the trace one would do:
-//  sctx, err := tracer.Extract(tracer.HTTPHeadersCarrier(req.Header))
-//  // ...
-//  span := tracer.StartSpan("child.span", tracer.ChildOf(sctx))
+//
+//	sctx, err := tracer.Extract(tracer.HTTPHeadersCarrier(req.Header))
+//	// ...
+//	span := tracer.StartSpan("child.span", tracer.ChildOf(sctx))
+//
 // In the same manner, any means can be used as a carrier to inject a context into a transport. Go's
 // context can also be used as a means to transport spans within the same process. The methods
 // StartSpanFromContext, ContextWithSpan and SpanFromContext exist for this reason.
