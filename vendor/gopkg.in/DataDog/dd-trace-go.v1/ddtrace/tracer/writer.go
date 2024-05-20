@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	globalinternal "gopkg.in/DataDog/dd-trace-go.v1/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 )
 
@@ -46,30 +47,34 @@ type agentTraceWriter struct {
 	// prioritySampling is the prioritySampler into which agentTraceWriter will
 	// read sampling rates sent by the agent
 	prioritySampling *prioritySampler
+
+	// statsd is used to send metrics
+	statsd globalinternal.StatsdClient
 }
 
-func newAgentTraceWriter(c *config, s *prioritySampler) *agentTraceWriter {
+func newAgentTraceWriter(c *config, s *prioritySampler, statsdClient globalinternal.StatsdClient) *agentTraceWriter {
 	return &agentTraceWriter{
 		config:           c,
 		payload:          newPayload(),
 		climit:           make(chan struct{}, concurrentConnectionLimit),
 		prioritySampling: s,
+		statsd:           statsdClient,
 	}
 }
 
 func (h *agentTraceWriter) add(trace []*span) {
 	if err := h.payload.push(trace); err != nil {
-		h.config.statsd.Incr("datadog.tracer.traces_dropped", []string{"reason:encoding_error"}, 1)
+		h.statsd.Incr("datadog.tracer.traces_dropped", []string{"reason:encoding_error"}, 1)
 		log.Error("Error encoding msgpack: %v", err)
 	}
 	if h.payload.size() > payloadSizeLimit {
-		h.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:size"}, 1)
+		h.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:size"}, 1)
 		h.flush()
 	}
 }
 
 func (h *agentTraceWriter) stop() {
-	h.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:shutdown"}, 1)
+	h.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:shutdown"}, 1)
 	h.flush()
 	h.wg.Wait()
 }
@@ -85,23 +90,39 @@ func (h *agentTraceWriter) flush() {
 	h.payload = newPayload()
 	go func(p *payload) {
 		defer func(start time.Time) {
+			// Once the payload has been used, clear the buffer for garbage
+			// collection to avoid a memory leak when references to this object
+			// may still be kept by faulty transport implementations or the
+			// standard library. See dd-trace-go#976
+			p.clear()
+
 			<-h.climit
+			h.statsd.Timing("datadog.tracer.flush_duration", time.Since(start), nil, 1)
 			h.wg.Done()
-			h.config.statsd.Timing("datadog.tracer.flush_duration", time.Since(start), nil, 1)
 		}(time.Now())
-		size, count := p.size(), p.itemCount()
-		log.Debug("Sending payload: size: %d traces: %d\n", size, count)
-		rc, err := h.config.transport.send(p)
-		if err != nil {
-			h.config.statsd.Count("datadog.tracer.traces_dropped", int64(count), []string{"reason:send_failed"}, 1)
-			log.Error("lost %d traces: %v", count, err)
-		} else {
-			h.config.statsd.Count("datadog.tracer.flush_bytes", int64(size), nil, 1)
-			h.config.statsd.Count("datadog.tracer.flush_traces", int64(count), nil, 1)
-			if err := h.prioritySampling.readRatesJSON(rc); err != nil {
-				h.config.statsd.Incr("datadog.tracer.decode_error", nil, 1)
+
+		var count, size int
+		var err error
+		for attempt := 0; attempt <= h.config.sendRetries; attempt++ {
+			size, count = p.size(), p.itemCount()
+			log.Debug("Sending payload: size: %d traces: %d\n", size, count)
+			var rc io.ReadCloser
+			rc, err = h.config.transport.send(p)
+			if err == nil {
+				log.Debug("sent traces after %d attempts", attempt+1)
+				h.statsd.Count("datadog.tracer.flush_bytes", int64(size), nil, 1)
+				h.statsd.Count("datadog.tracer.flush_traces", int64(count), nil, 1)
+				if err := h.prioritySampling.readRatesJSON(rc); err != nil {
+					h.statsd.Incr("datadog.tracer.decode_error", nil, 1)
+				}
+				return
 			}
+			log.Error("failure sending traces (attempt %d), will retry: %v", attempt+1, err)
+			p.reset()
+			time.Sleep(time.Millisecond)
 		}
+		h.statsd.Count("datadog.tracer.traces_dropped", int64(count), []string{"reason:send_failed"}, 1)
+		log.Error("lost %d traces: %v", count, err)
 	}(oldp)
 }
 
@@ -116,12 +137,14 @@ type logTraceWriter struct {
 	buf       bytes.Buffer
 	hasTraces bool
 	w         io.Writer
+	statsd    globalinternal.StatsdClient
 }
 
-func newLogTraceWriter(c *config) *logTraceWriter {
+func newLogTraceWriter(c *config, statsdClient globalinternal.StatsdClient) *logTraceWriter {
 	w := &logTraceWriter{
 		config: c,
 		w:      logWriter,
+		statsd: statsdClient,
 	}
 	w.resetBuffer()
 	return w
@@ -290,7 +313,7 @@ func (h *logTraceWriter) add(trace []*span) {
 		n, err := h.writeTrace(trace)
 		if err != nil {
 			log.Error("Lost a trace: %s", err.cause)
-			h.config.statsd.Count("datadog.tracer.traces_dropped", 1, []string{"reason:" + err.dropReason}, 1)
+			h.statsd.Count("datadog.tracer.traces_dropped", 1, []string{"reason:" + err.dropReason}, 1)
 			return
 		}
 		trace = trace[n:]
@@ -303,7 +326,7 @@ func (h *logTraceWriter) add(trace []*span) {
 }
 
 func (h *logTraceWriter) stop() {
-	h.config.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:shutdown"}, 1)
+	h.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:shutdown"}, 1)
 	h.flush()
 }
 
