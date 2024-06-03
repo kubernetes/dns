@@ -62,7 +62,7 @@ Follow these steps to make changes and release a new binary.
    Status for build jobs can be checked at - https://testgrid.k8s.io/sig-network-dns#dns-push-images
 5. Promote the images to `gcr.io/k8s-artifacts-prod` using the process described
    in [this](https://github.com/kubernetes/k8s.io/tree/main/k8s.gcr.io#image-promoter) link.
-   The image SHAs should be added to [`images/k8s-staging-dns/images.yaml`](https://github.com/kubernetes/k8s.io/blob/main/k8s.gcr.io/images/k8s-staging-dns/images.yaml).
+   The image SHAs should be added to [`images/k8s-staging-dns/images.yaml`](https://github.com/kubernetes/k8s.io/blob/main/registry.k8s.io/images/k8s-staging-dns/images.yaml).
    The SHAs can be obtained by running the command `python parse-image-sha.py <TAG>`
    This will return the SHAs for kube-dns as well as node-cache images. Node-cache images are always promoted, kube-dns images are promoted if there is a change to kubedns/vulnerability fix.
 6. Images will be available in the repo registry.k8s.io/dns/. The node-cache image with tag 1.15.14 can be found at registry.k8s.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at registry.k8s.io/k8s-dns-node-cache:<TAG>
