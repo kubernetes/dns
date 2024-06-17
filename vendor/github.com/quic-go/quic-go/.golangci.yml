@@ -1,0 +1,33 @@
+run:
+  skip-files:
+    - internal/handshake/cipher_suite.go
+linters-settings:
+  misspell:
+    ignore-words:
+      - ect
+
+linters:
+  disable-all: true
+  enable:
+    - asciicheck
+    - exhaustive
+    - exportloopref
+    - goimports
+    - gofmt # redundant, since gofmt *should* be a no-op after gofumpt
+    - gofumpt
+    - gosimple
+    - ineffassign
+    - misspell
+    - prealloc
+    - staticcheck
+    - stylecheck
+    - unconvert
+    - unparam
+    - unused
+    - vet
+
+issues:
+  exclude-rules:
+    - path: internal/qtls
+      linters:
+        - depguard

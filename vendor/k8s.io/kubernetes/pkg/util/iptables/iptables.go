@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 /*
 Copyright 2014 The Kubernetes Authors.
 
@@ -218,7 +221,7 @@ type runner struct {
 func newInternal(exec utilexec.Interface, protocol Protocol, lockfilePath14x, lockfilePath16x string) Interface {
 	version, err := getIPTablesVersion(exec, protocol)
 	if err != nil {
-		klog.Warningf("Error checking iptables version, assuming version at least %s: %v", MinCheckVersion, err)
+		klog.InfoS("Error checking iptables version, assuming version at least", "version", MinCheckVersion, "err", err)
 		version = MinCheckVersion
 	}
 
@@ -355,7 +358,7 @@ func (runner *runner) SaveInto(table Table, buffer *bytes.Buffer) error {
 	// run and return
 	iptablesSaveCmd := iptablesSaveCommand(runner.protocol)
 	args := []string{"-t", string(table)}
-	klog.V(4).Infof("running %s %v", iptablesSaveCmd, args)
+	klog.V(4).InfoS("Running", "command", iptablesSaveCmd, "arguments", args)
 	cmd := runner.exec.Command(iptablesSaveCmd, args...)
 	cmd.SetStdout(buffer)
 	stderrBuffer := bytes.NewBuffer(nil)
@@ -412,7 +415,7 @@ func (runner *runner) restoreInternal(args []string, data []byte, flush FlushFla
 		trace.Step("Locks grabbed")
 		defer func(locker iptablesLocker) {
 			if err := locker.Close(); err != nil {
-				klog.Errorf("Failed to close iptables locks: %v", err)
+				klog.ErrorS(err, "Failed to close iptables locks")
 			}
 		}(locker)
 	}
@@ -420,7 +423,7 @@ func (runner *runner) restoreInternal(args []string, data []byte, flush FlushFla
 	// run the command and return the output or an error including the output and error
 	fullArgs := append(runner.restoreWaitFlag, args...)
 	iptablesRestoreCmd := iptablesRestoreCommand(runner.protocol)
-	klog.V(4).Infof("running %s %v", iptablesRestoreCmd, fullArgs)
+	klog.V(4).InfoS("Running", "command", iptablesRestoreCmd, "arguments", fullArgs)
 	cmd := runner.exec.Command(iptablesRestoreCmd, fullArgs...)
 	cmd.SetStdin(bytes.NewBuffer(data))
 	b, err := cmd.CombinedOutput()
@@ -446,7 +449,6 @@ func iptablesRestoreCommand(protocol Protocol) string {
 		return cmdIP6TablesRestore
 	}
 	return cmdIPTablesRestore
-
 }
 
 func iptablesCommand(protocol Protocol) string {
@@ -464,7 +466,7 @@ func (runner *runner) runContext(ctx context.Context, op operation, args []strin
 	iptablesCmd := iptablesCommand(runner.protocol)
 	fullArgs := append(runner.waitFlag, string(op))
 	fullArgs = append(fullArgs, args...)
-	klog.V(5).Infof("running iptables: %s %v", iptablesCmd, fullArgs)
+	klog.V(5).InfoS("Running", "command", iptablesCmd, "arguments", fullArgs)
 	if ctx == nil {
 		return runner.exec.Command(iptablesCmd, fullArgs...).CombinedOutput()
 	}
@@ -492,7 +494,7 @@ func trimhex(s string) string {
 // of hack and half-measures.  We should nix this ASAP.
 func (runner *runner) checkRuleWithoutCheck(table Table, chain Chain, args ...string) (bool, error) {
 	iptablesSaveCmd := iptablesSaveCommand(runner.protocol)
-	klog.V(1).Infof("running %s -t %s", iptablesSaveCmd, string(table))
+	klog.V(1).InfoS("Running", "command", iptablesSaveCmd, "table", string(table))
 	out, err := runner.exec.Command(iptablesSaveCmd, "-t", string(table)).CombinedOutput()
 	if err != nil {
 		return false, fmt.Errorf("error checking rule: %v", err)
@@ -509,10 +511,10 @@ func (runner *runner) checkRuleWithoutCheck(table Table, chain Chain, args ...st
 		tmpField = trimhex(tmpField)
 		argsCopy = append(argsCopy, strings.Fields(tmpField)...)
 	}
-	argset := sets.NewString(argsCopy...)
+	argset := sets.New(argsCopy...)
 
 	for _, line := range strings.Split(string(out), "\n") {
-		var fields = strings.Fields(line)
+		fields := strings.Fields(line)
 
 		// Check that this is a rule for the correct chain, and that it has
 		// the correct number of argument (+2 for "-A <chain name>")
@@ -528,10 +530,10 @@ func (runner *runner) checkRuleWithoutCheck(table Table, chain Chain, args ...st
 		}
 
 		// TODO: This misses reorderings e.g. "-x foo ! -y bar" will match "! -x foo -y bar"
-		if sets.NewString(fields...).IsSuperset(argset) {
+		if sets.New(fields...).IsSuperset(argset) {
 			return true, nil
 		}
-		klog.V(5).Infof("DBG: fields is not a superset of args: fields=%v  args=%v", fields, args)
+		klog.V(5).InfoS("DBG: fields is not a superset of args", "fields", fields, "arguments", args)
 	}
 
 	return false, nil
@@ -572,7 +574,7 @@ func (runner *runner) Monitor(canary Chain, tables []Table, reloadFunc func(), i
 		_ = utilwait.PollImmediateUntil(interval, func() (bool, error) {
 			for _, table := range tables {
 				if _, err := runner.EnsureChain(table, canary); err != nil {
-					klog.Warningf("Could not set up iptables canary %s/%s: %v", string(table), string(canary), err)
+					klog.ErrorS(err, "Could not set up iptables canary", "table", table, "chain", canary)
 					return false, nil
 				}
 			}
@@ -584,11 +586,10 @@ func (runner *runner) Monitor(canary Chain, tables []Table, reloadFunc func(), i
 			if exists, err := runner.ChainExists(tables[0], canary); exists {
 				return false, nil
 			} else if isResourceError(err) {
-				klog.Warningf("Could not check for iptables canary %s/%s: %v", string(tables[0]), string(canary), err)
+				klog.ErrorS(err, "Could not check for iptables canary", "table", tables[0], "chain", canary)
 				return false, nil
 			}
-			klog.V(2).Infof("iptables canary %s/%s deleted", string(tables[0]), string(canary))
-
+			klog.V(2).InfoS("IPTables canary deleted", "table", tables[0], "chain", canary)
 			// Wait for the other canaries to be deleted too before returning
 			// so we don't start reloading too soon.
 			err := utilwait.PollImmediate(iptablesFlushPollTime, iptablesFlushTimeout, func() (bool, error) {
@@ -600,11 +601,10 @@ func (runner *runner) Monitor(canary Chain, tables []Table, reloadFunc func(), i
 				return true, nil
 			})
 			if err != nil {
-				klog.Warning("Inconsistent iptables state detected.")
+				klog.InfoS("Inconsistent iptables state detected")
 			}
 			return true, nil
 		}, stopCh)
-
 		if err != nil {
 			// stopCh was closed
 			for _, table := range tables {
@@ -613,7 +613,7 @@ func (runner *runner) Monitor(canary Chain, tables []Table, reloadFunc func(), i
 			return
 		}
 
-		klog.V(2).Infof("Reloading after iptables flush")
+		klog.V(2).InfoS("Reloading after iptables flush")
 		reloadFunc()
 	}
 }
@@ -694,11 +694,11 @@ func getIPTablesRestoreWaitFlag(version *utilversion.Version, exec utilexec.Inte
 	// --version, assume it also supports --wait
 	vstring, err := getIPTablesRestoreVersionString(exec, protocol)
 	if err != nil || vstring == "" {
-		klog.V(3).Infof("couldn't get iptables-restore version; assuming it doesn't support --wait")
+		klog.V(3).InfoS("Couldn't get iptables-restore version; assuming it doesn't support --wait")
 		return nil
 	}
 	if _, err := utilversion.ParseGeneric(vstring); err != nil {
-		klog.V(3).Infof("couldn't parse iptables-restore version; assuming it doesn't support --wait")
+		klog.V(3).InfoS("Couldn't parse iptables-restore version; assuming it doesn't support --wait")
 		return nil
 	}
 	return []string{WaitString}
