@@ -4,24 +4,15 @@ sudo: false
 
 matrix:
   include:
-    - go: "1.9.x"
-    - go: "1.10.x"     
-    - go: "1.11.x"
-      env:
-        - GO111MODULE=off
-    - go: "1.12.x"
-      env:
-        - GO111MODULE=on      
-    - go: "tip"
-      env:
-        - GO111MODULE=on
+    - go: "1.17.x"
+    - go: "1.18.x"
+    - go: "1.19.x"
 
 install:
   - go get -d -t ./...
-  - go get -u golang.org/x/lint/golint
 
 script:
-  - make test vet lint bench
+  - make test vet bench
 
 notifications:
   webhooks:
