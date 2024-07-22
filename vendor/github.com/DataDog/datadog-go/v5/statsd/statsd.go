@@ -10,11 +10,15 @@ statsd is based on go-statsd-client.
 */
 package statsd
 
+//go:generate mockgen -source=statsd.go -destination=mocks/statsd.go
+
 import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -66,7 +70,22 @@ const WindowsPipeAddressPrefix = `\\.\pipe\`
 const (
 	agentHostEnvVarName = "DD_AGENT_HOST"
 	agentPortEnvVarName = "DD_DOGSTATSD_PORT"
+	agentURLEnvVarName  = "DD_DOGSTATSD_URL"
 	defaultUDPPort      = "8125"
+)
+
+const (
+	// ddEntityID specifies client-side user-specified entity ID injection.
+	// This env var can be set to the Pod UID on Kubernetes via the downward API.
+	// Docs: https://docs.datadoghq.com/developers/dogstatsd/?tab=kubernetes#origin-detection-over-udp
+	ddEntityID = "DD_ENTITY_ID"
+
+	// ddEntityIDTag specifies the tag name for the client-side entity ID injection
+	// The Agent expects this tag to contain a non-prefixed Kubernetes Pod UID.
+	ddEntityIDTag = "dd.internal.entity_id"
+
+	// originDetectionEnabled specifies the env var to enable/disable sending the container ID field.
+	originDetectionEnabled = "DD_ORIGIN_DETECTION_ENABLED"
 )
 
 /*
@@ -74,10 +93,10 @@ ddEnvTagsMapping is a mapping of each "DD_" prefixed environment variable
 to a specific tag name. We use a slice to keep the order and simplify tests.
 */
 var ddEnvTagsMapping = []struct{ envName, tagName string }{
-	{"DD_ENTITY_ID", "dd.internal.entity_id"}, // Client-side entity ID injection for container tagging.
-	{"DD_ENV", "env"},                         // The name of the env in which the service runs.
-	{"DD_SERVICE", "service"},                 // The name of the running service.
-	{"DD_VERSION", "version"},                 // The current version of the running service.
+	{ddEntityID, ddEntityIDTag}, // Client-side entity ID injection for container tagging.
+	{"DD_ENV", "env"},           // The name of the env in which the service runs.
+	{"DD_SERVICE", "service"},   // The name of the running service.
+	{"DD_VERSION", "version"},   // The current version of the running service.
 }
 
 type metricType int
@@ -109,6 +128,9 @@ const (
 	writerWindowsPipe string = "pipe"
 )
 
+// noTimestamp is used as a value for metric without a given timestamp.
+const noTimestamp = int64(0)
+
 type metric struct {
 	metricType metricType
 	namespace  string
@@ -123,6 +145,7 @@ type metric struct {
 	tags       []string
 	stags      string
 	rate       float64
+	timestamp  int64
 }
 
 type noClientErr string
@@ -135,6 +158,15 @@ func (e noClientErr) Error() string {
 	return string(e)
 }
 
+type invalidTimestampErr string
+
+// InvalidTimestamp is returned if a provided timestamp is invalid.
+const InvalidTimestamp = invalidTimestampErr("invalid timestamp")
+
+func (e invalidTimestampErr) Error() string {
+	return string(e)
+}
+
 // ClientInterface is an interface that exposes the common client functions for the
 // purpose of being able to provide a no-op client or even mocking. This can aid
 // downstream users' with their testing.
@@ -142,8 +174,24 @@ type ClientInterface interface {
 	// Gauge measures the value of a metric at a particular time.
 	Gauge(name string, value float64, tags []string, rate float64) error
 
+	// GaugeWithTimestamp measures the value of a metric at a given time.
+	// BETA - Please contact our support team for more information to use this feature: https://www.datadoghq.com/support/
+	// The value will bypass any aggregation on the client side and agent side, this is
+	// useful when sending points in the past.
+	//
+	// Minimum Datadog Agent version: 7.40.0
+	GaugeWithTimestamp(name string, value float64, tags []string, rate float64, timestamp time.Time) error
+
 	// Count tracks how many times something happened per second.
 	Count(name string, value int64, tags []string, rate float64) error
+
+	// CountWithTimestamp tracks how many times something happened at the given second.
+	// BETA - Please contact our support team for more information to use this feature: https://www.datadoghq.com/support/
+	// The value will bypass any aggregation on the client side and agent side, this is
+	// useful when sending points in the past.
+	//
+	// Minimum Datadog Agent version: 7.40.0
+	CountWithTimestamp(name string, value int64, tags []string, rate float64, timestamp time.Time) error
 
 	// Histogram tracks the statistical distribution of a set of values on each host.
 	Histogram(name string, value float64, tags []string, rate float64) error
@@ -184,6 +232,12 @@ type ClientInterface interface {
 
 	// Flush forces a flush of all the queued dogstatsd payloads.
 	Flush() error
+
+	// IsClosed returns if the client has been closed.
+	IsClosed() bool
+
+	// GetTelemetry return the telemetry metrics for the client since it started.
+	GetTelemetry() Telemetry
 }
 
 // A Client is a handle for sending messages to dogstatsd.  It is safe to
@@ -208,6 +262,7 @@ type Client struct {
 	aggExtended     *aggregator
 	options         []Option
 	addrOption      string
+	isClosed        bool
 }
 
 // statsdTelemetry contains telemetry metrics about the client
@@ -229,9 +284,17 @@ var _ ClientInterface = &Client{}
 
 func resolveAddr(addr string) string {
 	envPort := ""
+
 	if addr == "" {
 		addr = os.Getenv(agentHostEnvVarName)
 		envPort = os.Getenv(agentPortEnvVarName)
+		agentURL, _ := os.LookupEnv(agentURLEnvVarName)
+		agentURL = parseAgentURL(agentURL)
+
+		// agentURLEnvVarName has priority over agentHostEnvVarName
+		if agentURL != "" {
+			return agentURL
+		}
 	}
 
 	if addr == "" {
@@ -248,6 +311,31 @@ func resolveAddr(addr string) string {
 		}
 	}
 	return addr
+}
+
+func parseAgentURL(agentURL string) string {
+	if agentURL != "" {
+		if strings.HasPrefix(agentURL, WindowsPipeAddressPrefix) {
+			return agentURL
+		}
+
+		parsedURL, err := url.Parse(agentURL)
+		if err != nil {
+			return ""
+		}
+
+		if parsedURL.Scheme == "udp" {
+			if strings.Contains(parsedURL.Host, ":") {
+				return parsedURL.Host
+			}
+			return fmt.Sprintf("%s:%s", parsedURL.Host, defaultUDPPort)
+		}
+
+		if parsedURL.Scheme == "unix" {
+			return agentURL
+		}
+	}
+	return ""
 }
 
 func createWriter(addr string, writeTimeout time.Duration) (io.WriteCloser, string, error) {
@@ -319,11 +407,20 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 		tags:      o.tags,
 		telemetry: &statsdTelemetry{},
 	}
+
+	hasEntityID := false
 	// Inject values of DD_* environment variables as global tags.
 	for _, mapping := range ddEnvTagsMapping {
 		if value := os.Getenv(mapping.envName); value != "" {
+			if mapping.envName == ddEntityID {
+				hasEntityID = true
+			}
 			c.tags = append(c.tags, fmt.Sprintf("%s:%s", mapping.tagName, value))
 		}
+	}
+
+	if !hasEntityID {
+		initContainerID(o.containerID, isOriginDetectionEnabled(o, hasEntityID))
 	}
 
 	if o.maxBytesPerPayload == 0 {
@@ -446,6 +543,13 @@ func (c *Client) Flush() error {
 	return nil
 }
 
+// IsClosed returns if the client has been closed.
+func (c *Client) IsClosed() bool {
+	c.closerLock.Lock()
+	defer c.closerLock.Unlock()
+	return c.isClosed
+}
+
 func (c *Client) flushTelemetryMetrics(t *Telemetry) {
 	t.TotalMetricsGauge = atomic.LoadUint64(&c.telemetry.totalMetricsGauge)
 	t.TotalMetricsCount = atomic.LoadUint64(&c.telemetry.totalMetricsCount)
@@ -512,6 +616,25 @@ func (c *Client) Gauge(name string, value float64, tags []string, rate float64) 
 	return c.send(metric{metricType: gauge, name: name, fvalue: value, tags: tags, rate: rate, globalTags: c.tags, namespace: c.namespace})
 }
 
+// GaugeWithTimestamp measures the value of a metric at a given time.
+// BETA - Please contact our support team for more information to use this feature: https://www.datadoghq.com/support/
+// The value will bypass any aggregation on the client side and agent side, this is
+// useful when sending points in the past.
+//
+// Minimum Datadog Agent version: 7.40.0
+func (c *Client) GaugeWithTimestamp(name string, value float64, tags []string, rate float64, timestamp time.Time) error {
+	if c == nil {
+		return ErrNoClient
+	}
+
+	if timestamp.IsZero() || timestamp.Unix() <= noTimestamp {
+		return InvalidTimestamp
+	}
+
+	atomic.AddUint64(&c.telemetry.totalMetricsGauge, 1)
+	return c.send(metric{metricType: gauge, name: name, fvalue: value, tags: tags, rate: rate, globalTags: c.tags, namespace: c.namespace, timestamp: timestamp.Unix()})
+}
+
 // Count tracks how many times something happened per second.
 func (c *Client) Count(name string, value int64, tags []string, rate float64) error {
 	if c == nil {
@@ -522,6 +645,25 @@ func (c *Client) Count(name string, value int64, tags []string, rate float64) er
 		return c.agg.count(name, value, tags)
 	}
 	return c.send(metric{metricType: count, name: name, ivalue: value, tags: tags, rate: rate, globalTags: c.tags, namespace: c.namespace})
+}
+
+// CountWithTimestamp tracks how many times something happened at the given second.
+// BETA - Please contact our support team for more information to use this feature: https://www.datadoghq.com/support/
+// The value will bypass any aggregation on the client side and agent side, this is
+// useful when sending points in the past.
+//
+// Minimum Datadog Agent version: 7.40.0
+func (c *Client) CountWithTimestamp(name string, value int64, tags []string, rate float64, timestamp time.Time) error {
+	if c == nil {
+		return ErrNoClient
+	}
+
+	if timestamp.IsZero() || timestamp.Unix() <= noTimestamp {
+		return InvalidTimestamp
+	}
+
+	atomic.AddUint64(&c.telemetry.totalMetricsCount, 1)
+	return c.send(metric{metricType: count, name: name, ivalue: value, tags: tags, rate: rate, globalTags: c.tags, namespace: c.namespace, timestamp: timestamp.Unix()})
 }
 
 // Histogram tracks the statistical distribution of a set of values on each host.
@@ -628,6 +770,10 @@ func (c *Client) Close() error {
 	c.closerLock.Lock()
 	defer c.closerLock.Unlock()
 
+	if c.isClosed {
+		return nil
+	}
+
 	// Notify all other threads that they should stop
 	select {
 	case <-c.stop:
@@ -654,5 +800,39 @@ func (c *Client) Close() error {
 	c.wg.Wait()
 
 	c.Flush()
+
+	c.isClosed = true
 	return c.sender.close()
+}
+
+// isOriginDetectionEnabled returns whether the clients should fill the container field.
+//
+// If DD_ENTITY_ID is set, we don't send the container ID
+// If a user-defined container ID is provided, we don't ignore origin detection
+// as dd.internal.entity_id is prioritized over the container field for backward compatibility.
+// If DD_ENTITY_ID is not set, we try to fill the container field automatically unless
+// DD_ORIGIN_DETECTION_ENABLED is explicitly set to false.
+func isOriginDetectionEnabled(o *Options, hasEntityID bool) bool {
+	if !o.originDetection || hasEntityID || o.containerID != "" {
+		// originDetection is explicitly disabled
+		// or DD_ENTITY_ID was found
+		// or a user-defined container ID was provided
+		return false
+	}
+
+	envVarValue := os.Getenv(originDetectionEnabled)
+	if envVarValue == "" {
+		// DD_ORIGIN_DETECTION_ENABLED is not set
+		// default to true
+		return true
+	}
+
+	enabled, err := strconv.ParseBool(envVarValue)
+	if err != nil {
+		// Error due to an unsupported DD_ORIGIN_DETECTION_ENABLED value
+		// default to true
+		return true
+	}
+
+	return enabled
 }
