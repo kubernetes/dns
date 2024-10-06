@@ -29,6 +29,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// This is a noop change just to verify the correctness of tests.
+
 // Nanny encapsulates a dnsmasq process and manages its configuration.
 type Nanny struct {
 	Exec string
