@@ -25,14 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/clock"
+	clock "k8s.io/utils/clock/testing"
 )
 
 func TestSyncFile(t *testing.T) {
 	testParentDir := t.TempDir()
 
 	testDir := filepath.Join(testParentDir, "datadir")
-
 	fakeClock := clock.NewFakeClock(time.Now())
 
 	source := newFileSyncSource(testDir, time.Second, fakeClock)
