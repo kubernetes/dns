@@ -51,7 +51,7 @@ var _ = Describe("kube-dns", func() {
 				}
 
 				return fmt.Errorf("expected %v, but got %v", expected, names)
-			}).Should(om.Succeed())
+			}, "5s", "1s").Should(om.Succeed())
 		})
 
 		It("should stop", func() {
