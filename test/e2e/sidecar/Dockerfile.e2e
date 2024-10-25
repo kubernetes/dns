@@ -13,11 +13,11 @@
 # limitations under the License.
 #
 # Builds the docker container for the e2e test.
-FROM registry.k8s.io/kube-dnsmasq-amd64:1.4
+FROM alpine:3.20
 MAINTAINER Bowei Du <bowei@google.com>
 
 COPY bin/amd64/sidecar /sidecar
 COPY bin/amd64/sidecar-e2e /sidecar-e2e
-RUN apk update && apk add curl bind-tools
+RUN apk update && apk add curl bind-tools dnsmasq
 
 ENTRYPOINT ["/sidecar-e2e", "-mode", "test"]

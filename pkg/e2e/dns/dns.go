@@ -45,7 +45,6 @@ func (kd *KubeDNS) Start(name string, args ...string) {
 
 	args = append(
 		args,
-		"--logtostderr",
 		"--dns-port", "10053",
 		"--kubecfg-file", fr.Path("test/e2e/cluster/config"))
 

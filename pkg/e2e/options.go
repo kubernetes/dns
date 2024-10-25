@@ -17,9 +17,11 @@ limitations under the License.
 package e2e
 
 const (
-	etcdImage      = "quay.io/coreos/etcd:v3.0.14"
-	hyperkubeImage = "registry.k8s.io/hyperkube:v1.5.1"
-	dnsmasqImage   = "registry.k8s.io/k8s-dns-dnsmasq-amd64:1.14.5"
+	etcdImage = "quay.io/coreos/etcd:v3.5.16"
+	// TODO remove hyperkube, it is deprecated
+	hyperkubeImage = "registry.k8s.io/hyperkube:v1.18.20"
+	// TODO Fix kubedns e2e test that uses this image, stops working after 1.14.10
+	dnsmasqImage = "registry.k8s.io/k8s-dns-dnsmasq-amd64:1.14.10"
 )
 
 type Options struct {
