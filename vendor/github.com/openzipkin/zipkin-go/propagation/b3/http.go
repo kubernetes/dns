@@ -21,8 +21,10 @@ import (
 	"github.com/openzipkin/zipkin-go/propagation"
 )
 
+// InjectOption provides functional option handler type.
 type InjectOption func(opts *InjectOptions)
 
+// InjectOptions provides the available functional options.
 type InjectOptions struct {
 	shouldInjectSingleHeader bool
 	shouldInjectMultiHeader  bool
