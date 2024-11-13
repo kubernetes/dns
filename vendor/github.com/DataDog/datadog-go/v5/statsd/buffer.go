@@ -4,11 +4,15 @@ import (
 	"strconv"
 )
 
-type bufferFullError string
+// MessageTooLongError is an error returned when a sample, event or service check is too large once serialized. See
+// WithMaxBytesPerPayload option for more details.
+type MessageTooLongError struct{}
 
-func (e bufferFullError) Error() string { return string(e) }
+func (e MessageTooLongError) Error() string {
+	return "message too long. See 'WithMaxBytesPerPayload' documentation."
+}
 
-const errBufferFull = bufferFullError("statsd buffer is full")
+var errBufferFull = MessageTooLongError{}
 
 type partialWriteError string
 
@@ -35,22 +39,24 @@ func newStatsdBuffer(maxSize, maxElements int) *statsdBuffer {
 	}
 }
 
-func (b *statsdBuffer) writeGauge(namespace string, globalTags []string, name string, value float64, tags []string, rate float64) error {
+func (b *statsdBuffer) writeGauge(namespace string, globalTags []string, name string, value float64, tags []string, rate float64, timestamp int64) error {
 	if b.elementCount >= b.maxElements {
 		return errBufferFull
 	}
 	originalBuffer := b.buffer
 	b.buffer = appendGauge(b.buffer, namespace, globalTags, name, value, tags, rate)
+	b.buffer = appendTimestamp(b.buffer, timestamp)
 	b.writeSeparator()
 	return b.validateNewElement(originalBuffer)
 }
 
-func (b *statsdBuffer) writeCount(namespace string, globalTags []string, name string, value int64, tags []string, rate float64) error {
+func (b *statsdBuffer) writeCount(namespace string, globalTags []string, name string, value int64, tags []string, rate float64, timestamp int64) error {
 	if b.elementCount >= b.maxElements {
 		return errBufferFull
 	}
 	originalBuffer := b.buffer
 	b.buffer = appendCount(b.buffer, namespace, globalTags, name, value, tags, rate)
+	b.buffer = appendTimestamp(b.buffer, timestamp)
 	b.writeSeparator()
 	return b.validateNewElement(originalBuffer)
 }
@@ -107,6 +113,7 @@ func (b *statsdBuffer) writeAggregated(metricSymbol []byte, namespace string, gl
 	b.buffer = append(b.buffer, '|')
 	b.buffer = append(b.buffer, metricSymbol...)
 	b.buffer = appendTagsAggregated(b.buffer, globalTags, tags)
+	b.buffer = appendContainerID(b.buffer)
 	b.writeSeparator()
 	b.elementCount++
 

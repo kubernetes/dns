@@ -41,7 +41,7 @@ type TextMapReader interface {
 
 var (
 	// ErrInvalidCarrier is returned when the carrier provided to the propagator
-	// does not implemented the correct interfaces.
+	// does not implement the correct interfaces.
 	ErrInvalidCarrier = errors.New("invalid carrier")
 
 	// ErrInvalidSpanContext is returned when the span context found in the

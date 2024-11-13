@@ -15,6 +15,7 @@ const (
 
 // env variables used to control cross-cutting tracer/profiling features.
 const (
-	EndpointEnvVar     = "DD_PROFILING_ENDPOINT_COLLECTION_ENABLED"
-	CodeHotspotsEnvVar = "DD_PROFILING_CODE_HOTSPOTS_COLLECTION_ENABLED"
+	CodeHotspotsEnvVar  = "DD_PROFILING_CODE_HOTSPOTS_COLLECTION_ENABLED" // aka code hotspots
+	EndpointEnvVar      = "DD_PROFILING_ENDPOINT_COLLECTION_ENABLED"      // aka endpoint profiling
+	EndpointCountEnvVar = "DD_PROFILING_ENDPOINT_COUNT_ENABLED"           // aka unit of work
 )

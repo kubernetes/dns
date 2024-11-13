@@ -11,10 +11,10 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
 )
 
@@ -30,15 +30,23 @@ const (
 
 var prefixMsg = fmt.Sprintf("Datadog Tracer %s", version.Tag)
 
+// Logger implementations are able to log given messages that the tracer might
+// output. This interface is duplicated here to avoid a cyclic dependency
+// between this package and ddtrace
+type Logger interface {
+	// Log prints the given message.
+	Log(msg string)
+}
+
 var (
-	mu     sync.RWMutex   // guards below fields
-	level                 = LevelWarn
-	logger ddtrace.Logger = &defaultLogger{l: log.New(os.Stderr, "", log.LstdFlags)}
+	mu     sync.RWMutex // guards below fields
+	level               = LevelWarn
+	logger Logger       = &defaultLogger{l: log.New(os.Stderr, "", log.LstdFlags)}
 )
 
 // UseLogger sets l as the active logger and returns a function to restore the
 // previous logger. The return value is mostly useful when testing.
-func UseLogger(l ddtrace.Logger) (undo func()) {
+func UseLogger(l Logger) (undo func()) {
 	Flush()
 	mu.Lock()
 	defer mu.Unlock()
@@ -92,9 +100,18 @@ var (
 
 func init() {
 	if v := os.Getenv("DD_LOGGING_RATE"); v != "" {
-		if sec, err := strconv.ParseUint(v, 10, 64); err != nil {
-			Warn("Invalid value for DD_LOGGING_RATE: %v", err)
+		setLoggingRate(v)
+	}
+}
+
+func setLoggingRate(v string) {
+	if sec, err := strconv.ParseInt(v, 10, 64); err != nil {
+		Warn("Invalid value for DD_LOGGING_RATE: %v", err)
+	} else {
+		if sec < 0 {
+			Warn("Invalid value for DD_LOGGING_RATE: negative value")
 		} else {
+			// DD_LOGGING_RATE = 0 allows to log errors immediately.
 			errrate = time.Duration(sec) * time.Second
 		}
 	}
@@ -187,19 +204,33 @@ func (p *defaultLogger) Log(msg string) { p.l.Print(msg) }
 // DiscardLogger discards every call to Log().
 type DiscardLogger struct{}
 
-// Log implements ddtrace.Logger.
-func (d DiscardLogger) Log(msg string) {}
+// Log implements Logger.
+func (d DiscardLogger) Log(_ string) {}
 
 // RecordLogger records every call to Log() and makes it available via Logs().
 type RecordLogger struct {
-	m    sync.Mutex
-	logs []string
+	m      sync.Mutex
+	logs   []string
+	ignore []string // a log is ignored if it contains a string in ignored
 }
 
-// Log implements ddtrace.Logger.
+// Ignore adds substrings to the ignore field of RecordLogger, allowing
+// the RecordLogger to ignore attempts to log strings with certain substrings.
+func (r *RecordLogger) Ignore(substrings ...string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.ignore = append(r.ignore, substrings...)
+}
+
+// Log implements Logger.
 func (r *RecordLogger) Log(msg string) {
 	r.m.Lock()
 	defer r.m.Unlock()
+	for _, ignored := range r.ignore {
+		if strings.Contains(msg, ignored) {
+			return
+		}
+	}
 	r.logs = append(r.logs, msg)
 }
 
@@ -210,4 +241,12 @@ func (r *RecordLogger) Logs() []string {
 	copied := make([]string, len(r.logs))
 	copy(copied, r.logs)
 	return copied
+}
+
+// Reset resets the logger's internal logs
+func (r *RecordLogger) Reset() {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.logs = r.logs[:0]
+	r.ignore = r.ignore[:0]
 }
