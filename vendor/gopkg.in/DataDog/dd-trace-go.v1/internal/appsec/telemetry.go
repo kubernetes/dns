@@ -8,7 +8,7 @@ package appsec
 import (
 	"runtime"
 
-	waf "github.com/DataDog/go-libddwaf/v2"
+	waf "github.com/DataDog/go-libddwaf/v3"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/telemetry"
 )
 
@@ -26,10 +26,10 @@ var (
 	wafSupported, _ = waf.SupportsTarget()
 	wafHealthy, _   = waf.Health()
 	staticConfigs   = []telemetry.Configuration{
-		{Name: "goos", Value: runtime.GOOS, Origin: "code"},
-		{Name: "goarch", Value: runtime.GOARCH, Origin: "code"},
-		{Name: "waf_supports_target", Value: wafSupported, Origin: "code"},
-		{Name: "waf_healthy", Value: wafHealthy, Origin: "code"},
+		{Name: "goos", Value: runtime.GOOS, Origin: telemetry.OriginCode},
+		{Name: "goarch", Value: runtime.GOARCH, Origin: telemetry.OriginCode},
+		{Name: "waf_supports_target", Value: wafSupported, Origin: telemetry.OriginCode},
+		{Name: "waf_healthy", Value: wafHealthy, Origin: telemetry.OriginCode},
 	}
 )
 
@@ -62,7 +62,7 @@ func (a *appsecTelemetry) addEnvConfig(name string, value any) {
 	if a == nil {
 		return
 	}
-	a.configs = append(a.configs, telemetry.Configuration{Name: name, Value: value, Origin: "env_var"})
+	a.configs = append(a.configs, telemetry.Configuration{Name: name, Value: value, Origin: telemetry.OriginEnvVar})
 }
 
 // setEnabled makes AppSec as having effectively been enabled.

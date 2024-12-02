@@ -214,12 +214,13 @@ func (c *concentrator) flushAndSend(timenow time.Time, includeCurrent bool) {
 // aggregation specifies a uniquely identifiable key under which a certain set
 // of stats are grouped inside a bucket.
 type aggregation struct {
-	Name       string
-	Type       string
-	Resource   string
-	Service    string
-	StatusCode uint32
-	Synthetics bool
+	Name        string
+	Type        string
+	Resource    string
+	Service     string
+	StatusCode  uint32
+	Synthetics  bool
+	IsTraceRoot trilean
 }
 
 type rawBucket struct {
@@ -278,6 +279,14 @@ func (sb *rawBucket) Export() statsBucket {
 	return csb
 }
 
+type trilean int32
+
+const (
+	trileanNotSet trilean = iota
+	trileanTrue
+	trileanFalse
+)
+
 type rawGroupedStats struct {
 	hits            uint64
 	topLevelHits    uint64
@@ -285,6 +294,7 @@ type rawGroupedStats struct {
 	duration        uint64
 	okDistribution  *ddsketch.DDSketch
 	errDistribution *ddsketch.DDSketch
+	IsTraceRoot     trilean
 }
 
 func newRawGroupedStats() *rawGroupedStats {
@@ -335,6 +345,7 @@ func (s *rawGroupedStats) export(k aggregation) (groupedStats, error) {
 		OkSummary:      okSummary,
 		ErrorSummary:   errSummary,
 		Synthetics:     k.Synthetics,
+		IsTraceRoot:    int32(k.IsTraceRoot),
 	}, nil
 }
 
