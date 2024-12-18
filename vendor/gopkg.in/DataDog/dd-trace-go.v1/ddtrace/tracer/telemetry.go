@@ -12,6 +12,12 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/telemetry"
 )
 
+var additionalConfigs []telemetry.Configuration
+
+func reportTelemetryOnAppStarted(c telemetry.Configuration) {
+	additionalConfigs = append(additionalConfigs, c)
+}
+
 // startTelemetry starts the global instrumentation telemetry client with tracer data
 // unless instrumentation telemetry is disabled via the DD_INSTRUMENTATION_TELEMETRY_ENABLED
 // env var.
@@ -44,20 +50,23 @@ func startTelemetry(c *config) {
 		{Name: "service", Value: c.serviceName},
 		{Name: "universal_version", Value: c.universalVersion},
 		{Name: "env", Value: c.env},
-		{Name: "agent_url", Value: c.agentURL.String()},
+		{Name: "version", Value: c.version},
+		{Name: "trace_agent_url", Value: c.agentURL.String()},
 		{Name: "agent_hostname", Value: c.hostname},
 		{Name: "runtime_metrics_enabled", Value: c.runtimeMetrics},
 		{Name: "dogstatsd_addr", Value: c.dogstatsdAddr},
-		{Name: "trace_debug_enabled", Value: !c.noDebugStack},
+		{Name: "debug_stack_enabled", Value: !c.noDebugStack},
 		{Name: "profiling_hotspots_enabled", Value: c.profilerHotspots},
 		{Name: "profiling_endpoints_enabled", Value: c.profilerEndpoints},
 		{Name: "trace_span_attribute_schema", Value: c.spanAttributeSchemaVersion},
 		{Name: "trace_peer_service_defaults_enabled", Value: c.peerServiceDefaultsEnabled},
 		{Name: "orchestrion_enabled", Value: c.orchestrionCfg.Enabled},
-		{Name: "trace_enabled", Value: c.enabled.current},
+		{Name: "trace_enabled", Value: c.enabled.current, Origin: c.enabled.cfgOrigin},
 		c.traceSampleRate.toTelemetry(),
 		c.headerAsTags.toTelemetry(),
 		c.globalTags.toTelemetry(),
+		c.traceSampleRules.toTelemetry(),
+		telemetry.Sanitize(telemetry.Configuration{Name: "span_sample_rules", Value: c.spanRules}),
 	}
 	var peerServiceMapping []string
 	for key, value := range c.peerServiceMappings {
@@ -100,5 +109,6 @@ func startTelemetry(c *config) {
 			telemetryConfigs = append(telemetryConfigs, telemetry.Configuration{Name: "orchestrion_" + k, Value: v})
 		}
 	}
+	telemetryConfigs = append(telemetryConfigs, additionalConfigs...)
 	telemetry.GlobalClient.ProductChange(telemetry.NamespaceTracers, true, telemetryConfigs)
 }

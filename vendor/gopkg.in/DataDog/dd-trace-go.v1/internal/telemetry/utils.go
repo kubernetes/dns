@@ -35,7 +35,7 @@ func Check(t *testing.T, configuration []Configuration, key string, expected int
 	for _, kv := range configuration {
 		if kv.Name == key {
 			if kv.Value != expected {
-				t.Errorf("configuration %s: wanted %v, got %v", key, expected, kv.Value)
+				t.Errorf("configuration %s: wanted '%v' type:%T, got '%v' type:%T", key, expected, expected, kv.Value, kv.Value)
 			}
 			return
 		}
@@ -84,6 +84,10 @@ func Sanitize(c Configuration) Configuration {
 			sb.WriteString(":")
 			sb.WriteString(fmt.Sprint(val[k]))
 		}
+		c.Value = sb.String()
+	default:
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprint(val))
 		c.Value = sb.String()
 	}
 	return c

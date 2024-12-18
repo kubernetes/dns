@@ -73,6 +73,9 @@ const (
 	// CassandraCluster specifies the tag name that is used to set the cluster.
 	CassandraCluster = "cassandra.cluster"
 
+	// CassandraDatacenter specifies the tag name that is used to set the datacenter.
+	CassandraDatacenter = "cassandra.datacenter"
+
 	// CassandraRowCount specifies the tag name to use when settings the row count.
 	CassandraRowCount = "cassandra.row_count"
 
@@ -84,4 +87,7 @@ const (
 
 	// CassandraContactPoints holds the list of cassandra initial seed nodes used to discover the cluster.
 	CassandraContactPoints = "db.cassandra.contact.points"
+
+	// CassandraHostID represents the host ID for this operation.
+	CassandraHostID = "db.cassandra.host.id"
 )

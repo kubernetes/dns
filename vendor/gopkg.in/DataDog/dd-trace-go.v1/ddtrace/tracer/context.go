@@ -11,11 +11,12 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	traceinternal "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/orchestrion"
 )
 
 // ContextWithSpan returns a copy of the given context which includes the span s.
 func ContextWithSpan(ctx context.Context, s Span) context.Context {
-	return context.WithValue(ctx, internal.ActiveSpanKey, s)
+	return orchestrion.CtxWithValue(ctx, internal.ActiveSpanKey, s)
 }
 
 // SpanFromContext returns the span contained in the given context. A second return
@@ -25,7 +26,7 @@ func SpanFromContext(ctx context.Context) (Span, bool) {
 	if ctx == nil {
 		return &traceinternal.NoopSpan{}, false
 	}
-	v := ctx.Value(internal.ActiveSpanKey)
+	v := orchestrion.WrapContext(ctx).Value(internal.ActiveSpanKey)
 	if s, ok := v.(ddtrace.Span); ok {
 		return s, true
 	}
