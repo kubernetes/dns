@@ -66,8 +66,10 @@ Follow these steps to make changes and release a new binary.
    The SHAs can be obtained by running the command `python parse-image-sha.py <TAG>`
    This will return the SHAs for kube-dns as well as node-cache images. Node-cache images are always promoted, kube-dns images are promoted if there is a change to kubedns/vulnerability fix.
 6. Images will be available in the repo registry.k8s.io/dns/. The node-cache image with tag 1.15.14 can be found at registry.k8s.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at registry.k8s.io/k8s-dns-node-cache:<TAG>
-7. Submit a PR for the kubernetes/kubernetes repository to switch to the new
-   version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189
+7. Prepare a PR for the kubernetes/kubernetes repository to switch to the new
+   version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189.
+   Trigger the optional [presubmit](https://github.com/kubernetes/test-infra/pull/33962) `pull-kubernetes-e2e-gci-gce-kube-dns-nodecache` and correct your PR if needed before merging.
+8. Verify the kubedns-related and nodecache-related tabs of the test grid at https://testgrid.k8s.io/sig-network-gce for regressions caused by the new image and revert if needed.
    
 ## Version compatibility
 
