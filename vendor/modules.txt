@@ -108,6 +108,7 @@ github.com/coredns/coredns/plugin/pkg/uniq
 github.com/coredns/coredns/plugin/pkg/up
 github.com/coredns/coredns/plugin/pkg/upstream
 github.com/coredns/coredns/plugin/pprof
+github.com/coredns/coredns/plugin/ready
 github.com/coredns/coredns/plugin/reload
 github.com/coredns/coredns/plugin/rewrite
 github.com/coredns/coredns/plugin/template
