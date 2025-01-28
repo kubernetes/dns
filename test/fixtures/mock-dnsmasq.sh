@@ -37,6 +37,21 @@ sleepThenError() {
 	exit 1
 }
 
+COUNT=0
+exitOnSecondCall() {
+	: $((COUNT+=1))
+	echo "Function call no ${COUNT}"
+	if [ $COUNT -ge 2 ]; then
+		exit 0
+	fi
+}
+
+trapTwice() {
+	trap exitOnSecondCall USR1
+	echo "Trap registered"
+	runForever
+}
+
 ARGS="$*"
 RUN=
 
@@ -50,6 +65,7 @@ while [ ! -z "$1" ]; do
 		--exitWithSuccess) RUN=exitWithSuccess;;
 		--runForever)      RUN=runForever;;
 		--sleepThenError)  RUN=sleepThenError;;
+		--trapTwice)       RUN=trapTwice;;
 	esac
 	shift
 done
