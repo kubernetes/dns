@@ -4,7 +4,7 @@
 # ./image-checks.sh <image-tag> <registry-name>
 # Kill with Ctrl + C once sidecar starts up successfully.
 TAG=$1
-REGISTRY=${2:-gcr.io/google-containers}
+REGISTRY=${2:-registry.k8s.io/dns}
 echo "Verifying that iptables exists in node-cache image"
 docker run --rm -it --entrypoint=iptables ${REGISTRY}/k8s-dns-node-cache:${TAG}
 echo "Verifying that node-cache binary exists in node-cache image"
