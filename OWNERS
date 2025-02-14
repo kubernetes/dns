@@ -2,5 +2,5 @@
 #  https://github.com/kubernetes/kubernetes/blob/master/docs/devel/owners.md
 approvers:
 - bowei
+- DamianSawicki
 - mrhohn
-- kl52752
