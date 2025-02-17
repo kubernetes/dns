@@ -59,10 +59,10 @@ func DurationEnv(key string, def time.Duration) time.Duration {
 	return v
 }
 
-// ForEachStringTag runs fn on every key:val pair encountered in str.
-// str may contain multiple key:val pairs separated by either space
-// or comma (but not a mixture of both).
-func ForEachStringTag(str string, fn func(key string, val string)) {
+// ForEachStringTag runs fn on every key val pair encountered in str.
+// str may contain multiple key val pairs separated by either space
+// or comma (but not a mixture of both), and each key val pair is separated by a delimiter.
+func ForEachStringTag(str string, delimiter string, fn func(key string, val string)) {
 	sep := " "
 	if strings.Index(str, ",") > -1 {
 		// falling back to comma as separator
@@ -73,7 +73,7 @@ func ForEachStringTag(str string, fn func(key string, val string)) {
 		if tag == "" {
 			continue
 		}
-		kv := strings.SplitN(tag, ":", 2)
+		kv := strings.SplitN(tag, delimiter, 2)
 		key := strings.TrimSpace(kv[0])
 		if key == "" {
 			continue
@@ -89,7 +89,7 @@ func ForEachStringTag(str string, fn func(key string, val string)) {
 // ParseTagString returns tags parsed from string as map
 func ParseTagString(str string) map[string]string {
 	res := make(map[string]string)
-	ForEachStringTag(str, func(key, val string) { res[key] = val })
+	ForEachStringTag(str, DDTagsDelimiter, func(key, val string) { res[key] = val })
 	return res
 }
 
@@ -103,6 +103,15 @@ func FloatEnv(key string, def float64) float64 {
 	v, err := strconv.ParseFloat(env, 64)
 	if err != nil {
 		log.Warn("Non-float value for env var %s, defaulting to %f. Parse failed with error: %v", key, def, err)
+		return def
+	}
+	return v
+}
+
+// BoolVal returns the parsed boolean value of string val, or def if not parseable
+func BoolVal(val string, def bool) bool {
+	v, err := strconv.ParseBool(val)
+	if err != nil {
 		return def
 	}
 	return v

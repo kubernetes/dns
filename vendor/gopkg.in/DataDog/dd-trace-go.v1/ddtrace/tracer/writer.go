@@ -219,6 +219,22 @@ func (h *logTraceWriter) encodeSpan(s *span) {
 		h.buf.WriteString(":")
 		h.marshalString(v)
 	}
+	// We cannot pack messagepack into JSON, so we need to marshal the meta struct as JSON, and send them through the `meta` field
+	for k, v := range s.MetaStruct {
+		if first {
+			first = false
+		} else {
+			h.buf.WriteString(`,`)
+		}
+		h.marshalString(k)
+		h.buf.WriteString(":")
+		jsonValue, err := json.Marshal(v)
+		if err != nil {
+			log.Error("Error marshaling value %q: %v", v, err)
+			continue
+		}
+		h.marshalString(string(jsonValue))
+	}
 	h.buf.WriteString(`},"metrics":{`)
 	first = true
 	for k, v := range s.Metrics {
