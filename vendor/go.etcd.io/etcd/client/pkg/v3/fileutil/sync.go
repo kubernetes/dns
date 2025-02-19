@@ -1,4 +1,4 @@
-// Copyright 2015 The etcd Authors
+// Copyright 2016 The etcd Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transport
+//go:build !linux && !darwin
+// +build !linux,!darwin
 
-import (
-	"net"
-	"time"
-)
+package fileutil
 
-type rwTimeoutDialer struct {
-	wtimeoutd  time.Duration
-	rdtimeoutd time.Duration
-	net.Dialer
+import "os"
+
+// Fsync is a wrapper around file.Sync(). Special handling is needed on darwin platform.
+func Fsync(f *os.File) error {
+	return f.Sync()
 }
 
-func (d *rwTimeoutDialer) Dial(network, address string) (net.Conn, error) {
-	conn, err := d.Dialer.Dial(network, address)
-	tconn := &timeoutConn{
-		rdtimeoutd: d.rdtimeoutd,
-		wtimeoutd:  d.wtimeoutd,
-		Conn:       conn,
-	}
-	return tconn, err
+// Fdatasync is a wrapper around file.Sync(). Special handling is needed on linux platform.
+func Fdatasync(f *os.File) error {
+	return f.Sync()
 }

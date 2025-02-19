@@ -115,10 +115,6 @@ github.com/coredns/coredns/plugin/test
 github.com/coredns/coredns/plugin/trace
 github.com/coredns/coredns/plugin/whoami
 github.com/coredns/coredns/request
-# github.com/coreos/etcd v3.3.13+incompatible
-## explicit
-github.com/coreos/etcd/pkg/tlsutil
-github.com/coreos/etcd/pkg/transport
 # github.com/coreos/go-semver v0.3.1
 ## explicit; go 1.8
 github.com/coreos/go-semver/semver
@@ -423,10 +419,13 @@ go.etcd.io/etcd/api/v3/v3rpc/rpctypes
 go.etcd.io/etcd/api/v3/version
 # go.etcd.io/etcd/client/pkg/v3 v3.5.12
 ## explicit; go 1.20
+go.etcd.io/etcd/client/pkg/v3/fileutil
 go.etcd.io/etcd/client/pkg/v3/logutil
 go.etcd.io/etcd/client/pkg/v3/pathutil
 go.etcd.io/etcd/client/pkg/v3/srv
 go.etcd.io/etcd/client/pkg/v3/systemd
+go.etcd.io/etcd/client/pkg/v3/tlsutil
+go.etcd.io/etcd/client/pkg/v3/transport
 go.etcd.io/etcd/client/pkg/v3/types
 # go.etcd.io/etcd/client/v2 v2.305.9
 ## explicit; go 1.19

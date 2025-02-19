@@ -15,6 +15,7 @@
 package transport
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -31,29 +32,34 @@ func NewTransport(info TLSInfo, dialtimeoutd time.Duration) (*http.Transport, er
 
 	t := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
+		DialContext: (&net.Dialer{
 			Timeout: dialtimeoutd,
 			// value taken from http.DefaultTransport
 			KeepAlive: 30 * time.Second,
-		}).Dial,
+		}).DialContext,
 		// value taken from http.DefaultTransport
 		TLSHandshakeTimeout: 10 * time.Second,
 		TLSClientConfig:     cfg,
 	}
 
-	dialer := (&net.Dialer{
+	dialer := &net.Dialer{
 		Timeout:   dialtimeoutd,
 		KeepAlive: 30 * time.Second,
-	})
-	dial := func(net, addr string) (net.Conn, error) {
-		return dialer.Dial("unix", addr)
 	}
 
+	dialContext := func(ctx context.Context, net, addr string) (net.Conn, error) {
+		return dialer.DialContext(ctx, "unix", addr)
+	}
 	tu := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
-		Dial:                dial,
+		DialContext:         dialContext,
 		TLSHandshakeTimeout: 10 * time.Second,
 		TLSClientConfig:     cfg,
+		// Cost of reopening connection on sockets is low, and they are mostly used in testing.
+		// Long living unix-transport connections were leading to 'leak' test flakes.
+		// Alternativly the returned Transport (t) should override CloseIdleConnections to
+		// forward it to 'tu' as well.
+		IdleConnTimeout: time.Microsecond,
 	}
 	ut := &unixTransport{tu}
 

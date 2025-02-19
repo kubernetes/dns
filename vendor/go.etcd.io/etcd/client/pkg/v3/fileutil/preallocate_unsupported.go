@@ -12,33 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transport
+//go:build !linux && !darwin
+// +build !linux,!darwin
 
-import (
-	"net"
-	"time"
-)
+package fileutil
 
-type timeoutConn struct {
-	net.Conn
-	wtimeoutd  time.Duration
-	rdtimeoutd time.Duration
+import "os"
+
+func preallocExtend(f *os.File, sizeInBytes int64) error {
+	return preallocExtendTrunc(f, sizeInBytes)
 }
 
-func (c timeoutConn) Write(b []byte) (n int, err error) {
-	if c.wtimeoutd > 0 {
-		if err := c.SetWriteDeadline(time.Now().Add(c.wtimeoutd)); err != nil {
-			return 0, err
-		}
-	}
-	return c.Conn.Write(b)
-}
-
-func (c timeoutConn) Read(b []byte) (n int, err error) {
-	if c.rdtimeoutd > 0 {
-		if err := c.SetReadDeadline(time.Now().Add(c.rdtimeoutd)); err != nil {
-			return 0, err
-		}
-	}
-	return c.Conn.Read(b)
-}
+func preallocFixed(f *os.File, sizeInBytes int64) error { return nil }

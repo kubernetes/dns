@@ -24,8 +24,8 @@ import (
 	"k8s.io/dns/third_party/forked/skydns/msg"
 	"k8s.io/dns/third_party/forked/skydns/server"
 
-	"github.com/coreos/etcd/pkg/transport"
 	"github.com/miekg/dns"
+	"go.etcd.io/etcd/client/pkg/v3/transport"
 	etcd "go.etcd.io/etcd/client/v2"
 	etcdv3 "go.etcd.io/etcd/client/v3"
 )
@@ -318,9 +318,9 @@ func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etc
 
 func newHTTPSTransport(certFile, keyFile, caFile string) (*http.Transport, error) {
 	info := transport.TLSInfo{
-		CertFile: certFile,
-		KeyFile:  keyFile,
-		CAFile:   caFile,
+		CertFile:      certFile,
+		KeyFile:       keyFile,
+		TrustedCAFile: caFile,
 	}
 	cfg, err := info.ClientConfig()
 	if err != nil {
