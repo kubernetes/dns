@@ -7,7 +7,7 @@ set -e
 echo "installing ginkgo"
 mkdir -p ${GOPATH}/src/k8s.io
 ln -s `pwd` ${GOPATH}/src/k8s.io/dns
-GOFLAGS="-mod=vendor" go install github.com/onsi/ginkgo/ginkgo
+go install github.com/onsi/ginkgo/ginkgo
 export PATH=$PATH:$HOME/gopath/bin
 
 echo "installing sudo"
