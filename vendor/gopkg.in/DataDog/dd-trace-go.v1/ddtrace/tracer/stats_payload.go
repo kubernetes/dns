@@ -53,4 +53,5 @@ type groupedStats struct {
 	ErrorSummary []byte `json:"errorSummary,omitempty"`
 	Synthetics   bool   `json:"synthetics,omitempty"`
 	TopLevelHits uint64 `json:"topLevelHits,omitempty"`
+	IsTraceRoot  int32  `json:"isTraceRoot,omitempty"`
 }

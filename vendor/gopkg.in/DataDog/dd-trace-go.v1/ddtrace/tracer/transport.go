@@ -11,8 +11,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -38,19 +36,21 @@ var defaultDialer = &net.Dialer{
 	DualStack: true,
 }
 
-var defaultClient = &http.Client{
-	// We copy the transport to avoid using the default one, as it might be
-	// augmented with tracing and we don't want these calls to be recorded.
-	// See https://golang.org/pkg/net/http/#DefaultTransport .
-	Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           defaultDialer.DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	},
-	Timeout: defaultHTTPTimeout,
+func defaultHTTPClient(timeout time.Duration) *http.Client {
+	if timeout == 0 {
+		timeout = defaultHTTPTimeout
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           defaultDialer.DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Timeout: timeout,
+	}
 }
 
 const (
@@ -58,7 +58,7 @@ const (
 	defaultPort        = "8126"
 	defaultAddress     = defaultHostname + ":" + defaultPort
 	defaultURL         = "http://" + defaultAddress
-	defaultHTTPTimeout = 2 * time.Second         // defines the current timeout before giving up with the send process
+	defaultHTTPTimeout = 10 * time.Second        // defines the current timeout before giving up with the send process
 	traceCountHeader   = "X-Datadog-Trace-Count" // header containing the number of traces in the payload
 )
 
@@ -185,33 +185,4 @@ func (t *httpTransport) send(p *payload) (body io.ReadCloser, err error) {
 
 func (t *httpTransport) endpoint() string {
 	return t.traceURL
-}
-
-// resolveAgentAddr resolves the given agent address and fills in any missing host
-// and port using the defaults. Some environment variable settings will
-// take precedence over configuration.
-func resolveAgentAddr() *url.URL {
-	var host, port string
-	if v := os.Getenv("DD_AGENT_HOST"); v != "" {
-		host = v
-	}
-	if v := os.Getenv("DD_TRACE_AGENT_PORT"); v != "" {
-		port = v
-	}
-	if _, err := os.Stat(defaultSocketAPM); host == "" && port == "" && err == nil {
-		return &url.URL{
-			Scheme: "unix",
-			Path:   defaultSocketAPM,
-		}
-	}
-	if host == "" {
-		host = defaultHostname
-	}
-	if port == "" {
-		port = defaultPort
-	}
-	return &url.URL{
-		Scheme: "http",
-		Host:   fmt.Sprintf("%s:%s", host, port),
-	}
 }
