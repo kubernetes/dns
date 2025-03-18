@@ -163,4 +163,24 @@ func TestNannyLifecycle(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	gomega.Expect(nanny.Kill()).To(gomega.Succeed())
 	gomega.Expect(nanny.Kill()).NotTo(gomega.Succeed())
+
+	// Send SIGUSR1.
+	nanny = &Nanny{Exec: mockDnsmasq}
+	nanny.Configure(
+		[]string{"--trapTwice"},
+		&config.Config{},
+		kubednsServer)
+	gomega.Expect(nanny.Start()).To(gomega.Succeed())
+	time.Sleep(time.Second)
+	gomega.Expect(nanny.SendSIGUSR1()).To(gomega.Succeed())
+	time.Sleep(250 * time.Millisecond)
+	running := true // Dnsmasq reacts on SIGUSR1 and continues.
+	select {
+	case _ = <-nanny.ExitChannel:
+		running = false
+	default:
+	}
+	gomega.Expect(running).To(gomega.BeTrue())
+	gomega.Expect(nanny.SendSIGUSR1()).To(gomega.Succeed()) // mockDnsmasq with --trapTwice successfully exits after receiving the second SIGUSR1.
+	gomega.Expect(<-nanny.ExitChannel).To(gomega.Succeed())
 }
