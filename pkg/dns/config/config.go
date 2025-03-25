@@ -24,6 +24,7 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/parse"
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	fed "k8s.io/dns/pkg/dns/federation"
 	"k8s.io/dns/pkg/dns/util"
 )
@@ -110,7 +111,7 @@ func (config *Config) validateStubDomains() error {
 					return fmt.Errorf("invalid nameserver: %q", ns)
 				}
 			}
-			if len(validation.IsValidIP(host)) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
+			if len(validation.IsValidIP(field.NewPath(""), host)) > 0 && len(validation.IsDNS1123Subdomain(ns)) > 0 {
 				return fmt.Errorf("invalid nameserver: %q", ns)
 			}
 		}
