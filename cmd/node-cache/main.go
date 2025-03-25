@@ -43,6 +43,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/loop"
 	_ "github.com/coredns/coredns/plugin/metrics"
 	_ "github.com/coredns/coredns/plugin/pprof"
+	_ "github.com/coredns/coredns/plugin/ready"
 	_ "github.com/coredns/coredns/plugin/reload"
 	_ "github.com/coredns/coredns/plugin/rewrite"
 	_ "github.com/coredns/coredns/plugin/template"
@@ -89,6 +90,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.StringVar(&params.KubednsCMPath, "kubednscm", "", "Path where the kube-dns configmap will be mounted")
 	flag.StringVar(&params.UpstreamSvcName, "upstreamsvc", "kube-dns", "Service name whose cluster IP is upstream for node-cache")
 	flag.StringVar(&params.HealthPort, "health-port", "8080", "port used by health plugin")
+	flag.StringVar(&params.ReadyPort, "ready-port", "8181", "port used by ready plugin")
 	flag.BoolVar(&params.SkipTeardown, "skipteardown", false, "indicates whether iptables rules should be torn down on exit")
 	flag.Parse()
 
@@ -117,6 +119,9 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	}
 	if _, err := strconv.Atoi(params.HealthPort); err != nil {
 		return nil, fmt.Errorf("invalid healthcheck port specified - %q", params.HealthPort)
+	}
+	if _, err := strconv.Atoi(params.ReadyPort); err != nil {
+		return nil, fmt.Errorf("invalid ready port specified - %q", params.ReadyPort)
 	}
 	if f = flag.Lookup("conf"); f != nil {
 		params.CoreFile = f.Value.String()
