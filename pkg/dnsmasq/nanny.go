@@ -176,7 +176,6 @@ func (n *Nanny) Kill() error {
 	}
 
 	if err := n.cmd.Process.Kill(); err != nil {
-		klog.Errorf("Error killing dnsmasq: %v", err)
 		return err
 	}
 
@@ -222,10 +221,14 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 		case currentConfig = <-configChan:
 			if opts.RestartOnChange {
 				klog.V(0).Infof("Restarting dnsmasq with new configuration")
-				nanny.Kill()
+				if err := nanny.Kill(); err != nil {
+					klog.Errorf("Error killing dnsmasq: %v", err)
+				}
 				nanny = &Nanny{Exec: opts.DnsmasqExec}
 				nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
-				nanny.Start()
+				if err := nanny.Start(); err != nil {
+					klog.Errorf("Could not start dnsmasq with new configuration: %v", err)
+				}
 			} else {
 				klog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
 			}
