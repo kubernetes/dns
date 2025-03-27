@@ -24,6 +24,8 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/klog/v2"
@@ -184,6 +186,17 @@ func (n *Nanny) Kill() error {
 	return nil
 }
 
+// Send SIGUSR1 to dnsmasq (which makes dnsmasq log statistics).
+func (n *Nanny) SendSIGUSR1() error {
+	if n.cmd == nil {
+		return fmt.Errorf("Process is not running")
+	}
+	if err := n.cmd.Process.Signal(syscall.SIGUSR1); err != nil {
+		return err
+	}
+	return nil
+}
+
 // RunNannyOpts for running the nanny.
 type RunNannyOpts struct {
 	// Location of the dnsmasq executable.
@@ -192,6 +205,8 @@ type RunNannyOpts struct {
 	DnsmasqArgs []string
 	// Restart the daemon on ConfigMap changes.
 	RestartOnChange bool
+	// Interval for triggering dnsmasq to log its statistics by sending SIGUSR1.
+	LogInterval time.Duration
 }
 
 // RunNanny runs the nanny and handles configuration updates.
@@ -208,6 +223,11 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 	nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
 	if err := nanny.Start(); err != nil {
 		klog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
+	}
+
+	logChannel := make(<-chan time.Time)
+	if opts.LogInterval != 0 {
+		logChannel = time.NewTicker(opts.LogInterval).C
 	}
 
 	configChan := sync.Periodic()
@@ -233,6 +253,10 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 				klog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
 			}
 			break
+		case <-logChannel:
+			if err := nanny.SendSIGUSR1(); err != nil {
+				klog.Warningf("Error sending SIGUSR1 to dnsmasq: %v", err)
+			}
 		}
 	}
 }
