@@ -152,8 +152,8 @@ github.com/farsightsec/golang-framestream
 # github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568
 ## explicit
 github.com/flynn/go-shlex
-# github.com/fsnotify/fsnotify v1.6.0
-## explicit; go 1.16
+# github.com/fsnotify/fsnotify v1.7.0
+## explicit; go 1.17
 github.com/fsnotify/fsnotify
 # github.com/go-logr/logr v1.4.2
 ## explicit; go 1.18
@@ -1043,8 +1043,8 @@ k8s.io/kube-openapi/pkg/schemaconv
 k8s.io/kube-openapi/pkg/spec3
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/kubernetes v1.28.14
-## explicit; go 1.20
+# k8s.io/kubernetes v1.29.14
+## explicit; go 1.21
 k8s.io/kubernetes/pkg/util/iptables
 # k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 ## explicit; go 1.18
