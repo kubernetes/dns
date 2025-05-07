@@ -24,6 +24,8 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/klog/v2"
@@ -176,12 +178,22 @@ func (n *Nanny) Kill() error {
 	}
 
 	if err := n.cmd.Process.Kill(); err != nil {
-		klog.Errorf("Error killing dnsmasq: %v", err)
 		return err
 	}
 
 	n.cmd = nil
 
+	return nil
+}
+
+// Send SIGUSR1 to dnsmasq (which makes dnsmasq log statistics).
+func (n *Nanny) SendSIGUSR1() error {
+	if n.cmd == nil {
+		return fmt.Errorf("Process is not running")
+	}
+	if err := n.cmd.Process.Signal(syscall.SIGUSR1); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -193,6 +205,8 @@ type RunNannyOpts struct {
 	DnsmasqArgs []string
 	// Restart the daemon on ConfigMap changes.
 	RestartOnChange bool
+	// Interval for triggering dnsmasq to log its statistics by sending SIGUSR1.
+	LogInterval time.Duration
 }
 
 // RunNanny runs the nanny and handles configuration updates.
@@ -211,6 +225,11 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 		klog.Fatalf("Could not start dnsmasq with initial configuration: %v", err)
 	}
 
+	logChannel := make(<-chan time.Time)
+	if opts.LogInterval != 0 {
+		logChannel = time.NewTicker(opts.LogInterval).C
+	}
+
 	configChan := sync.Periodic()
 
 	for {
@@ -222,14 +241,22 @@ func RunNanny(sync config.Sync, opts RunNannyOpts, kubednsServer string) {
 		case currentConfig = <-configChan:
 			if opts.RestartOnChange {
 				klog.V(0).Infof("Restarting dnsmasq with new configuration")
-				nanny.Kill()
+				if err := nanny.Kill(); err != nil {
+					klog.Errorf("Error killing dnsmasq: %v", err)
+				}
 				nanny = &Nanny{Exec: opts.DnsmasqExec}
 				nanny.Configure(opts.DnsmasqArgs, currentConfig, kubednsServer)
-				nanny.Start()
+				if err := nanny.Start(); err != nil {
+					klog.Errorf("Could not start dnsmasq with new configuration: %v", err)
+				}
 			} else {
 				klog.V(2).Infof("Not restarting dnsmasq (--restartDnsmasq=false)")
 			}
 			break
+		case <-logChannel:
+			if err := nanny.SendSIGUSR1(); err != nil {
+				klog.Warningf("Error sending SIGUSR1 to dnsmasq: %v", err)
+			}
 		}
 	}
 }

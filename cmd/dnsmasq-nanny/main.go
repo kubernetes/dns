@@ -37,6 +37,7 @@ var (
 		RunNannyOpts: dnsmasq.RunNannyOpts{
 			DnsmasqExec:     "/usr/sbin/dnsmasq",
 			RestartOnChange: false,
+			LogInterval:     time.Duration(0),
 		},
 		configDir:     "/etc/k8s/dns/dnsmasq-nanny",
 		syncInterval:  10 * time.Second,
@@ -69,6 +70,9 @@ Any arguments given after "--" will be passed directly to dnsmasq itself.
 		"interval to check for configuration updates")
 	flag.StringVar(&opts.kubednsServer, "kubednsServer", opts.kubednsServer,
 		"local kubedns instance address for non-IP name resolution")
+	flag.DurationVar(&opts.LogInterval, "logInterval",
+		opts.LogInterval,
+		"interval to send SIGUSR1 to dnsmasq which triggers statistics logging (if zero, SIGUSR1 is not sent)")
 	klog.InitFlags(nil)
 	flag.Parse()
 }
