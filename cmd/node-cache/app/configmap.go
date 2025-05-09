@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -132,6 +133,14 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	}
 	clog.Infof("Updated Corefile with %d custom stubdomains and upstream servers %s", len(dnsConfig.StubDomains), upstreamServers)
 	clog.Infof("Using config file:\n%s", newConfig.String())
+
+	// Trigger reload of in-process CoreDNS
+	if c.selfProcess != nil {
+		clog.Infof("Sending reload signal to PID %v", c.selfProcess.Pid)
+		if err := c.selfProcess.Signal(syscall.SIGUSR1); err != nil {
+			clog.Errorf("Failed to trigger CoreDNS reload: %v", err)
+		}
+	}
 }
 
 // syncInfo contains all parameters needed to watch a configmap directory for updates
