@@ -28,10 +28,10 @@ OUTPUT_DIR := _output/$(ARCH)
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
 # Multiarch image
-# Uploaded: Nov 12, 2024, 4:43:54 PM
-BASEIMAGE ?= gcr.io/distroless/base-debian12@sha256:7a4bffcb07307d97aa731b50cb6ab22a68a8314426f4e4428335939b5b1943a5
+# Uploaded: Mar 28, 2025
+BASEIMAGE ?= gcr.io/distroless/base-debian12@sha256:27769871031f67460f1545a52dfacead6d18a9f197db77110cfc649ca2a91f44
 ifeq ($(ARCH),amd64)
-	COMPILE_IMAGE := registry.k8s.io/build-image/debian-base-$(ARCH):bullseye-v1.4.1
+	COMPILE_IMAGE := registry.k8s.io/build-image/debian-base-$(ARCH):bookworm-v1.0.4
 else ifeq ($(ARCH),arm)
 	TRIPLE    ?= arm-linux-gnueabihf
 	QEMUARCH  := arm
