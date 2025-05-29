@@ -57,15 +57,31 @@ const DefaultMaxAgentPayloadSize = 8192
 
 /*
 UnixAddressPrefix holds the prefix to use to enable Unix Domain Socket
-traffic instead of UDP.
+traffic instead of UDP. The type of the socket will be guessed.
 */
 const UnixAddressPrefix = "unix://"
+
+/*
+UnixDatagramAddressPrefix holds the prefix to use to enable Unix Domain Socket
+datagram traffic instead of UDP.
+*/
+const UnixAddressDatagramPrefix = "unixgram://"
+
+/*
+UnixAddressStreamPrefix holds the prefix to use to enable Unix Domain Socket
+stream traffic instead of UDP.
+*/
+const UnixAddressStreamPrefix = "unixstream://"
 
 /*
 WindowsPipeAddressPrefix holds the prefix to use to enable Windows Named Pipes
 traffic instead of UDP.
 */
 const WindowsPipeAddressPrefix = `\\.\pipe\`
+
+var (
+	AddressPrefixes = []string{UnixAddressPrefix, UnixAddressDatagramPrefix, UnixAddressStreamPrefix, WindowsPipeAddressPrefix}
+)
 
 const (
 	agentHostEnvVarName = "DD_AGENT_HOST"
@@ -123,9 +139,11 @@ const (
 )
 
 const (
-	writerNameUDP     string = "udp"
-	writerNameUDS     string = "uds"
-	writerWindowsPipe string = "pipe"
+	writerNameUDP       string = "udp"
+	writerNameUDS       string = "uds"
+	writerNameUDSStream string = "uds-stream"
+	writerWindowsPipe   string = "pipe"
+	writerNameCustom    string = "custom"
 )
 
 // noTimestamp is used as a value for metric without a given timestamp.
@@ -197,6 +215,9 @@ type ClientInterface interface {
 	Histogram(name string, value float64, tags []string, rate float64) error
 
 	// Distribution tracks the statistical distribution of a set of values across your infrastructure.
+	//
+	// It is recommended to use `WithMaxBufferedMetricsPerContext` to avoid dropping metrics at high throughput, `rate` can
+	// also be used to limit the load. Both options can *not* be used together.
 	Distribution(name string, value float64, tags []string, rate float64) error
 
 	// Decr is just Count of -1
@@ -240,6 +261,8 @@ type ClientInterface interface {
 	GetTelemetry() Telemetry
 }
 
+type ErrorHandler func(error)
+
 // A Client is a handle for sending messages to dogstatsd.  It is safe to
 // use one Client from multiple goroutines simultaneously.
 type Client struct {
@@ -248,21 +271,23 @@ type Client struct {
 	// namespace to prepend to all statsd calls
 	namespace string
 	// tags are global tags to be added to every statsd call
-	tags            []string
-	flushTime       time.Duration
-	telemetry       *statsdTelemetry
-	telemetryClient *telemetryClient
-	stop            chan struct{}
-	wg              sync.WaitGroup
-	workers         []*worker
-	closerLock      sync.Mutex
-	workersMode     receivingMode
-	aggregatorMode  receivingMode
-	agg             *aggregator
-	aggExtended     *aggregator
-	options         []Option
-	addrOption      string
-	isClosed        bool
+	tags                  []string
+	flushTime             time.Duration
+	telemetry             *statsdTelemetry
+	telemetryClient       *telemetryClient
+	stop                  chan struct{}
+	wg                    sync.WaitGroup
+	workers               []*worker
+	closerLock            sync.Mutex
+	workersMode           receivingMode
+	aggregatorMode        receivingMode
+	agg                   *aggregator
+	aggExtended           *aggregator
+	options               []Option
+	addrOption            string
+	isClosed              bool
+	errorOnBlockedChannel bool
+	errorHandler          ErrorHandler
 }
 
 // statsdTelemetry contains telemetry metrics about the client
@@ -301,14 +326,19 @@ func resolveAddr(addr string) string {
 		return ""
 	}
 
-	if !strings.HasPrefix(addr, WindowsPipeAddressPrefix) && !strings.HasPrefix(addr, UnixAddressPrefix) {
-		if !strings.Contains(addr, ":") {
-			if envPort != "" {
-				addr = fmt.Sprintf("%s:%s", addr, envPort)
-			} else {
-				addr = fmt.Sprintf("%s:%s", addr, defaultUDPPort)
-			}
+	for _, prefix := range AddressPrefixes {
+		if strings.HasPrefix(addr, prefix) {
+			return addr
 		}
+	}
+	// TODO: How does this work for IPv6?
+	if strings.Contains(addr, ":") {
+		return addr
+	}
+	if envPort != "" {
+		addr = fmt.Sprintf("%s:%s", addr, envPort)
+	} else {
+		addr = fmt.Sprintf("%s:%s", addr, defaultUDPPort)
 	}
 	return addr
 }
@@ -338,7 +368,7 @@ func parseAgentURL(agentURL string) string {
 	return ""
 }
 
-func createWriter(addr string, writeTimeout time.Duration) (io.WriteCloser, string, error) {
+func createWriter(addr string, writeTimeout time.Duration, connectTimeout time.Duration) (Transport, string, error) {
 	addr = resolveAddr(addr)
 	if addr == "" {
 		return nil, "", errors.New("No address passed and autodetection from environment failed")
@@ -349,7 +379,13 @@ func createWriter(addr string, writeTimeout time.Duration) (io.WriteCloser, stri
 		w, err := newWindowsPipeWriter(addr, writeTimeout)
 		return w, writerWindowsPipe, err
 	case strings.HasPrefix(addr, UnixAddressPrefix):
-		w, err := newUDSWriter(addr[len(UnixAddressPrefix):], writeTimeout)
+		w, err := newUDSWriter(addr[len(UnixAddressPrefix):], writeTimeout, connectTimeout, "")
+		return w, writerNameUDS, err
+	case strings.HasPrefix(addr, UnixAddressDatagramPrefix):
+		w, err := newUDSWriter(addr[len(UnixAddressDatagramPrefix):], writeTimeout, connectTimeout, "unixgram")
+		return w, writerNameUDS, err
+	case strings.HasPrefix(addr, UnixAddressStreamPrefix):
+		w, err := newUDSWriter(addr[len(UnixAddressStreamPrefix):], writeTimeout, connectTimeout, "unix")
 		return w, writerNameUDS, err
 	default:
 		w, err := newUDPWriter(addr, writeTimeout)
@@ -365,7 +401,7 @@ func New(addr string, options ...Option) (*Client, error) {
 		return nil, err
 	}
 
-	w, writerType, err := createWriter(addr, o.writeTimeout)
+	w, writerType, err := createWriter(addr, o.writeTimeout, o.connectTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +414,14 @@ func New(addr string, options ...Option) (*Client, error) {
 	return client, err
 }
 
+type customWriter struct {
+	io.WriteCloser
+}
+
+func (w *customWriter) GetTransportName() string {
+	return writerNameCustom
+}
+
 // NewWithWriter creates a new Client with given writer. Writer is a
 // io.WriteCloser
 func NewWithWriter(w io.WriteCloser, options ...Option) (*Client, error) {
@@ -385,7 +429,7 @@ func NewWithWriter(w io.WriteCloser, options ...Option) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newWithWriter(w, o, "custom")
+	return newWithWriter(&customWriter{w}, o, writerNameCustom)
 }
 
 // CloneWithExtraOptions create a new Client with extra options
@@ -401,11 +445,13 @@ func CloneWithExtraOptions(c *Client, options ...Option) (*Client, error) {
 	return New(c.addrOption, opt...)
 }
 
-func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, error) {
+func newWithWriter(w Transport, o *Options, writerName string) (*Client, error) {
 	c := Client{
-		namespace: o.namespace,
-		tags:      o.tags,
-		telemetry: &statsdTelemetry{},
+		namespace:             o.namespace,
+		tags:                  o.tags,
+		telemetry:             &statsdTelemetry{},
+		errorOnBlockedChannel: o.channelModeErrorsWhenFull,
+		errorHandler:          o.errorHandler,
 	}
 
 	hasEntityID := false
@@ -423,22 +469,24 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 		initContainerID(o.containerID, isOriginDetectionEnabled(o, hasEntityID))
 	}
 
+	isUDS := writerName == writerNameUDS
+
 	if o.maxBytesPerPayload == 0 {
-		if writerName == writerNameUDS {
+		if isUDS {
 			o.maxBytesPerPayload = DefaultMaxAgentPayloadSize
 		} else {
 			o.maxBytesPerPayload = OptimalUDPPayloadSize
 		}
 	}
 	if o.bufferPoolSize == 0 {
-		if writerName == writerNameUDS {
+		if isUDS {
 			o.bufferPoolSize = DefaultUDSBufferPoolSize
 		} else {
 			o.bufferPoolSize = DefaultUDPBufferPoolSize
 		}
 	}
 	if o.senderQueueSize == 0 {
-		if writerName == writerNameUDS {
+		if isUDS {
 			o.senderQueueSize = DefaultUDSBufferPoolSize
 		} else {
 			o.senderQueueSize = DefaultUDPBufferPoolSize
@@ -446,7 +494,7 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 	}
 
 	bufferPool := newBufferPool(o.bufferPoolSize, o.maxBytesPerPayload, o.maxMessagesPerPayload)
-	c.sender = newSender(w, o.senderQueueSize, bufferPool)
+	c.sender = newSender(w, o.senderQueueSize, bufferPool, o.errorHandler)
 	c.aggregatorMode = o.receiveMode
 
 	c.workersMode = o.receiveMode
@@ -458,8 +506,8 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 		c.workersMode = mutexMode
 	}
 
-	if o.aggregation || o.extendedAggregation {
-		c.agg = newAggregator(&c)
+	if o.aggregation || o.extendedAggregation || o.maxBufferedSamplesPerContext > 0 {
+		c.agg = newAggregator(&c, int64(o.maxBufferedSamplesPerContext))
 		c.agg.start(o.aggregationFlushInterval)
 
 		if o.extendedAggregation {
@@ -491,10 +539,10 @@ func newWithWriter(w io.WriteCloser, o *Options, writerName string) (*Client, er
 
 	if o.telemetry {
 		if o.telemetryAddr == "" {
-			c.telemetryClient = newTelemetryClient(&c, writerName, c.agg != nil)
+			c.telemetryClient = newTelemetryClient(&c, c.agg != nil)
 		} else {
 			var err error
-			c.telemetryClient, err = newTelemetryClientWithCustomAddr(&c, writerName, o.telemetryAddr, c.agg != nil, bufferPool, o.writeTimeout)
+			c.telemetryClient, err = newTelemetryClientWithCustomAddr(&c, o.telemetryAddr, c.agg != nil, bufferPool, o.writeTimeout, o.connectTimeout)
 			if err != nil {
 				return nil, err
 			}
@@ -567,6 +615,24 @@ func (c *Client) GetTelemetry() Telemetry {
 	return c.telemetryClient.getTelemetry()
 }
 
+// GetTransport return the name of the transport used.
+func (c *Client) GetTransport() string {
+	if c.sender == nil {
+		return ""
+	}
+	return c.sender.getTransportName()
+}
+
+type ErrorInputChannelFull struct {
+	Metric      metric
+	ChannelSize int
+	Msg         string
+}
+
+func (e ErrorInputChannelFull) Error() string {
+	return e.Msg
+}
+
 func (c *Client) send(m metric) error {
 	h := hashString32(m.name)
 	worker := c.workers[h%uint32(len(c.workers))]
@@ -576,6 +642,13 @@ func (c *Client) send(m metric) error {
 		case worker.inputMetrics <- m:
 		default:
 			atomic.AddUint64(&c.telemetry.totalDroppedOnReceive, 1)
+			err := &ErrorInputChannelFull{m, len(worker.inputMetrics), "Worker input channel full"}
+			if c.errorHandler != nil {
+				c.errorHandler(err)
+			}
+			if c.errorOnBlockedChannel {
+				return err
+			}
 		}
 		return nil
 	}
@@ -594,10 +667,18 @@ func (c *Client) sendBlocking(m metric) error {
 
 func (c *Client) sendToAggregator(mType metricType, name string, value float64, tags []string, rate float64, f bufferedMetricSampleFunc) error {
 	if c.aggregatorMode == channelMode {
+		m := metric{metricType: mType, name: name, fvalue: value, tags: tags, rate: rate}
 		select {
-		case c.aggExtended.inputMetrics <- metric{metricType: mType, name: name, fvalue: value, tags: tags, rate: rate}:
+		case c.aggExtended.inputMetrics <- m:
 		default:
 			atomic.AddUint64(&c.telemetry.totalDroppedOnReceive, 1)
+			err := &ErrorInputChannelFull{m, len(c.aggExtended.inputMetrics), "Aggregator input channel full"}
+			if c.errorHandler != nil {
+				c.errorHandler(err)
+			}
+			if c.errorOnBlockedChannel {
+				return err
+			}
 		}
 		return nil
 	}
