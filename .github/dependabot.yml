@@ -1,18 +1,30 @@
 version: 2
 updates:
-- package-ecosystem: docker
-  directory: /images/dnsmasq
-  schedule:
-    interval: weekly
-- package-ecosystem: docker
-  directory: /
-  schedule:
-    interval: weekly
-- package-ecosystem: gomod
-  directory: /
-  schedule:
-    interval: weekly
-  groups:
-    gomod-dependencies:
-      patterns:
-      - '*'
+  - package-ecosystem: "docker"
+    directory: "/images/dnsmasq"
+    schedule:
+      interval: "weekly"
+    labels:
+      - docker
+      - dependencies
+      - ok-to-test
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - docker
+      - dependencies
+      - ok-to-test
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      k8s.io: # Group k8s.io golang dependencies updates
+        patterns:
+          - "k8s.io/*"
+    labels:
+      - go
+      - dependencies
+      - ok-to-test
