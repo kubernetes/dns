@@ -14,6 +14,7 @@ limitations under the License.
 package app
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -52,6 +53,7 @@ type ConfigParams struct {
 	HealthPort           string        // port for the healthcheck
 	SetupIptables        bool
 	SkipTeardown         bool // Indicates whether the iptables rules and interface should be torn down
+	ReloadWithSignal     bool // Indicates config reload should be triggered with SIGUSR1, rather than expecting CoreDNS's reload plugin
 }
 
 type iptablesRule struct {
@@ -69,6 +71,7 @@ type CacheApp struct {
 	kubednsConfig *options.KubeDNSConfig
 	exitChan      chan struct{} // Channel to terminate background goroutines
 	clusterDNSIP  net.IP
+	selfProcess   *os.Process
 }
 
 func isLockedErr(err error) bool {
@@ -277,6 +280,13 @@ func (c *CacheApp) RunApp() {
 // NewCacheApp returns a new instance of CacheApp by applying the specified config params.
 func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
 	c := &CacheApp{params: params, kubednsConfig: options.NewKubeDNSConfig()}
+	if params.ReloadWithSignal {
+		var err error
+		c.selfProcess, err = os.FindProcess(os.Getpid())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get process handle on self: %w", err)
+		}
+	}
 	c.clusterDNSIP = net.ParseIP(os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
 	if c.clusterDNSIP == nil {
 		clog.Warningf("Unable to lookup IP address of Upstream service %s, env %s `%s`", params.UpstreamSvcName, toSvcEnv(params.UpstreamSvcName), os.ExpandEnv(toSvcEnv(params.UpstreamSvcName)))
