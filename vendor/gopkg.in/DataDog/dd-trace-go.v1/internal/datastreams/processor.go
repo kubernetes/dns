@@ -23,16 +23,17 @@ import (
 	"github.com/DataDog/sketches-go/ddsketch"
 	"github.com/DataDog/sketches-go/ddsketch/mapping"
 	"github.com/DataDog/sketches-go/ddsketch/store"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	bucketDuration            = time.Second * 10
-	loadAgentFeaturesInterval = time.Second * 30
-	defaultServiceName        = "unnamed-go-service"
+	bucketDuration     = time.Second * 10
+	defaultServiceName = "unnamed-go-service"
 )
 
-var sketchMapping, _ = mapping.NewLogarithmicMapping(0.01)
+// use the same gamma and index offset as the Datadog backend, to avoid doing any conversions in
+// the backend that would lead to a loss of precision
+var sketchMapping, _ = mapping.NewLogarithmicMappingWithGamma(1.015625, 1.8761281912861705)
 
 type statsPoint struct {
 	edgeTags       []string
@@ -42,6 +43,7 @@ type statsPoint struct {
 	pathwayLatency int64
 	edgeLatency    int64
 	payloadSize    int64
+	serviceName    string
 }
 
 type statsGroup struct {
@@ -95,7 +97,6 @@ func (b bucket) export(timestampType TimestampType) StatsBucket {
 		stats = append(stats, StatsPoint{
 			PathwayLatency: pathwayLatency,
 			EdgeLatency:    edgeLatency,
-			Service:        s.service,
 			EdgeTags:       s.edgeTags,
 			Hash:           s.hash,
 			ParentHash:     s.parentHash,
@@ -171,12 +172,17 @@ type kafkaOffset struct {
 	timestamp  int64
 }
 
+type bucketKey struct {
+	serviceName string
+	btime       int64
+}
+
 type Processor struct {
 	in                   *fastQueue
 	hashCache            *hashCache
 	inKafka              chan kafkaOffset
-	tsTypeCurrentBuckets map[int64]bucket
-	tsTypeOriginBuckets  map[int64]bucket
+	tsTypeCurrentBuckets map[bucketKey]bucket
+	tsTypeOriginBuckets  map[bucketKey]bucket
 	wg                   sync.WaitGroup
 	stopped              uint64
 	stop                 chan struct{} // closing this channel triggers shutdown
@@ -189,9 +195,7 @@ type Processor struct {
 	service              string
 	version              string
 	// used for tests
-	timeSource                  func() time.Time
-	disableStatsFlushing        uint32
-	getAgentSupportsDataStreams func() bool
+	timeSource func() time.Time
 }
 
 func (p *Processor) time() time.Time {
@@ -201,25 +205,23 @@ func (p *Processor) time() time.Time {
 	return time.Now()
 }
 
-func NewProcessor(statsd internal.StatsdClient, env, service, version string, agentURL *url.URL, httpClient *http.Client, getAgentSupportsDataStreams func() bool) *Processor {
+func NewProcessor(statsd internal.StatsdClient, env, service, version string, agentURL *url.URL, httpClient *http.Client) *Processor {
 	if service == "" {
 		service = defaultServiceName
 	}
 	p := &Processor{
-		tsTypeCurrentBuckets:        make(map[int64]bucket),
-		tsTypeOriginBuckets:         make(map[int64]bucket),
-		hashCache:                   newHashCache(),
-		in:                          newFastQueue(),
-		stopped:                     1,
-		statsd:                      statsd,
-		env:                         env,
-		service:                     service,
-		version:                     version,
-		transport:                   newHTTPTransport(agentURL, httpClient),
-		timeSource:                  time.Now,
-		getAgentSupportsDataStreams: getAgentSupportsDataStreams,
+		tsTypeCurrentBuckets: make(map[bucketKey]bucket),
+		tsTypeOriginBuckets:  make(map[bucketKey]bucket),
+		hashCache:            newHashCache(),
+		in:                   newFastQueue(),
+		stopped:              1,
+		statsd:               statsd,
+		env:                  env,
+		service:              service,
+		version:              version,
+		transport:            newHTTPTransport(agentURL, httpClient),
+		timeSource:           time.Now,
 	}
-	p.updateAgentSupportsDataStreams(getAgentSupportsDataStreams())
 	return p
 }
 
@@ -227,16 +229,17 @@ func NewProcessor(statsd internal.StatsdClient, env, service, version string, ag
 // It gives us the start time of the time bucket in which such timestamp falls.
 func alignTs(ts, bucketSize int64) int64 { return ts - ts%bucketSize }
 
-func (p *Processor) getBucket(btime int64, buckets map[int64]bucket) bucket {
-	b, ok := buckets[btime]
+func (p *Processor) getBucket(btime int64, service string, buckets map[bucketKey]bucket) bucket {
+	k := bucketKey{serviceName: service, btime: btime}
+	b, ok := buckets[k]
 	if !ok {
 		b = newBucket(uint64(btime), uint64(bucketDuration.Nanoseconds()))
-		buckets[btime] = b
+		buckets[k] = b
 	}
 	return b
 }
-func (p *Processor) addToBuckets(point statsPoint, btime int64, buckets map[int64]bucket) {
-	b := p.getBucket(btime, buckets)
+func (p *Processor) addToBuckets(point statsPoint, btime int64, buckets map[bucketKey]bucket) {
+	b := p.getBucket(btime, point.serviceName, buckets)
 	group, ok := b.points[point.hash]
 	if !ok {
 		group = statsGroup{
@@ -270,7 +273,7 @@ func (p *Processor) add(point statsPoint) {
 
 func (p *Processor) addKafkaOffset(o kafkaOffset) {
 	btime := alignTs(o.timestamp, bucketDuration.Nanoseconds())
-	b := p.getBucket(btime, p.tsTypeCurrentBuckets)
+	b := p.getBucket(btime, p.service, p.tsTypeCurrentBuckets)
 	if o.offsetType == produceOffset {
 		b.latestProduceOffsets[partitionKey{
 			partition: o.partition,
@@ -343,19 +346,17 @@ func (p *Processor) Start() {
 	}
 	p.stop = make(chan struct{})
 	p.flushRequest = make(chan chan<- struct{})
-	p.wg.Add(2)
-	go p.reportStats()
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.reportStats()
+	}()
+	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
 		tick := time.NewTicker(bucketDuration)
 		defer tick.Stop()
 		p.run(tick.C)
-	}()
-	go func() {
-		defer p.wg.Done()
-		tick := time.NewTicker(loadAgentFeaturesInterval)
-		defer tick.Stop()
-		p.runLoadAgentFeatures(tick.C)
 	}()
 }
 
@@ -381,7 +382,14 @@ func (p *Processor) Stop() {
 }
 
 func (p *Processor) reportStats() {
-	for range time.NewTicker(time.Second * 10).C {
+	tick := time.NewTicker(time.Second * 10)
+	defer tick.Stop()
+	for {
+		select {
+		case <-p.stop:
+			return
+		case <-tick.C:
+		}
 		p.statsd.Count("datadog.datastreams.processor.payloads_in", atomic.SwapInt64(&p.stats.payloadsIn, 0), nil, 1)
 		p.statsd.Count("datadog.datastreams.processor.flushed_payloads", atomic.SwapInt64(&p.stats.flushedPayloads, 0), nil, 1)
 		p.statsd.Count("datadog.datastreams.processor.flushed_buckets", atomic.SwapInt64(&p.stats.flushedBuckets, 0), nil, 1)
@@ -390,44 +398,54 @@ func (p *Processor) reportStats() {
 	}
 }
 
-func (p *Processor) flushBucket(buckets map[int64]bucket, bucketStart int64, timestampType TimestampType) StatsBucket {
-	bucket := buckets[bucketStart]
-	delete(buckets, bucketStart)
+func (p *Processor) flushBucket(buckets map[bucketKey]bucket, bucketKey bucketKey, timestampType TimestampType) StatsBucket {
+	bucket := buckets[bucketKey]
+	delete(buckets, bucketKey)
 	return bucket.export(timestampType)
 }
 
-func (p *Processor) flush(now time.Time) StatsPayload {
+func (p *Processor) flush(now time.Time) map[string]StatsPayload {
 	nowNano := now.UnixNano()
-	sp := StatsPayload{
-		Service:       p.service,
-		Version:       p.version,
-		Env:           p.env,
-		Lang:          "go",
-		TracerVersion: version.Tag,
-		Stats:         make([]StatsBucket, 0, len(p.tsTypeCurrentBuckets)+len(p.tsTypeOriginBuckets)),
+	payloads := make(map[string]StatsPayload)
+	addBucket := func(service string, bucket StatsBucket) {
+		payload, ok := payloads[service]
+		if !ok {
+			payload = StatsPayload{
+				Service:       service,
+				Version:       p.version,
+				Env:           p.env,
+				Lang:          "go",
+				TracerVersion: version.Tag,
+				Stats:         make([]StatsBucket, 0, 1),
+			}
+		}
+		payload.Stats = append(payload.Stats, bucket)
+		payloads[service] = payload
 	}
-	for ts := range p.tsTypeCurrentBuckets {
-		if ts > nowNano-bucketDuration.Nanoseconds() {
+	for bucketKey := range p.tsTypeCurrentBuckets {
+		if bucketKey.btime > nowNano-bucketDuration.Nanoseconds() {
 			// do not flush the bucket at the current time
 			continue
 		}
-		sp.Stats = append(sp.Stats, p.flushBucket(p.tsTypeCurrentBuckets, ts, TimestampTypeCurrent))
+		addBucket(bucketKey.serviceName, p.flushBucket(p.tsTypeCurrentBuckets, bucketKey, TimestampTypeCurrent))
 	}
-	for ts := range p.tsTypeOriginBuckets {
-		if ts > nowNano-bucketDuration.Nanoseconds() {
+	for bucketKey := range p.tsTypeOriginBuckets {
+		if bucketKey.btime > nowNano-bucketDuration.Nanoseconds() {
 			// do not flush the bucket at the current time
 			continue
 		}
-		sp.Stats = append(sp.Stats, p.flushBucket(p.tsTypeOriginBuckets, ts, TimestampTypeOrigin))
+		addBucket(bucketKey.serviceName, p.flushBucket(p.tsTypeOriginBuckets, bucketKey, TimestampTypeOrigin))
 	}
-	return sp
+	return payloads
 }
 
-func (p *Processor) sendToAgent(payload StatsPayload) {
-	atomic.AddInt64(&p.stats.flushedPayloads, 1)
-	atomic.AddInt64(&p.stats.flushedBuckets, int64(len(payload.Stats)))
-	if err := p.transport.sendPipelineStats(&payload); err != nil {
-		atomic.AddInt64(&p.stats.flushErrors, 1)
+func (p *Processor) sendToAgent(payloads map[string]StatsPayload) {
+	for _, payload := range payloads {
+		atomic.AddInt64(&p.stats.flushedPayloads, 1)
+		atomic.AddInt64(&p.stats.flushedBuckets, int64(len(payload.Stats)))
+		if err := p.transport.sendPipelineStats(&payload); err != nil {
+			atomic.AddInt64(&p.stats.flushErrors, 1)
+		}
 	}
 }
 
@@ -446,12 +464,17 @@ func (p *Processor) SetCheckpointWithParams(ctx context.Context, params options.
 		edgeStart = parent.EdgeStart()
 		parentHash = parent.GetHash()
 	}
+	service := p.service
+	if params.ServiceOverride != "" {
+		service = params.ServiceOverride
+	}
 	child := Pathway{
-		hash:         p.hashCache.get(p.service, p.env, edgeTags, parentHash),
+		hash:         p.hashCache.get(service, p.env, edgeTags, parentHash),
 		pathwayStart: pathwayStart,
 		edgeStart:    now,
 	}
 	dropped := p.in.push(&processorInput{typ: pointTypeStats, point: statsPoint{
+		serviceName:    service,
 		edgeTags:       edgeTags,
 		parentHash:     parentHash,
 		hash:           child.hash,
@@ -504,30 +527,5 @@ func (p *Processor) TrackKafkaHighWatermarkOffset(_ string, topic string, partit
 	}})
 	if dropped {
 		atomic.AddInt64(&p.stats.dropped, 1)
-	}
-}
-
-func (p *Processor) runLoadAgentFeatures(tick <-chan time.Time) {
-	for {
-		select {
-		case <-tick:
-			p.updateAgentSupportsDataStreams(p.getAgentSupportsDataStreams())
-		case <-p.stop:
-			return
-		}
-	}
-}
-
-func (p *Processor) updateAgentSupportsDataStreams(agentSupportsDataStreams bool) {
-	var disableStatsFlushing uint32
-	if !agentSupportsDataStreams {
-		disableStatsFlushing = 1
-	}
-	if atomic.SwapUint32(&p.disableStatsFlushing, disableStatsFlushing) != disableStatsFlushing {
-		if agentSupportsDataStreams {
-			log.Info("Detected agent upgrade. Turning on Data Streams Monitoring.")
-		} else {
-			log.Warn("Turning off Data Streams Monitoring. Upgrade your agent to 7.34+")
-		}
 	}
 }

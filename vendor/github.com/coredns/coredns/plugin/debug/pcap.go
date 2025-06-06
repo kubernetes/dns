@@ -57,7 +57,7 @@ func hexdump(data []byte) []byte {
 	b := new(bytes.Buffer)
 
 	newline := ""
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		if i%16 == 0 {
 			fmt.Fprintf(b, "%s%s%06x", newline, prefix, i)
 			newline = "\n"

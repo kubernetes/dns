@@ -43,11 +43,14 @@ type Forward struct {
 	from    string
 	ignored []string
 
-	tlsConfig     *tls.Config
-	tlsServerName string
-	maxfails      uint32
-	expire        time.Duration
-	maxConcurrent int64
+	nextAlternateRcodes []int
+
+	tlsConfig                  *tls.Config
+	tlsServerName              string
+	maxfails                   uint32
+	expire                     time.Duration
+	maxConcurrent              int64
+	failfastUnhealthyUpstreams bool
 
 	opts proxy.Options // also here for testing
 
@@ -70,6 +73,11 @@ func New() *Forward {
 func (f *Forward) SetProxy(p *proxy.Proxy) {
 	f.proxies = append(f.proxies, p)
 	p.Start(f.hcInterval)
+}
+
+// SetProxyOptions setup proxy options
+func (f *Forward) SetProxyOptions(opts proxy.Options) {
+	f.opts = opts
 }
 
 // SetTapPlugin appends one or more dnstap plugins to the tap plugin list.
@@ -124,12 +132,16 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			if fails < len(f.proxies) {
 				continue
 			}
-			// All upstream proxies are dead, assume healthcheck is completely broken and randomly
+
+			healthcheckBrokenCount.Add(1)
+			// All upstreams are dead, return servfail if all upstreams are down
+			if f.failfastUnhealthyUpstreams {
+				break
+			}
+			// assume healthcheck is completely broken and randomly
 			// select an upstream to connect to.
 			r := new(random)
 			proxy = r.List(f.proxies)[0]
-
-			healthcheckBrokenCount.Add(1)
 		}
 
 		if span != nil {
@@ -192,6 +204,15 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			formerr.SetRcode(state.Req, dns.RcodeFormatError)
 			w.WriteMsg(formerr)
 			return 0, nil
+		}
+
+		// Check if we have an alternate Rcode defined, check if we match on the code
+		for _, alternateRcode := range f.nextAlternateRcodes {
+			if alternateRcode == ret.Rcode && f.Next != nil { // In case we do not have a Next handler, just continue normally
+				if _, ok := f.Next.(*Forward); ok { // Only continue if the next forwarder is also a Forworder
+					return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
+				}
+			}
 		}
 
 		w.WriteMsg(ret)

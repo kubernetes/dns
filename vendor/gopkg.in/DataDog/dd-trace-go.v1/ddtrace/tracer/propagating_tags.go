@@ -5,6 +5,11 @@
 
 package tracer
 
+import (
+	"gopkg.in/DataDog/dd-trace-go.v1/internal"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+)
+
 func (t *trace) hasPropagatingTag(k string) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -23,6 +28,27 @@ func (t *trace) setPropagatingTag(key, value string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.setPropagatingTagLocked(key, value)
+}
+
+func (t *trace) setTraceSourcePropagatingTag(key string, value internal.TraceSource) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// If there is already a TraceSource value set in the trace
+	// we need to add the new value to the bitmask.
+	if source := t.propagatingTags[key]; source != "" {
+		tSource, err := internal.ParseTraceSource(source)
+		if err != nil {
+			log.Error("failed to parse trace source tag: %v", err)
+		}
+
+		tSource |= value
+
+		t.setPropagatingTagLocked(key, tSource.String())
+		return
+	}
+
+	t.setPropagatingTagLocked(key, value.String())
 }
 
 // setPropagatingTagLocked sets the key/value pair as a trace propagating tag.
@@ -44,7 +70,7 @@ func (t *trace) unsetPropagatingTag(key string) {
 // iteratePropagatingTags allows safe iteration through the propagating tags of a trace.
 // the trace must not be modified during this call, as it is locked for reading.
 //
-// f should return whether or not the iteration should continue.
+// f should return whether the iteration should continue.
 func (t *trace) iteratePropagatingTags(f func(k, v string) bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

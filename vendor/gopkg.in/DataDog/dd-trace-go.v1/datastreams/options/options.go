@@ -6,5 +6,6 @@
 package options
 
 type CheckpointParams struct {
-	PayloadSize int64
+	PayloadSize     int64
+	ServiceOverride string
 }

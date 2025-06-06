@@ -1,0 +1,7 @@
+[
+    {
+        "namespace": "",
+        "type": "gauge",
+        "name": "orchestrion.enabled"
+    }
+]

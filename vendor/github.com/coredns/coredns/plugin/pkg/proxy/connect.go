@@ -18,6 +18,13 @@ import (
 	"github.com/miekg/dns"
 )
 
+const (
+	ErrTransportStopped              = "proxy: transport stopped"
+	ErrTransportStoppedDuringDial    = "proxy: transport stopped during dial"
+	ErrTransportStoppedRetClosed     = "proxy: transport stopped, ret channel closed"
+	ErrTransportStoppedDuringRetWait = "proxy: transport stopped during ret wait"
+)
+
 // limitTimeout is a utility function to auto-tune timeout values
 // average observed time is moved towards the last observed delay moderated by a weight
 // next timeout to use will be the double of the computed average, limited by min and max frame.
@@ -52,32 +59,55 @@ func (t *Transport) Dial(proto string) (*persistConn, bool, error) {
 		proto = "tcp-tls"
 	}
 
-	t.dial <- proto
-	pc := <-t.ret
-
-	if pc != nil {
-		connCacheHitsCount.WithLabelValues(t.proxyName, t.addr, proto).Add(1)
-		return pc, true, nil
+	// Check if transport is stopped before attempting to dial
+	select {
+	case <-t.stop:
+		return nil, false, errors.New(ErrTransportStopped)
+	default:
 	}
-	connCacheMissesCount.WithLabelValues(t.proxyName, t.addr, proto).Add(1)
 
-	reqTime := time.Now()
-	timeout := t.dialTimeout()
-	if proto == "tcp-tls" {
-		conn, err := dns.DialTimeoutWithTLS("tcp", t.addr, t.tlsConfig, timeout)
+	// Use select to avoid blocking if connManager has stopped
+	select {
+	case t.dial <- proto:
+		// Successfully sent dial request
+	case <-t.stop:
+		return nil, false, errors.New(ErrTransportStoppedDuringDial)
+	}
+
+	// Receive response with stop awareness
+	select {
+	case pc, ok := <-t.ret:
+		if !ok {
+			// ret channel was closed by connManager during stop
+			return nil, false, errors.New(ErrTransportStoppedRetClosed)
+		}
+
+		if pc != nil {
+			connCacheHitsCount.WithLabelValues(t.proxyName, t.addr, proto).Add(1)
+			return pc, true, nil
+		}
+		connCacheMissesCount.WithLabelValues(t.proxyName, t.addr, proto).Add(1)
+
+		reqTime := time.Now()
+		timeout := t.dialTimeout()
+		if proto == "tcp-tls" {
+			conn, err := dns.DialTimeoutWithTLS("tcp", t.addr, t.tlsConfig, timeout)
+			t.updateDialTimeout(time.Since(reqTime))
+			return &persistConn{c: conn}, false, err
+		}
+		conn, err := dns.DialTimeout(proto, t.addr, timeout)
 		t.updateDialTimeout(time.Since(reqTime))
 		return &persistConn{c: conn}, false, err
+	case <-t.stop:
+		return nil, false, errors.New(ErrTransportStoppedDuringRetWait)
 	}
-	conn, err := dns.DialTimeout(proto, t.addr, timeout)
-	t.updateDialTimeout(time.Since(reqTime))
-	return &persistConn{c: conn}, false, err
 }
 
 // Connect selects an upstream, sends the request and waits for a response.
 func (p *Proxy) Connect(ctx context.Context, state request.Request, opts Options) (*dns.Msg, error) {
 	start := time.Now()
 
-	proto := ""
+	var proto string
 	switch {
 	case opts.ForceTCP: // TCP flag has precedence over UDP flag
 		proto = "tcp"

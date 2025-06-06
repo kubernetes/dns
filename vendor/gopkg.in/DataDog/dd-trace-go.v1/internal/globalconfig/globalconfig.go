@@ -9,10 +9,10 @@ package globalconfig
 
 import (
 	"math"
+	"os"
 	"sync"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/internal"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 
 	"github.com/google/uuid"
 )
@@ -29,7 +29,8 @@ type config struct {
 	serviceName   string
 	runtimeID     string
 	headersAsTags *internal.LockMap
-	statsCarrier  *internal.StatsCarrier
+	dogstatsdAddr string
+	statsTags     []string
 }
 
 // AnalyticsRate returns the sampling rate at which events should be marked. It uses
@@ -60,6 +61,41 @@ func SetServiceName(name string) {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	cfg.serviceName = name
+}
+
+// DogstatsdAddr returns the destination for tracer and contrib statsd clients
+func DogstatsdAddr() string {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	return cfg.dogstatsdAddr
+}
+
+// SetDogstatsdAddr sets the destination for statsd clients to be used by tracer and contrib packages
+func SetDogstatsdAddr(addr string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	cfg.dogstatsdAddr = addr
+}
+
+// StatsTags returns a list of tags that apply to statsd payloads for both tracer and contribs
+func StatsTags() []string {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	// Copy the slice before returning it, so that callers cannot pollute the underlying array
+	tags := make([]string, len(cfg.statsTags))
+	copy(tags, cfg.statsTags)
+	return tags
+}
+
+// SetStatsTags configures the list of tags that should be applied to contribs' statsd.Client as global tags
+// It should only be called by the tracer package
+func SetStatsTags(tags []string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	// Copy the slice before setting it, so that any changes to the slice provided to SetStatsTags does not pollute the underlying array of statsTags
+	statsTags := make([]string, len(tags))
+	copy(statsTags, tags)
+	cfg.statsTags = statsTags
 }
 
 // RuntimeID returns this process's unique runtime id.
@@ -96,25 +132,17 @@ func ClearHeaderTags() {
 	cfg.headersAsTags.Clear()
 }
 
-// SetStatsCarrier sets the provided StatsCarrier onto the globalconfig
-func SetStatsCarrier(sc *internal.StatsCarrier) {
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
-	cfg.statsCarrier = sc
+// InstrumentationInstallID returns the install ID as described in DD_INSTRUMENTATION_INSTALL_ID
+func InstrumentationInstallID() string {
+	return os.Getenv("DD_INSTRUMENTATION_INSTALL_ID")
 }
 
-// PushStat pushes the stat onto the StatsCarrier's stats channel, via the Add method
-func PushStat(stat internal.Stat) {
-	cfg.mu.RLock()
-	defer cfg.mu.RUnlock()
-	if !StatsCarrier() {
-		log.Debug("No stats carrier found; dropping stat %v", stat.Name())
-		return
-	}
-	cfg.statsCarrier.Add(stat)
+// InstrumentationInstallType returns the install type as described in DD_INSTRUMENTATION_INSTALL_TYPE
+func InstrumentationInstallType() string {
+	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TYPE")
 }
 
-// StatsCarrier returns true if there is a StatsCarrier on the globalconfig, else false
-func StatsCarrier() bool {
-	return cfg.statsCarrier != nil
+// InstrumentationInstallTime returns the install time as described in DD_INSTRUMENTATION_INSTALL_TIME
+func InstrumentationInstallTime() string {
+	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TIME")
 }

@@ -138,7 +138,7 @@ func (h *Hostsfile) readHosts() {
 	h.mtime = stat.ModTime()
 	h.size = stat.Size()
 
-	hostsEntries.WithLabelValues().Set(float64(h.inline.Len() + h.hmap.Len()))
+	hostsEntries.WithLabelValues(h.path).Set(float64(h.inline.Len() + h.hmap.Len()))
 	hostsReloadTime.Set(float64(stat.ModTime().UnixNano()) / 1e9)
 	h.Unlock()
 }
@@ -171,7 +171,7 @@ func (h *Hostsfile) parse(r io.Reader) *Map {
 			continue
 		}
 
-		family := 0
+		var family int
 		if addr.To4() != nil {
 			family = 1
 		} else {

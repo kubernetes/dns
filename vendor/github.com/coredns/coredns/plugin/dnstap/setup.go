@@ -3,6 +3,7 @@ package dnstap
 import (
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/coredns/caddy"
@@ -20,8 +21,11 @@ func parseConfig(c *caddy.Controller) ([]*Dnstap, error) {
 	dnstaps := []*Dnstap{}
 
 	for c.Next() { // directive name
-		d := Dnstap{}
-		endpoint := ""
+		d := Dnstap{
+			MultipleTcpWriteBuf: 1,
+			MultipleQueue:       1,
+		}
+
 		d.repl = replacer.New()
 
 		args := c.RemainingArgs()
@@ -30,7 +34,15 @@ func parseConfig(c *caddy.Controller) ([]*Dnstap, error) {
 			return nil, c.ArgErr()
 		}
 
-		endpoint = args[0]
+		endpoint := args[0]
+
+		if len(args) >= 3 {
+			d.MultipleTcpWriteBuf, _ = strconv.Atoi(args[2])
+		}
+
+		if len(args) >= 4 {
+			d.MultipleQueue, _ = strconv.Atoi(args[3])
+		}
 
 		var dio *dio
 		if strings.HasPrefix(endpoint, "tls://") {
@@ -39,23 +51,23 @@ func parseConfig(c *caddy.Controller) ([]*Dnstap, error) {
 			if err != nil {
 				return nil, c.ArgErr()
 			}
-			dio = newIO("tls", endpointURL.Host)
-			d = Dnstap{io: dio}
+			dio = newIO("tls", endpointURL.Host, d.MultipleQueue, d.MultipleTcpWriteBuf)
+			d.io = dio
 		} else if strings.HasPrefix(endpoint, "tcp://") {
 			// remote network endpoint
 			endpointURL, err := url.Parse(endpoint)
 			if err != nil {
 				return nil, c.ArgErr()
 			}
-			dio = newIO("tcp", endpointURL.Host)
-			d = Dnstap{io: dio}
+			dio = newIO("tcp", endpointURL.Host, d.MultipleQueue, d.MultipleTcpWriteBuf)
+			d.io = dio
 		} else {
 			endpoint = strings.TrimPrefix(endpoint, "unix://")
-			dio = newIO("unix", endpoint)
-			d = Dnstap{io: dio}
+			dio = newIO("unix", endpoint, d.MultipleQueue, d.MultipleTcpWriteBuf)
+			d.io = dio
 		}
 
-		d.IncludeRawMessage = len(args) == 2 && args[1] == "full"
+		d.IncludeRawMessage = len(args) >= 2 && args[1] == "full"
 
 		hostname, _ := os.Hostname()
 		d.Identity = []byte(hostname)

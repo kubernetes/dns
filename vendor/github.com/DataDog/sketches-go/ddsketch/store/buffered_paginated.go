@@ -177,7 +177,7 @@ func (s *BufferedPaginatedStore) compact() {
 }
 
 func (s *BufferedPaginatedStore) sortBuffer() {
-	sort.Slice(s.buffer, func(i, j int) bool { return s.buffer[i] < s.buffer[j] })
+	sort.Ints(s.buffer)
 }
 
 func (s *BufferedPaginatedStore) Add(index int) {
@@ -553,6 +553,20 @@ func (s *BufferedPaginatedStore) ToProto() *sketchpb.Store {
 	return &sketchpb.Store{
 		BinCounts: binCounts,
 	}
+}
+
+func (s *BufferedPaginatedStore) EncodeProto(builder *sketchpb.StoreBuilder) {
+	if s.IsEmpty() {
+		return
+	}
+
+	s.ForEach(func(index int, count float64) (stop bool) {
+		builder.AddBinCounts(func(w *sketchpb.Store_BinCountsEntryBuilder) {
+			w.SetKey(int32(index))
+			w.SetValue(count)
+		})
+		return false
+	})
 }
 
 func (s *BufferedPaginatedStore) Reweight(w float64) error {
