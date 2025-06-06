@@ -1,590 +1,360 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2022 Datadog, Inc.
+// Copyright 2024 Datadog, Inc.
 
-// Package telemetry implements a client for sending telemetry information to
-// Datadog regarding usage of an APM library such as tracing or profiling.
 package telemetry
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net"
-	"net/http"
+	"errors"
 	"os"
-	"runtime"
-	"runtime/debug"
-	"strings"
+	"strconv"
 	"sync"
-	"time"
 
-	"gopkg.in/DataDog/dd-trace-go.v1/internal"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig"
-	logger "gopkg.in/DataDog/dd-trace-go.v1/internal/log"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal/osinfo"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/telemetry/internal"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/telemetry/internal/mapper"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/telemetry/internal/transport"
 )
 
-// Client buffers and sends telemetry messages to Datadog (possibly through an
-// agent).
-type Client interface {
-	ProductChange(namespace Namespace, enabled bool, configuration []Configuration)
-	ConfigChange(configuration []Configuration)
-	Record(namespace Namespace, metric MetricKind, name string, value float64, tags []string, common bool)
-	Count(namespace Namespace, name string, value float64, tags []string, common bool)
-	ApplyOps(opts ...Option)
-	Stop()
+// NewClient creates a new telemetry client with the given service, environment, and version and config.
+func NewClient(service, env, version string, config ClientConfig) (Client, error) {
+	if service == "" {
+		return nil, errors.New("service name must not be empty")
+	}
+
+	config = defaultConfig(config)
+	if err := config.validateConfig(); err != nil {
+		return nil, err
+	}
+
+	return newClient(internal.TracerConfig{Service: service, Env: env, Version: version}, config)
 }
 
-var (
-	// GlobalClient acts as a global telemetry client that the
-	// tracer, profiler, and appsec products will use
-	GlobalClient Client
-	globalClient sync.Mutex
+func newClient(tracerConfig internal.TracerConfig, config ClientConfig) (*client, error) {
+	writerConfig, err := newWriterConfig(config, tracerConfig)
+	if err != nil {
+		return nil, err
+	}
 
-	// integrations tracks the the integrations enabled
-	contribPackages []Integration
-	contrib         sync.Mutex
+	writer, err := internal.NewWriter(writerConfig)
+	if err != nil {
+		return nil, err
+	}
 
-	// copied from dd-trace-go/profiler
-	defaultHTTPClient = &http.Client{
-		// We copy the transport to avoid using the default one, as it might be
-		// augmented with tracing and we don't want these calls to be recorded.
-		// See https://golang.org/pkg/net/http/#DefaultTransport .
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+	client := &client{
+		tracerConfig: tracerConfig,
+		writer:       writer,
+		clientConfig: config,
+		flushMapper:  mapper.NewDefaultMapper(config.HeartbeatInterval, config.ExtendedHeartbeatInterval),
+		payloadQueue: internal.NewRingQueue[transport.Payload](config.PayloadQueueSize),
+
+		dependencies: dependencies{
+			DependencyLoader: config.DependencyLoader,
 		},
-		Timeout: 5 * time.Second,
+		metrics: metrics{
+			skipAllowlist: config.Debug,
+		},
+		distributions: distributions{
+			skipAllowlist: config.Debug,
+			queueSize:     config.DistributionsSize,
+			pool:          internal.NewSyncPool(func() []float64 { return make([]float64, config.DistributionsSize.Min) }),
+		},
+		logger: logger{
+			maxDistinctLogs: config.MaxDistinctLogs,
+		},
 	}
-	hostname string
 
-	// protects agentlessURL, which may be changed for testing purposes
-	agentlessEndpointLock sync.RWMutex
-	// agentlessURL is the endpoint used to send telemetry in an agentless environment. It is
-	// also the default URL in case connecting to the agent URL fails.
-	agentlessURL = "https://instrumentation-telemetry-intake.datadoghq.com/api/v2/apmtelemetry"
+	client.dataSources = append(client.dataSources,
+		&client.integrations,
+		&client.products,
+		&client.configuration,
+		&client.dependencies,
+	)
 
-	defaultHeartbeatInterval = 60.0 // seconds
-
-	// LogPrefix specifies the prefix for all telemetry logging
-	LogPrefix = "Instrumentation telemetry: "
-)
-
-func init() {
-	h, err := os.Hostname()
-	if err == nil {
-		hostname = h
+	if config.LogsEnabled {
+		client.dataSources = append(client.dataSources, &client.logger)
 	}
-	GlobalClient = new(client)
+
+	if config.MetricsEnabled {
+		client.dataSources = append(client.dataSources, &client.metrics, &client.distributions)
+	}
+
+	client.flushTicker = internal.NewTicker(client.Flush, config.FlushInterval)
+
+	return client, nil
 }
 
-// client implements Client interface. Client.Start should be called before any other methods.
-//
-// Client is safe to use from multiple goroutines concurrently. The client will
-// send all telemetry requests in the background, in order to avoid blocking the
-// caller since telemetry should not disrupt an application. Metrics are
-// aggregated by the Client.
+// dataSources is where the data that will be flushed is coming from. I.e metrics, logs, configurations, etc.
+type dataSource interface {
+	Payload() transport.Payload
+}
+
 type client struct {
-	// URL for the Datadog agent or Datadog telemetry endpoint
-	URL string
-	// APIKey should be supplied if the endpoint is not a Datadog agent,
-	// i.e. you are sending telemetry directly to Datadog
-	APIKey string
-	// The interval for sending a heartbeat signal to the backend.
-	// Configurable with DD_TELEMETRY_HEARTBEAT_INTERVAL. Default 60s.
-	heartbeatInterval time.Duration
+	tracerConfig internal.TracerConfig
+	clientConfig ClientConfig
 
-	// e.g. "tracers", "profilers", "appsec"
-	Namespace Namespace
+	// Data sources
+	dataSources   []dataSource
+	integrations  integrations
+	products      products
+	configuration configuration
+	dependencies  dependencies
+	logger        logger
+	metrics       metrics
+	distributions distributions
 
-	// App-specific information
-	Service string
-	Env     string
-	Version string
+	// flushMapper is the transformer to use for the next flush on the gathered bodies on this tick
+	flushMapper   mapper.Mapper
+	flushMapperMu sync.Mutex
 
-	// Client will be used for telemetry uploads. This http.Client, if
-	// provided, should be the same as would be used for any other
-	// interaction with the Datadog agent, e.g. if the agent is accessed
-	// over UDS, or if the user provides their own http.Client to the
-	// profiler/tracer to access the agent over a proxy.
-	//
-	// If Client is nil, an http.Client with the same Transport settings as
-	// http.DefaultTransport and a 5 second timeout will be used.
-	Client *http.Client
+	// flushTicker is the ticker that triggers a call to client.Flush every flush interval
+	flushTicker *internal.Ticker
 
-	// mu guards all of the following fields
-	mu sync.Mutex
+	// writer is the writer to use to send the payloads to the backend or the agent
+	writer internal.Writer
 
-	// debug enables the debug flag for all requests, see
-	// https://dtdg.co/3bv2MMv.
-	// DD_INSTRUMENTATION_TELEMETRY_DEBUG configures this field.
-	debug bool
-	// started is true in between when Start() returns and the next call to
-	// Stop()
-	started bool
-	// seqID is a sequence number used to order telemetry messages by
-	// the back end.
-	seqID int64
-	// heartbeatT is used to schedule heartbeat messages
-	heartbeatT *time.Timer
-	// requests hold all messages which don't need to be immediately sent
-	requests []*Request
-	// metrics holds un-sent metrics that will be aggregated the next time
-	// metrics are sent
-	metrics    map[Namespace]map[string]*metric
-	newMetrics bool
+	// payloadQueue is used when we cannot flush previously built payload for multiple reasons.
+	payloadQueue *internal.RingQueue[transport.Payload]
 }
 
-func log(msg string, args ...interface{}) {
-	// Debug level so users aren't spammed with telemetry info.
-	logger.Debug(fmt.Sprintf(LogPrefix+msg, args...))
+func (c *client) Log(level LogLevel, text string, options ...LogOption) {
+	if !c.clientConfig.LogsEnabled {
+		return
+	}
+
+	c.logger.Add(level, text, options...)
 }
 
-// start registers that the app has begun running with the app-started event.
-// Must be called with c.mu locked.
-// start also configures the telemetry client based on the following telemetry
-// environment variables: DD_INSTRUMENTATION_TELEMETRY_ENABLED,
-// DD_TELEMETRY_HEARTBEAT_INTERVAL, DD_INSTRUMENTATION_TELEMETRY_DEBUG,
-// and DD_TELEMETRY_DEPENDENCY_COLLECTION_ENABLED.
-// TODO: implement passing in error information about tracer start
-func (c *client) start(configuration []Configuration, namespace Namespace) {
-	if Disabled() {
-		return
-	}
-	if c.started {
-		log("attempted to start telemetry client when client has already started - ignoring attempt")
-		return
-	}
-	// Don't start the telemetry client if there is some error configuring the client with fallback
-	// options, e.g. an API key was not found but agentless telemetry is expected.
-	if err := c.fallbackOps(); err != nil {
-		log(err.Error())
-		return
-	}
+func (c *client) MarkIntegrationAsLoaded(integration Integration) {
+	c.integrations.Add(integration)
+}
 
-	c.started = true
-	c.metrics = make(map[Namespace]map[string]*metric)
-	c.debug = internal.BoolEnv("DD_INSTRUMENTATION_TELEMETRY_DEBUG", false)
-
-	productInfo := Products{
-		AppSec: ProductDetails{
-			Version: version.Tag,
-			// if appsec is the one starting the telemetry client,
-			// then AppSec is enabled
-			Enabled: namespace == NamespaceAppSec,
-		},
-		Profiler: ProductDetails{
-			Version: version.Tag,
-			// if the profiler is the one starting the telemetry client,
-			// then profiling is enabled.
-			Enabled: namespace == NamespaceProfilers,
-		},
+func (c *client) Count(namespace Namespace, name string, tags []string) MetricHandle {
+	if !c.clientConfig.MetricsEnabled {
+		return noopMetricHandle{}
 	}
-	payload := &AppStarted{
-		Configuration: configuration,
-		Products:      productInfo,
-	}
-	appStarted := c.newRequest(RequestTypeAppStarted)
-	appStarted.Body.Payload = payload
-	c.scheduleSubmit(appStarted)
+	return c.metrics.LoadOrStore(namespace, transport.CountMetric, name, tags)
+}
 
-	if collectDependencies() {
-		var depPayload Dependencies
-		if deps, ok := debug.ReadBuildInfo(); ok {
-			for _, dep := range deps.Deps {
-				depPayload.Dependencies = append(depPayload.Dependencies,
-					Dependency{
-						Name:    dep.Path,
-						Version: strings.TrimPrefix(dep.Version, "v"),
-					},
-				)
-			}
+func (c *client) Rate(namespace Namespace, name string, tags []string) MetricHandle {
+	if !c.clientConfig.MetricsEnabled {
+		return noopMetricHandle{}
+	}
+	return c.metrics.LoadOrStore(namespace, transport.RateMetric, name, tags)
+}
+
+func (c *client) Gauge(namespace Namespace, name string, tags []string) MetricHandle {
+	if !c.clientConfig.MetricsEnabled {
+		return noopMetricHandle{}
+	}
+	return c.metrics.LoadOrStore(namespace, transport.GaugeMetric, name, tags)
+}
+
+func (c *client) Distribution(namespace Namespace, name string, tags []string) MetricHandle {
+	if !c.clientConfig.MetricsEnabled {
+		return noopMetricHandle{}
+	}
+	return c.distributions.LoadOrStore(namespace, name, tags)
+}
+
+func (c *client) ProductStarted(product Namespace) {
+	c.products.Add(product, true, nil)
+}
+
+func (c *client) ProductStopped(product Namespace) {
+	c.products.Add(product, false, nil)
+}
+
+func (c *client) ProductStartError(product Namespace, err error) {
+	c.products.Add(product, false, err)
+}
+
+func (c *client) RegisterAppConfig(key string, value any, origin Origin) {
+	c.configuration.Add(Configuration{key, value, origin})
+}
+
+func (c *client) RegisterAppConfigs(kvs ...Configuration) {
+	for _, value := range kvs {
+		c.configuration.Add(value)
+	}
+}
+
+func (c *client) Config() ClientConfig {
+	return c.clientConfig
+}
+
+// Flush sends all the data sources before calling flush
+// This function is called by the flushTicker so it should not panic, or it will crash the whole customer application.
+// If a panic occurs, we stop the telemetry and log the error.
+func (c *client) Flush() {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
 		}
-		dep := c.newRequest(RequestTypeDependenciesLoaded)
-		dep.Body.Payload = depPayload
-		c.scheduleSubmit(dep)
-	}
-
-	if len(contribPackages) > 0 {
-		req := c.newRequest(RequestTypeAppIntegrationsChange)
-		req.Body.Payload = IntegrationsChange{Integrations: contribPackages}
-		c.scheduleSubmit(req)
-	}
-
-	c.flush()
-	c.heartbeatInterval = heartbeatInterval()
-	c.heartbeatT = time.AfterFunc(c.heartbeatInterval, c.backgroundHeartbeat)
-}
-
-func heartbeatInterval() time.Duration {
-	heartbeat := internal.FloatEnv("DD_TELEMETRY_HEARTBEAT_INTERVAL", defaultHeartbeatInterval)
-	if heartbeat <= 0 || heartbeat > 3600 {
-		log("DD_TELEMETRY_HEARTBEAT_INTERVAL=%d not in [1,3600] range, setting to default of %f", heartbeat, defaultHeartbeatInterval)
-		heartbeat = defaultHeartbeatInterval
-	}
-	return time.Duration(heartbeat * float64(time.Second))
-}
-
-// Stop notifies the telemetry endpoint that the app is closing. All outstanding
-// messages will also be sent. No further messages will be sent until the client
-// is started again
-func (c *client) Stop() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.started {
-		return
-	}
-	c.started = false
-	c.heartbeatT.Stop()
-	// close request types have no body
-	r := c.newRequest(RequestTypeAppClosing)
-	c.scheduleSubmit(r)
-	c.flush()
-}
-
-// Disabled returns whether instrumentation telemetry is disabled
-// according to the DD_INSTRUMENTATION_TELEMETRY_ENABLED env var
-func Disabled() bool {
-	return !internal.BoolEnv("DD_INSTRUMENTATION_TELEMETRY_ENABLED", true)
-}
-
-// collectDependencies returns whether dependencies telemetry information is sent
-func collectDependencies() bool {
-	return internal.BoolEnv("DD_TELEMETRY_DEPENDENCY_COLLECTION_ENABLED", true)
-}
-
-// MetricKind specifies the type of metric being reported.
-// Metric types mirror Datadog metric types - for a more detailed
-// description of metric types, see:
-// https://docs.datadoghq.com/metrics/types/?tab=count#metric-types
-type MetricKind string
-
-var (
-	// MetricKindGauge represents a gauge type metric
-	MetricKindGauge MetricKind = "gauge"
-	// MetricKindCount represents a count type metric
-	MetricKindCount MetricKind = "count"
-	// MetricKindDist represents a distribution type metric
-	MetricKindDist MetricKind = "distribution"
-)
-
-type metric struct {
-	name  string
-	kind  MetricKind
-	value float64
-	// Unix timestamp
-	ts     float64
-	tags   []string
-	common bool
-}
-
-// TODO: Can there be identically named/tagged metrics with a "common" and "not
-// common" variant?
-
-func newMetric(name string, kind MetricKind, tags []string, common bool) *metric {
-	return &metric{
-		name:   name,
-		kind:   kind,
-		tags:   append([]string{}, tags...),
-		common: common,
-	}
-}
-
-func metricKey(name string, tags []string, kind MetricKind) string {
-	return name + string(kind) + strings.Join(tags, "-")
-}
-
-// Record sets the value for a gauge or distribution metric type
-// with the given name and tags. If the metric is not language-specific, common should be set to true
-func (c *client) Record(namespace Namespace, kind MetricKind, name string, value float64, tags []string, common bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.started {
-		return
-	}
-	if _, ok := c.metrics[namespace]; !ok {
-		c.metrics[namespace] = map[string]*metric{}
-	}
-	key := metricKey(name, tags, kind)
-	m, ok := c.metrics[namespace][key]
-	if !ok {
-		m = newMetric(name, kind, tags, common)
-		c.metrics[namespace][key] = m
-	}
-	m.value = value
-	m.ts = float64(time.Now().Unix())
-	c.newMetrics = true
-}
-
-// Count adds the value to a count with the given name and tags. If the metric
-// is not language-specific, common should be set to true
-func (c *client) Count(namespace Namespace, name string, value float64, tags []string, common bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.started {
-		return
-	}
-	if _, ok := c.metrics[namespace]; !ok {
-		c.metrics[namespace] = map[string]*metric{}
-	}
-	key := metricKey(name, tags, MetricKindCount)
-	m, ok := c.metrics[namespace][key]
-	if !ok {
-		m = newMetric(name, MetricKindCount, tags, common)
-		c.metrics[namespace][key] = m
-	}
-	m.value += value
-	m.ts = float64(time.Now().Unix())
-	c.newMetrics = true
-}
-
-// flush sends any outstanding telemetry messages and aggregated metrics to be
-// sent to the backend. Requests are sent in the background. Must be called
-// with c.mu locked
-func (c *client) flush() {
-	// initialize submissions slice of capacity len(c.requests) + 2
-	// to hold all the new events, plus two potential metric events
-	submissions := make([]*Request, 0, len(c.requests)+2)
-
-	// copy over requests so we can do the actual submission without holding
-	// the lock. Zero out the old stuff so we don't leak references
-	for i, r := range c.requests {
-		submissions = append(submissions, r)
-		c.requests[i] = nil
-	}
-	c.requests = c.requests[:0]
-
-	if c.newMetrics {
-		c.newMetrics = false
-		for namespace := range c.metrics {
-			// metrics can either be request type generate-metrics or distributions
-			dPayload := &DistributionMetrics{
-				Namespace: namespace,
-			}
-			gPayload := &Metrics{
-				Namespace: namespace,
-			}
-			for _, m := range c.metrics[namespace] {
-				if m.kind == MetricKindDist {
-					dPayload.Series = append(dPayload.Series, DistributionSeries{
-						Metric: m.name,
-						Tags:   m.tags,
-						Common: m.common,
-						Points: []float64{m.value},
-					})
-				} else {
-					gPayload.Series = append(gPayload.Series, Series{
-						Metric: m.name,
-						Type:   string(m.kind),
-						Tags:   m.tags,
-						Common: m.common,
-						Points: [][2]float64{{m.ts, m.value}},
-					})
-				}
-			}
-			if len(dPayload.Series) > 0 {
-				distributions := c.newRequest(RequestTypeDistributions)
-				distributions.Body.Payload = dPayload
-				submissions = append(submissions, distributions)
-			}
-			if len(gPayload.Series) > 0 {
-				generateMetrics := c.newRequest(RequestTypeGenerateMetrics)
-				generateMetrics.Body.Payload = gPayload
-				submissions = append(submissions, generateMetrics)
-			}
-		}
-	}
-
-	go func() {
-		for _, r := range submissions {
-			err := r.submit()
-			if err != nil {
-				log("submission error: %s", err.Error())
-			}
+		log.Warn("panic while flushing telemetry data, stopping telemetry: %v", r)
+		telemetryClientDisabled = true
+		if gc, ok := GlobalClient().(*client); ok && gc == c {
+			SwapClient(nil)
 		}
 	}()
-}
 
-var (
-	osName        string
-	osNameOnce    sync.Once
-	osVersion     string
-	osVersionOnce sync.Once
-)
-
-// XXX: is it actually safe to cache osName and osVersion? For example, can the
-// kernel be updated without stopping execution?
-
-func getOSName() string {
-	osNameOnce.Do(func() { osName = osinfo.OSName() })
-	return osName
-}
-
-func getOSVersion() string {
-	osVersionOnce.Do(func() { osVersion = osinfo.OSVersion() })
-	return osVersion
-}
-
-// newRequests populates a request with the common fields shared by all requests
-// sent through this Client
-func (c *client) newRequest(t RequestType) *Request {
-	c.seqID++
-	body := &Body{
-		APIVersion:  "v2",
-		RequestType: t,
-		TracerTime:  time.Now().Unix(),
-		RuntimeID:   globalconfig.RuntimeID(),
-		SeqID:       c.seqID,
-		Debug:       c.debug,
-		Application: Application{
-			ServiceName:     c.Service,
-			Env:             c.Env,
-			ServiceVersion:  c.Version,
-			TracerVersion:   version.Tag,
-			LanguageName:    "go",
-			LanguageVersion: runtime.Version(),
-		},
-		Host: Host{
-			Hostname:     hostname,
-			OS:           getOSName(),
-			OSVersion:    getOSVersion(),
-			Architecture: runtime.GOARCH,
-			// TODO (lievan): getting kernel name, release, version TBD
-		},
-	}
-
-	header := &http.Header{
-		"Content-Type":               {"application/json"},
-		"DD-Telemetry-API-Version":   {"v2"},
-		"DD-Telemetry-Request-Type":  {string(t)},
-		"DD-Client-Library-Language": {"go"},
-		"DD-Client-Library-Version":  {version.Tag},
-		"DD-Agent-Env":               {c.Env},
-		"DD-Agent-Hostname":          {hostname},
-	}
-	if cid := internal.ContainerID(); cid != "" {
-		header.Set("Datadog-Container-ID", cid)
-	}
-	if eid := internal.EntityID(); eid != "" {
-		header.Set("Datadog-Entity-ID", eid)
-	}
-	if c.URL == getAgentlessURL() {
-		header.Set("DD-API-KEY", c.APIKey)
-	}
-	client := c.Client
-	if client == nil {
-		client = defaultHTTPClient
-	}
-	return &Request{Body: body,
-		Header:     header,
-		HTTPClient: client,
-		URL:        c.URL,
-	}
-}
-
-// submit sends a telemetry request
-func (r *Request) submit() error {
-	retry, err := r.trySubmit()
-	if retry {
-		// retry telemetry submissions in instances where the telemetry client has trouble
-		// connecting with the agent
-		log("telemetry submission failed, retrying with agentless: %s", err)
-		r.URL = getAgentlessURL()
-		r.Header.Set("DD-API-KEY", defaultAPIKey())
-		if _, err := r.trySubmit(); err == nil {
-			return nil
-		}
-		log("retrying with agentless telemetry failed: %s", err)
-	}
-	return err
-}
-
-// agentlessRetry determines if we should retry a failed a request with
-// by submitting to the agentless endpoint
-func agentlessRetry(req *Request, resp *http.Response, err error) bool {
-	if req.URL == getAgentlessURL() {
-		// no need to retry with agentless endpoint if it already failed
-		return false
-	}
-	if err != nil {
-		// we didn't get a response which might signal a connectivity problem with
-		// agent - retry with agentless
-		return true
-	}
-	// TODO: add more status codes we do not want to retry on
-	doNotRetry := []int{http.StatusBadRequest, http.StatusTooManyRequests, http.StatusUnauthorized, http.StatusForbidden}
-	for status := range doNotRetry {
-		if resp.StatusCode == status {
-			return false
+	payloads := make([]transport.Payload, 0, 8)
+	for _, ds := range c.dataSources {
+		if payload := ds.Payload(); payload != nil {
+			payloads = append(payloads, payload)
 		}
 	}
-	return true
-}
 
-// trySubmit submits a telemetry request to the specified URL
-// in the Request struct. If submission fails, return whether or not
-// this submission should be re-tried with the agentless endpoint
-// as well as the error that occurred
-func (r *Request) trySubmit() (retry bool, err error) {
-	b, err := json.Marshal(r.Body)
+	nbBytes, err := c.flush(payloads)
 	if err != nil {
-		return false, err
-	}
+		// We check if the failure is about telemetry or appsec data to log the error at the right level
+		var dependenciesFound bool
+		for _, payload := range payloads {
+			if payload.RequestType() == transport.RequestTypeAppDependenciesLoaded {
+				dependenciesFound = true
+				break
+			}
+		}
+		if dependenciesFound {
+			log.Warn("appsec: error while flushing SCA Security Data: %v", err)
+		} else {
+			log.Debug("telemetry: error while flushing telemetry data: %v", err)
+		}
 
-	req, err := http.NewRequest(http.MethodPost, r.URL, bytes.NewReader(b))
-	if err != nil {
-		return false, err
-	}
-	req.Header = *r.Header
-
-	req.ContentLength = int64(len(b))
-
-	client := r.HTTPClient
-	if client == nil {
-		client = defaultHTTPClient
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return agentlessRetry(r, resp, err), err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-		return agentlessRetry(r, resp, err), errBadStatus(resp.StatusCode)
-	}
-	return false, nil
-}
-
-type errBadStatus int
-
-func (e errBadStatus) Error() string { return fmt.Sprintf("bad HTTP response status %d", e) }
-
-// scheduleSubmit queues a request to be sent to the backend. Should be called
-// with c.mu locked
-func (c *client) scheduleSubmit(r *Request) {
-	c.requests = append(c.requests, r)
-}
-
-// backgroundHeartbeat is invoked at every heartbeat interval,
-// sending the app-heartbeat event and flushing any outstanding
-// telemetry messages
-func (c *client) backgroundHeartbeat() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.started {
 		return
 	}
-	c.scheduleSubmit(c.newRequest(RequestTypeAppHeartbeat))
-	c.flush()
-	c.heartbeatT.Reset(c.heartbeatInterval)
+
+	if c.clientConfig.Debug {
+		log.Debug("telemetry: flushed %d bytes of data", nbBytes)
+	}
+}
+
+func (c *client) transform(payloads []transport.Payload) []transport.Payload {
+	c.flushMapperMu.Lock()
+	defer c.flushMapperMu.Unlock()
+	payloads, c.flushMapper = c.flushMapper.Transform(payloads)
+	return payloads
+}
+
+// flush sends all the data sources to the writer after having sent them through the [transform] function.
+// It returns the amount of bytes sent to the writer.
+func (c *client) flush(payloads []transport.Payload) (int, error) {
+	payloads = c.transform(payloads)
+
+	if c.payloadQueue.IsEmpty() && len(payloads) == 0 {
+		return 0, nil
+	}
+
+	emptyQueue := c.payloadQueue.IsEmpty()
+	// We enqueue the new payloads to preserve the order of the payloads
+	c.payloadQueue.Enqueue(payloads...)
+	payloads = c.payloadQueue.Flush()
+
+	var (
+		nbBytes        int
+		speedIncreased bool
+		failedCalls    []internal.EndpointRequestResult
+	)
+
+	for i, payload := range payloads {
+		results, err := c.writer.Flush(payload)
+		c.computeFlushMetrics(results, err)
+		if err != nil {
+			// We stop flushing when we encounter a fatal error, put the bodies in the queue and return the error
+			if results[len(results)-1].StatusCode == 413 { // If the payload is too large we have no way to divide it, we can only skip it...
+				log.Warn("telemetry: tried sending a payload that was too large, dropping it")
+				continue
+			}
+			c.payloadQueue.Enqueue(payloads[i:]...)
+			return nbBytes, err
+		}
+
+		failedCalls = append(failedCalls, results[:len(results)-1]...)
+		successfulCall := results[len(results)-1]
+
+		if !speedIncreased && successfulCall.PayloadByteSize > c.clientConfig.EarlyFlushPayloadSize {
+			// We increase the speed of the flushTicker to try to flush the remaining bodies faster as we are at risk of sending too large bodies to the backend
+			c.flushTicker.CanIncreaseSpeed()
+			speedIncreased = true
+		}
+
+		nbBytes += successfulCall.PayloadByteSize
+	}
+
+	if emptyQueue && !speedIncreased { // If we did not send a very big payload, and we have no payloads
+		c.flushTicker.CanDecreaseSpeed()
+	}
+
+	if len(failedCalls) > 0 {
+		var errs []error
+		for _, call := range failedCalls {
+			errs = append(errs, call.Error)
+		}
+		log.Debug("non-fatal error(s) while flushing telemetry data: %v", errors.Join(errs...))
+	}
+
+	return nbBytes, nil
+}
+
+// computeFlushMetrics computes and submits the metrics for the flush operation using the output from the writer.Flush method.
+// It will submit the number of requests, responses, errors, the number of bytes sent and the duration of the call that was successful.
+func (c *client) computeFlushMetrics(results []internal.EndpointRequestResult, reason error) {
+	if !c.clientConfig.internalMetricsEnabled {
+		return
+	}
+
+	indexToEndpoint := func(i int) string {
+		if i == 0 && c.clientConfig.AgentURL != "" {
+			return "agent"
+		}
+		return "agentless"
+	}
+
+	for i, result := range results {
+		endpoint := "endpoint:" + indexToEndpoint(i)
+		c.Count(transport.NamespaceTelemetry, "telemetry_api.requests", []string{endpoint}).Submit(1)
+		if result.StatusCode != 0 {
+			c.Count(transport.NamespaceTelemetry, "telemetry_api.responses", []string{endpoint, "status_code:" + strconv.Itoa(result.StatusCode)}).Submit(1)
+		}
+
+		if result.Error != nil {
+			typ := "type:network"
+			if os.IsTimeout(result.Error) {
+				typ = "type:timeout"
+			}
+			var writerStatusCodeError *internal.WriterStatusCodeError
+			if errors.As(result.Error, &writerStatusCodeError) {
+				typ = "type:status_code"
+			}
+			c.Count(transport.NamespaceTelemetry, "telemetry_api.errors", []string{endpoint, typ}).Submit(1)
+		}
+	}
+
+	if reason != nil {
+		return
+	}
+
+	successfulCall := results[len(results)-1]
+	endpoint := "endpoint:" + indexToEndpoint(len(results)-1)
+	c.Distribution(transport.NamespaceTelemetry, "telemetry_api.bytes", []string{endpoint}).Submit(float64(successfulCall.PayloadByteSize))
+	c.Distribution(transport.NamespaceTelemetry, "telemetry_api.ms", []string{endpoint}).Submit(float64(successfulCall.CallDuration.Milliseconds()))
+}
+
+func (c *client) AppStart() {
+	c.flushMapperMu.Lock()
+	defer c.flushMapperMu.Unlock()
+	c.flushMapper = mapper.NewAppStartedMapper(c.flushMapper)
+}
+
+func (c *client) AppStop() {
+	c.flushMapperMu.Lock()
+	defer c.flushMapperMu.Unlock()
+	c.flushMapper = mapper.NewAppClosingMapper(c.flushMapper)
+}
+
+func (c *client) Close() error {
+	c.flushTicker.Stop()
+	return nil
 }

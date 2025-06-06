@@ -1,4 +1,7 @@
 // Package rand is used for concurrency safe random number generator.
+// This package provides a thread-safe wrapper around math/rand for use in
+// load balancing and server selection. It is NOT suitable for cryptographic
+// purposes and should not be used for security-sensitive operations.
 package rand
 
 import (

@@ -85,14 +85,31 @@ func (t *tracer) reportRuntimeMetrics(interval time.Duration) {
 	}
 }
 
-func (t *tracer) reportHealthMetrics(interval time.Duration) {
+// reportHealthMetricsAtInterval reports noisy health metrics at the specified interval.
+// The periodic reporting ensures metrics are delivered without overwhelming the system or logs.
+func (t *tracer) reportHealthMetricsAtInterval(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			t.statsd.Count("datadog.tracer.spans_started", int64(atomic.SwapUint32(&t.spansStarted, 0)), nil, 1)
-			t.statsd.Count("datadog.tracer.spans_finished", int64(atomic.SwapUint32(&t.spansFinished, 0)), nil, 1)
+			// if there are started spans, report the number of spans with their integration, then
+			// reset the count
+			// the Count() function reports the total number of event occurrences in one time interval. We reset
+			// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
+
+			for k, v := range t.spansStarted.GetAndReset() {
+				t.statsd.Count("datadog.tracer.spans_started", v, []string{"integration:" + k}, 1)
+			}
+
+			// if there are finished spans, report the number of spans with their integration, then
+			// reset the count
+			// the Count() function reports the total number of event occurrences in one time interval. We reset
+			// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
+			for k, v := range t.spansFinished.GetAndReset() {
+				t.statsd.Count("datadog.tracer.spans_finished", v, []string{"integration:" + k}, 1)
+			}
+
 			t.statsd.Count("datadog.tracer.traces_dropped", int64(atomic.SwapUint32(&t.tracesDropped, 0)), []string{"reason:trace_too_large"}, 1)
 		case <-t.stop:
 			return
