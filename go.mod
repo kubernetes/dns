@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/coredns/caddy v1.1.1
-	github.com/coredns/coredns v1.11.3
+	github.com/coredns/coredns v1.12.1
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/miekg/dns v1.1.63
 	github.com/onsi/ginkgo v1.16.5
