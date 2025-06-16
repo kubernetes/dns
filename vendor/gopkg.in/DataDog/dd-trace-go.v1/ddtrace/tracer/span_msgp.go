@@ -4,7 +4,6 @@ package tracer
 
 import (
 	"github.com/tinylib/msgp/msgp"
-
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 )
 
@@ -181,6 +180,12 @@ func (z *span) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Meta[za0001] = za0002
 			}
+		case "meta_struct":
+			err = z.MetaStruct.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "MetaStruct")
+				return
+			}
 		case "metrics":
 			var zb0003 uint32
 			zb0003, err = dc.ReadMapHeader()
@@ -254,6 +259,25 @@ func (z *span) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "span_events":
+			var zb0005 uint32
+			zb0005, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "SpanEvents")
+				return
+			}
+			if cap(z.SpanEvents) >= int(zb0005) {
+				z.SpanEvents = (z.SpanEvents)[:zb0005]
+			} else {
+				z.SpanEvents = make([]spanEvent, zb0005)
+			}
+			for za0006 := range z.SpanEvents {
+				err = z.SpanEvents[za0006].DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "SpanEvents", za0006)
+					return
+				}
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -268,15 +292,23 @@ func (z *span) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *span) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(13)
-	var zb0001Mask uint16 /* 13 bits */
+	zb0001Len := uint32(15)
+	var zb0001Mask uint16 /* 15 bits */
 	if z.Meta == nil {
 		zb0001Len--
 		zb0001Mask |= 0x40
 	}
 	if z.Metrics == nil {
 		zb0001Len--
-		zb0001Mask |= 0x80
+		zb0001Mask |= 0x100
+	}
+	if z.SpanLinks == nil {
+		zb0001Len--
+		zb0001Mask |= 0x2000
+	}
+	if z.SpanEvents == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4000
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -370,7 +402,17 @@ func (z *span) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x80) == 0 { // if not empty
+	// write "meta_struct"
+	err = en.Append(0xab, 0x6d, 0x65, 0x74, 0x61, 0x5f, 0x73, 0x74, 0x72, 0x75, 0x63, 0x74)
+	if err != nil {
+		return
+	}
+	err = z.MetaStruct.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "MetaStruct")
+		return
+	}
+	if (zb0001Mask & 0x100) == 0 { // if not empty
 		// write "metrics"
 		err = en.Append(0xa7, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73)
 		if err != nil {
@@ -434,21 +476,42 @@ func (z *span) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Error")
 		return
 	}
-	// write "span_links"
-	err = en.Append(0xaa, 0x73, 0x70, 0x61, 0x6e, 0x5f, 0x6c, 0x69, 0x6e, 0x6b, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.SpanLinks)))
-	if err != nil {
-		err = msgp.WrapError(err, "SpanLinks")
-		return
-	}
-	for za0005 := range z.SpanLinks {
-		err = z.SpanLinks[za0005].EncodeMsg(en)
+	if (zb0001Mask & 0x2000) == 0 { // if not empty
+		// write "span_links"
+		err = en.Append(0xaa, 0x73, 0x70, 0x61, 0x6e, 0x5f, 0x6c, 0x69, 0x6e, 0x6b, 0x73)
 		if err != nil {
-			err = msgp.WrapError(err, "SpanLinks", za0005)
 			return
+		}
+		err = en.WriteArrayHeader(uint32(len(z.SpanLinks)))
+		if err != nil {
+			err = msgp.WrapError(err, "SpanLinks")
+			return
+		}
+		for za0005 := range z.SpanLinks {
+			err = z.SpanLinks[za0005].EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "SpanLinks", za0005)
+				return
+			}
+		}
+	}
+	if (zb0001Mask & 0x4000) == 0 { // if not empty
+		// write "span_events"
+		err = en.Append(0xab, 0x73, 0x70, 0x61, 0x6e, 0x5f, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteArrayHeader(uint32(len(z.SpanEvents)))
+		if err != nil {
+			err = msgp.WrapError(err, "SpanEvents")
+			return
+		}
+		for za0006 := range z.SpanEvents {
+			err = z.SpanEvents[za0006].EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "SpanEvents", za0006)
+				return
+			}
 		}
 	}
 	return
@@ -463,7 +526,7 @@ func (z *span) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0001) + msgp.StringPrefixSize + len(za0002)
 		}
 	}
-	s += 8 + msgp.MapHeaderSize
+	s += 12 + z.MetaStruct.Msgsize() + 8 + msgp.MapHeaderSize
 	if z.Metrics != nil {
 		for za0003, za0004 := range z.Metrics {
 			_ = za0004
@@ -473,6 +536,10 @@ func (z *span) Msgsize() (s int) {
 	s += 8 + msgp.Uint64Size + 9 + msgp.Uint64Size + 10 + msgp.Uint64Size + 6 + msgp.Int32Size + 11 + msgp.ArrayHeaderSize
 	for za0005 := range z.SpanLinks {
 		s += z.SpanLinks[za0005].Msgsize()
+	}
+	s += 12 + msgp.ArrayHeaderSize
+	for za0006 := range z.SpanEvents {
+		s += z.SpanEvents[za0006].Msgsize()
 	}
 	return
 }

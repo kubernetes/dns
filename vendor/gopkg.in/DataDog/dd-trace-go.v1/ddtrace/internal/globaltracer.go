@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 )
 
 var (
@@ -46,6 +47,7 @@ type NoopTracer struct{}
 
 // StartSpan implements ddtrace.Tracer.
 func (NoopTracer) StartSpan(_ string, _ ...ddtrace.StartSpanOption) ddtrace.Span {
+	log.Debug("Tracer must be started before starting a span; Review the docs for more information: https://docs.datadoghq.com/tracing/trace_collection/library_config/go/")
 	return NoopSpan{}
 }
 
