@@ -71,7 +71,6 @@ const (
 // StatsPoint contains a set of statistics grouped under various aggregation keys.
 type StatsPoint struct {
 	// These fields indicate the properties under which the stats were aggregated.
-	Service    string // deprecated
 	EdgeTags   []string
 	Hash       uint64
 	ParentHash uint64

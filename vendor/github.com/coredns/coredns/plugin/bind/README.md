@@ -13,7 +13,7 @@ If several addresses are provided, a listener will be open on each of the IP pro
 
 Each address has to be an IP or name of one of the interfaces of the host. Bind by interface name, binds to the IPs on that interface at the time of startup or reload (reload will happen with a SIGHUP or if the config file changes).
 
-If the given argument is an interface name, and that interface has several IP addresses, CoreDNS will listen on all of the interface IP addresses (including IPv4 and IPv6), except for IPv6 link-local addresses on that interface.
+If the given argument is an interface name, and that interface has several IP addresses, CoreDNS will listen on all of the interface IP addresses (including IPv4 and IPv6).
 
 ## Syntax
 
@@ -108,6 +108,3 @@ bad.example.com {
     forward . 5.6.7.8
 }
 ```
-
-Also on MacOS there is an (open) bug where this doesn't work properly. See
-<https://github.com/miekg/dns/issues/724> for details, but no solution.

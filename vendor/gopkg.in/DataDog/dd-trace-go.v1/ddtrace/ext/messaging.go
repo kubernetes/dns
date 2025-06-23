@@ -8,6 +8,8 @@ package ext
 const (
 	// MessagingSystem identifies which messaging system created this span (kafka, rabbitmq, amazonsqs, googlepubsub...)
 	MessagingSystem = "messaging.system"
+	// MessagingDestinationName identifies message destination name
+	MessagingDestinationName = "messaging.destination.name"
 )
 
 // Available values for messaging.system.
