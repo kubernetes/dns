@@ -1,0 +1,1017 @@
+[
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "api_security.missing_route"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "api_security.request.no_schema"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "api_security.request.schema"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "instrum.user_auth.missing_user_id"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "instrum.user_auth.missing_user_login"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "rasp.error"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "rasp.rule.eval"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "rasp.rule.match"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "rasp.rule.skipped"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "rasp.timeout"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "sdk.event"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.config_errors"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.error"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.init"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.input_truncated"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.requests"
+    },
+    {
+        "namespace": "appsec",
+        "type": "count",
+        "name": "waf.updates"
+    },
+    {
+        "namespace": "appsec",
+        "type": "distribution",
+        "name": "rasp.duration"
+    },
+    {
+        "namespace": "appsec",
+        "type": "distribution",
+        "name": "rasp.duration_ext"
+    },
+    {
+        "namespace": "appsec",
+        "type": "distribution",
+        "name": "waf.duration"
+    },
+    {
+        "namespace": "appsec",
+        "type": "distribution",
+        "name": "waf.duration_ext"
+    },
+    {
+        "namespace": "appsec",
+        "type": "distribution",
+        "name": "waf.truncated_value_size"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "code_coverage.errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "code_coverage.is_empty"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "code_coverage_finished"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "code_coverage_started"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "early_flake_detection.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "early_flake_detection.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "endpoint_payload.dropped"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "endpoint_payload.requests"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "endpoint_payload.requests_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "event_created"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "event_finished"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "events_enqueued_for_serialization"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "flaky_tests.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "flaky_tests.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git.command"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git.command_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.objects_pack"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.objects_pack_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.search_commits"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.search_commits_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.settings"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.settings_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "git_requests.settings_response"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "impacted_tests_detection.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "impacted_tests_detection.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_forced_run"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_skippable_tests.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_skippable_tests.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_skippable_tests.response_suites"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_skippable_tests.response_tests"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_skipped"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "itr_unskippable"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "known_tests.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "known_tests.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "manual_api_events"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "test_management_tests.request"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "test_management_tests.request_errors"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "count",
+        "name": "test_session"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "code_coverage.files"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "early_flake_detection.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "early_flake_detection.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "early_flake_detection.response_tests"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "endpoint_payload.bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "endpoint_payload.events_count"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "endpoint_payload.events_serialization_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "endpoint_payload.requests_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "flaky_tests.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "flaky_tests.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "flaky_tests.response_tests"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git.command_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git_requests.objects_pack_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git_requests.objects_pack_files"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git_requests.objects_pack_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git_requests.search_commits_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "git_requests.settings_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "impacted_tests_detection.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "impacted_tests_detection.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "impacted_tests_detection.response_files"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "itr_skippable_tests.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "itr_skippable_tests.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "known_tests.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "known_tests.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "known_tests.response_tests"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "test_management_tests.request_ms"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "test_management_tests.response_bytes"
+    },
+    {
+        "namespace": "civisibility",
+        "type": "distribution",
+        "name": "test_management_tests.response_tests"
+    },
+    {
+        "namespace": "general",
+        "type": "count",
+        "name": "logs_created"
+    },
+    {
+        "namespace": "general",
+        "type": "distribution",
+        "name": "init_time"
+    },
+    {
+        "namespace": "general",
+        "type": "distribution",
+        "name": "tracer_init_time"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "executed.propagation"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "executed.sink"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "executed.source"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "executed.tainted"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "instrumented.propagation"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "instrumented.sink"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "instrumented.source"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "json.tag.size.exceeded"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "request.tainted"
+    },
+    {
+        "namespace": "iast",
+        "type": "count",
+        "name": "suppressed.vulnerabilities"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "activate_distributed_headers"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "annotations"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "dropped_eval_events"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "dropped_span_events"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "evals_submitted"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "evaluators.error"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "evaluators.init"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "evaluators.run"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "inject_distributed_headers"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "product_enabled"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "span.finished"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "span.start"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "spans_exported"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "count",
+        "name": "user_flush"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "distribution",
+        "name": "evaluators.rule_sample_rate"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "distribution",
+        "name": "init_time"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "distribution",
+        "name": "span.raw_size"
+    },
+    {
+        "namespace": "mlobs",
+        "type": "distribution",
+        "name": "span.size"
+    },
+    {
+        "namespace": "profilers",
+        "type": "count",
+        "name": "profile_api.errors"
+    },
+    {
+        "namespace": "profilers",
+        "type": "count",
+        "name": "profile_api.requests"
+    },
+    {
+        "namespace": "profilers",
+        "type": "count",
+        "name": "profile_api.responses"
+    },
+    {
+        "namespace": "profilers",
+        "type": "count",
+        "name": "ssi_heuristic.number_of_profiles"
+    },
+    {
+        "namespace": "profilers",
+        "type": "count",
+        "name": "ssi_heuristic.number_of_runtime_id"
+    },
+    {
+        "namespace": "profilers",
+        "type": "distribution",
+        "name": "profile_api.bytes"
+    },
+    {
+        "namespace": "profilers",
+        "type": "distribution",
+        "name": "profile_api.ms"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.content_security_policy"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.failed"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.initialization.failed"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.initialization.succeed"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.installation"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.skipped"
+    },
+    {
+        "namespace": "rum",
+        "type": "count",
+        "name": "injection.succeed"
+    },
+    {
+        "namespace": "rum",
+        "type": "distribution",
+        "name": "injection.installation.duration"
+    },
+    {
+        "namespace": "rum",
+        "type": "distribution",
+        "name": "injection.ms"
+    },
+    {
+        "namespace": "rum",
+        "type": "distribution",
+        "name": "injection.response.bytes"
+    },
+    {
+        "namespace": "sidecar",
+        "type": "count",
+        "name": "server.submitted_payloads"
+    },
+    {
+        "namespace": "sidecar",
+        "type": "distribution",
+        "name": "server.memory_usage"
+    },
+    {
+        "namespace": "sidecar",
+        "type": "gauge",
+        "name": "server.active_sessions"
+    },
+    {
+        "namespace": "telemetry",
+        "type": "count",
+        "name": "telemetry_api.errors"
+    },
+    {
+        "namespace": "telemetry",
+        "type": "count",
+        "name": "telemetry_api.requests"
+    },
+    {
+        "namespace": "telemetry",
+        "type": "count",
+        "name": "telemetry_api.responses"
+    },
+    {
+        "namespace": "telemetry",
+        "type": "distribution",
+        "name": "telemetry_api.bytes"
+    },
+    {
+        "namespace": "telemetry",
+        "type": "distribution",
+        "name": "telemetry_api.ms"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "context_header.truncated"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "context_header_style.extracted"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "context_header_style.injected"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "docker_lib_injection.failure"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "docker_lib_injection.success"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "exporter_fallback"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "host_lib_injection.failure"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "host_lib_injection.success"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "inject.error"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "inject.language_detection"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "inject.skip"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "inject.success"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "integration_errors"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "k8s_lib_injection.failure"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "k8s_lib_injection.success"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.abort"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.abort.integration"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.abort.runtime"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.complete"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.error"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "library_entrypoint.injector.error"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "otel.env.hiding"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "otel.env.invalid"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "otel.env.unsupported"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "public_api.called"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "span_created"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "span_finished"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "span_pointer_calculation"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "span_pointer_calculation.issue"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "spans_created"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "spans_dropped"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "spans_enqueued_for_serialization"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "spans_finished"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "stats_api.errors"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "stats_api.requests"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "stats_api.responses"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_api.errors"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_api.requests"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_api.responses"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_chunks_dropped"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_chunks_enqueued"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_chunks_enqueued_for_serialization"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_chunks_sent"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_partial_flush.count"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_segments_closed"
+    },
+    {
+        "namespace": "tracers",
+        "type": "count",
+        "name": "trace_segments_created"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "inject.latency.baseline"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "inject.latency.end_to_end"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "inject.latency.init_container"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "stats_api.bytes"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "stats_api.ms"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_api.bytes"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_api.ms"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_chunk_serialization.bytes"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_chunk_serialization.ms"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_chunk_size"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_partial_flush.spans_closed"
+    },
+    {
+        "namespace": "tracers",
+        "type": "distribution",
+        "name": "trace_partial_flush.spans_remaining"
+    },
+    {
+        "namespace": "tracers",
+        "type": "gauge",
+        "name": "stats_buckets"
+    }
+]
