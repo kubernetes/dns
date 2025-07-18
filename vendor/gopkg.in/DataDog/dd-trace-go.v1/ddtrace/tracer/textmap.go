@@ -8,10 +8,11 @@ package tracer
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
@@ -91,6 +92,10 @@ const (
 	// DefaultPriorityHeader specifies the key that will be used in HTTP headers
 	// or text maps to store the sampling priority value.
 	DefaultPriorityHeader = "x-datadog-sampling-priority"
+
+	// DefaultBaggageHeader specifies the key that will be used in HTTP headers
+	// or text maps to store the baggage value.
+	DefaultBaggageHeader = "baggage"
 )
 
 // originHeader specifies the name of the header indicating the origin of the trace.
@@ -128,6 +133,10 @@ type PropagatorConfig struct {
 	// B3 specifies if B3 headers should be added for trace propagation.
 	// See https://github.com/openzipkin/b3-propagation
 	B3 bool
+
+	// BaggageHeader specifies the map key that will be used to store the baggage key-value pairs.
+	// It defaults to DefaultBaggageHeader.
+	BaggageHeader string
 }
 
 // NewPropagator returns a new propagator which uses TextMap to inject
@@ -155,6 +164,9 @@ func NewPropagator(cfg *PropagatorConfig, propagators ...Propagator) Propagator 
 	}
 	if cfg.PriorityHeader == "" {
 		cfg.PriorityHeader = DefaultPriorityHeader
+	}
+	if cfg.BaggageHeader == "" {
+		cfg.BaggageHeader = DefaultBaggageHeader
 	}
 	cp := new(chainedPropagator)
 	cp.onlyExtractFirst = internal.BoolEnv("DD_TRACE_PROPAGATION_EXTRACT_FIRST", false)
@@ -197,14 +209,14 @@ type chainedPropagator struct {
 // a warning and be ignored.
 func getPropagators(cfg *PropagatorConfig, ps string) ([]Propagator, string) {
 	dd := &propagator{cfg}
-	defaultPs := []Propagator{dd, &propagatorW3c{}}
-	defaultPsName := "datadog,tracecontext"
+	defaultPs := []Propagator{dd, &propagatorW3c{}, &propagatorBaggage{}}
+	defaultPsName := "datadog,tracecontext,baggage"
 	if cfg.B3 {
 		defaultPs = append(defaultPs, &propagatorB3{})
 		defaultPsName += ",b3"
 	}
 	if ps == "" {
-		if prop := os.Getenv(headerPropagationStyle); prop != "" {
+		if prop := getDDorOtelConfig("propagationStyle"); prop != "" {
 			ps = prop // use the generic DD_TRACE_PROPAGATION_STYLE if set
 		} else {
 			return defaultPs, defaultPsName // no env set, so use default from configuration
@@ -227,6 +239,9 @@ func getPropagators(cfg *PropagatorConfig, ps string) ([]Propagator, string) {
 			listNames = append(listNames, v)
 		case "tracecontext":
 			list = append(list, &propagatorW3c{})
+			listNames = append(listNames, v)
+		case "baggage":
+			list = append(list, &propagatorBaggage{})
 			listNames = append(listNames, v)
 		case "b3", "b3multi":
 			if !cfg.B3 {
@@ -263,41 +278,115 @@ func (p *chainedPropagator) Inject(spanCtx ddtrace.SpanContext, carrier interfac
 	return nil
 }
 
-// Extract implements Propagator. This method will attempt to extract the context
+// Extract implements Propagator. This method will attempt to extract a span context
 // based on the precedence order of the propagators. Generally, the first valid
-// trace context that could be extracted will be returned, and other extractors will
-// be ignored. However, the W3C tracestate header value will always be extracted and
-// stored in the local trace context even if a previous propagator has already succeeded
-// so long as the trace-ids match.
+// trace context that could be extracted will be returned. However, the W3C tracestate
+// header value will always be extracted and stored in the local trace context even if
+// a previous propagator has succeeded so long as the trace-ids match.
+// Furthermore, if we have already successfully extracted a trace context and a
+// subsequent trace context has conflicting trace information, such information will
+// be relayed in the returned SpanContext with a SpanLink.
 func (p *chainedPropagator) Extract(carrier interface{}) (ddtrace.SpanContext, error) {
 	var ctx ddtrace.SpanContext
+	var links []ddtrace.SpanLink
+
 	for _, v := range p.extractors {
-		if ctx != nil {
-			// A local trace context has already been extracted.
-			p, isW3C := v.(*propagatorW3c)
-			if !isW3C {
-				continue // Ignore other propagators.
+		firstExtract := (ctx == nil) // ctx stores the most recently extracted ctx across iterations; if it's nil, no extractor has run yet
+		extractedCtx, err := v.Extract(carrier)
+
+		// If the extractor is the baggage propagator and its baggage is empty,
+		// treat it as if nothing was extracted.
+		if _, ok := v.(*propagatorBaggage); ok {
+			if extractedSpan, ok := extractedCtx.(*spanContext); ok && len(extractedSpan.baggage) == 0 {
+				extractedCtx = nil
 			}
-			p.propagateTracestate(ctx.(*spanContext), carrier)
-			break
 		}
-		var err error
-		ctx, err = v.Extract(carrier)
-		if ctx != nil {
-			if p.onlyExtractFirst {
-				// Return early if the customer configured that only the first successful
-				// extraction should occur.
-				return ctx, nil
+
+		if firstExtract {
+			if err != nil {
+				if p.onlyExtractFirst { // Every error is relevant when we are relying on the first extractor
+					return nil, err
+				}
+				if err != ErrSpanContextNotFound { // We don't care about ErrSpanContextNotFound because we could find a span context in a subsequent extractor
+					return nil, err
+				}
 			}
-		} else if err != ErrSpanContextNotFound {
-			return nil, err
+			if p.onlyExtractFirst {
+				return extractedCtx, nil
+			}
+			ctx = extractedCtx
+		} else { // A local trace context has already been extracted
+			extractedCtx2, ok1 := extractedCtx.(*spanContext)
+			ctx2, ok2 := ctx.(*spanContext)
+			// If we can't cast to spanContext, we can't propgate tracestate or create span links
+			if !ok1 || !ok2 {
+				continue
+			}
+			if extractedCtx2.TraceID128() == ctx2.TraceID128() {
+				if pW3C, ok := v.(*propagatorW3c); ok {
+					pW3C.propagateTracestate(ctx2, extractedCtx2)
+					// If trace IDs match but span IDs do not, use spanID from `*propagatorW3c` extractedCtx for parenting
+					if extractedCtx2.SpanID() != ctx2.SpanID() {
+						var ddCtx *spanContext
+						// Grab the datadog-propagated spancontext again
+						if ddp := getDatadogPropagator(p); ddp != nil {
+							if ddSpanCtx, err := ddp.Extract(carrier); err == nil {
+								ddCtx, _ = ddSpanCtx.(*spanContext)
+							}
+						}
+						overrideDatadogParentID(ctx2, extractedCtx2, ddCtx)
+					}
+				}
+			} else { // Trace IDs do not match - create span links
+				link := ddtrace.SpanLink{TraceID: extractedCtx2.TraceID(), SpanID: extractedCtx2.SpanID(), TraceIDHigh: extractedCtx2.TraceIDUpper(), Attributes: map[string]string{"reason": "terminated_context", "context_headers": getPropagatorName(v)}}
+				if trace := extractedCtx2.trace; trace != nil {
+					if flags := uint32(*trace.priority); flags > 0 { // Set the flags based on the sampling priority
+						link.Flags = 1
+					} else {
+						link.Flags = 0
+					}
+					link.Tracestate = extractedCtx2.trace.propagatingTag(tracestateHeader)
+				}
+				links = append(links, link)
+			}
+		}
+
+		if _, ok := v.(*propagatorBaggage); ok && extractedCtx != nil {
+			if ctxSpan, ok := ctx.(*spanContext); ok {
+				if extractedSpan, ok := extractedCtx.(*spanContext); ok && len(extractedSpan.baggage) > 0 {
+					ctxSpan.baggage = extractedSpan.baggage
+					atomic.StoreUint32(&ctxSpan.hasBaggage, 1)
+				}
+			}
 		}
 	}
+
+	// 0 successful extractions
 	if ctx == nil {
 		return nil, ErrSpanContextNotFound
 	}
+	if spCtx, ok := ctx.(*spanContext); ok && len(links) > 0 {
+		spCtx.spanLinks = links
+	}
 	log.Debug("Extracted span context: %#v", ctx)
 	return ctx, nil
+}
+
+func getPropagatorName(p Propagator) string {
+	switch p.(type) {
+	case *propagator:
+		return "datadog"
+	case *propagatorB3:
+		return "b3multi"
+	case *propagatorB3SingleHeader:
+		return "b3"
+	case *propagatorW3c:
+		return "tracecontext"
+	case *propagatorBaggage:
+		return "baggage"
+	default:
+		return ""
+	}
 }
 
 // propagateTracestate will add the tracestate propagating tag to the given
@@ -306,15 +395,8 @@ func (p *chainedPropagator) Extract(carrier interface{}) (ddtrace.SpanContext, e
 // provided by the given *spanContext. If it matches, then the tracestate
 // will be re-composed based on the composition of the given *spanContext,
 // but will include the non-DD vendors in the W3C trace context's tracestate.
-func (p *propagatorW3c) propagateTracestate(ctx *spanContext, carrier interface{}) {
-	w3cCtx, _ := p.Extract(carrier)
-	if w3cCtx == nil {
-		return // It's not valid, so ignore it.
-	}
-	if ctx.TraceID() != w3cCtx.TraceID() {
-		return // The trace-ids must match.
-	}
-	if w3cCtx.(*spanContext).trace == nil {
+func (p *propagatorW3c) propagateTracestate(ctx *spanContext, w3cCtx *spanContext) {
+	if w3cCtx.trace == nil {
 		return // this shouldn't happen, since it should have a propagating tag already
 	}
 	if ctx.trace == nil {
@@ -324,9 +406,10 @@ func (p *propagatorW3c) propagateTracestate(ctx *spanContext, carrier interface{
 	// it to the span context that will be returned.
 	// Note: Other trace context fields like sampling priority, propagated tags,
 	// and origin will remain unchanged.
-	ts := w3cCtx.(*spanContext).trace.propagatingTag(tracestateHeader)
+	ts := w3cCtx.trace.propagatingTag(tracestateHeader)
 	priority, _ := ctx.SamplingPriority()
 	setPropagatingTag(ctx, tracestateHeader, composeTracestate(ctx, priority, ts))
+	ctx.isRemote = (w3cCtx.isRemote)
 }
 
 // propagator implements Propagator and injects/extracts span contexts
@@ -485,6 +568,33 @@ func validateTID(tid string) error {
 		return fmt.Errorf("malformed: %q", tid)
 	}
 	return nil
+}
+
+// getDatadogPropagator returns the Datadog Propagator
+func getDatadogPropagator(cp *chainedPropagator) *propagator {
+	for _, e := range cp.extractors {
+		p, isDatadog := (e).(*propagator)
+		if isDatadog {
+			return p
+		}
+	}
+	return nil
+}
+
+// overrideDatadogParentID overrides the span ID of a context with the ID extracted from tracecontext headers.
+// If the reparenting ID is not set on the context, the span ID from datadog headers is used.
+// spanContexts are passed by reference to avoid copying lock value in spanContext type
+func overrideDatadogParentID(ctx, w3cCtx, ddCtx *spanContext) {
+	if ctx == nil || w3cCtx == nil || ddCtx == nil {
+		return
+	}
+	ctx.spanID = w3cCtx.spanID
+	if w3cCtx.reparentID != "" {
+		ctx.reparentID = w3cCtx.reparentID
+	} else if ddCtx != nil {
+		// NIT: could be done without using fmt.Sprintf? Is it worth it?
+		ctx.reparentID = fmt.Sprintf("%016x", ddCtx.SpanID())
+	}
 }
 
 // unmarshalPropagatingTags unmarshals tags from v into ctx
@@ -750,43 +860,136 @@ func (*propagatorW3c) injectTextMap(spanCtx ddtrace.SpanContext, writer TextMapW
 	}
 	writer.Set(traceparentHeader, fmt.Sprintf("00-%s-%016x-%v", traceID, ctx.spanID, flags))
 	// if context priority / origin / tags were updated after extraction,
+	// or if there is a span on the trace
 	// or the tracestateHeader doesn't start with `dd=`
 	// we need to recreate tracestate
 	if ctx.updated ||
+		(!ctx.isRemote || ctx.isRemote && ctx.trace != nil && ctx.trace.root != nil) ||
 		(ctx.trace != nil && !strings.HasPrefix(ctx.trace.propagatingTag(tracestateHeader), "dd=")) ||
 		ctx.trace.propagatingTagsLen() == 0 {
+		// compose a new value for the tracestate
 		writer.Set(tracestateHeader, composeTracestate(ctx, p, ctx.trace.propagatingTag(tracestateHeader)))
 	} else {
+		// use a cached value for the tracestate (e.g., no updating p: key)
 		writer.Set(tracestateHeader, ctx.trace.propagatingTag(tracestateHeader))
 	}
 	return nil
 }
 
+// stringMutator maps characters in a string to new characters. It is a state machine intended
+// to replace regex patterns for simple character replacement, including collapsing runs of a
+// specific range.
+//
+// It's designed after the `hash#Hash` interface, and to work with `strings.Map`.
+type stringMutator struct {
+	// n is the current state of the mutator. It is used to track runs of characters that should
+	// be collapsed.
+	n bool
+	// fn is the function that implements the character replacement logic.
+	// It returns the rune to use as replacement and a bool to tell if next consecutive
+	// characters must be dropped if they fall in the currently matched character set.
+	// It's possible to return `-1` to immediately drop the current rune.
+	//
+	// This logic allows for:
+	// - Replace only the current rune: return <new value>, false
+	// - Drop only the current rune: return -1, false
+	// - Replace the current rune and drop the next consecutive runes if they match the same case: return <new value>, true
+	// - Drop all the consecutive runes matching the same case as the current one: return -1, true
+	//
+	// A known limitation is that we can only support a single case of consecutive runes.
+	fn func(rune) (rune, bool)
+}
+
+// Mutate the mapped string using `strings.Map` and the provided function implementing the character
+// replacement logic.
+func (sm *stringMutator) Mutate(fn func(rune) (rune, bool), s string) string {
+	sm.fn = fn
+	rs := strings.Map(sm.mapping, s)
+	sm.reset()
+
+	return rs
+}
+
+func (sm *stringMutator) mapping(r rune) rune {
+	v, dropConsecutiveMatches := sm.fn(r)
+	if v < 0 {
+		// We reset the state machine in any match that is not related to a consecutive run
+		sm.reset()
+		return -1
+	}
+	if dropConsecutiveMatches {
+		if !sm.n {
+			sm.n = true
+			return v
+		}
+		return -1
+	}
+	// We reset the state machine in any match that is not related to a consecutive run
+	sm.reset()
+	return v
+}
+
+// reset resets the state of the mutator.
+func (sm *stringMutator) reset() {
+	sm.n = false
+}
+
 var (
-	// keyRgx is used to sanitize the keys of the datadog propagating tags.
+	// keyDisallowedFn is used to sanitize the keys of the datadog propagating tags.
 	// Disallowed characters are comma (reserved as a list-member separator),
 	// equals (reserved for list-member key-value separator),
 	// space and characters outside the ASCII range 0x20 to 0x7E.
 	// Disallowed characters must be replaced with the underscore.
-	keyRgx = regexp.MustCompile(",|=|[^\\x20-\\x7E]+")
+	// Equivalent to regexp.MustCompile(",|=|[^\\x20-\\x7E]+")
+	keyDisallowedFn = func(r rune) (rune, bool) {
+		switch {
+		case r == ',' || r == '=':
+			return '_', false
+		case r < 0x20 || r > 0x7E:
+			return '_', true
+		}
+		return r, false
+	}
 
-	// valueRgx is used to sanitize the values of the datadog propagating tags.
+	// valueDisallowedFn is used to sanitize the values of the datadog propagating tags.
 	// Disallowed characters are comma (reserved as a list-member separator),
 	// semi-colon (reserved for separator between entries in the dd list-member),
 	// tilde (reserved, will represent 0x3D (equals) in the encoded tag value,
 	// and characters outside the ASCII range 0x20 to 0x7E.
 	// Equals character must be encoded with a tilde.
 	// Other disallowed characters must be replaced with the underscore.
-	valueRgx = regexp.MustCompile(",|;|~|[^\\x20-\\x7E]+")
+	// Equivalent to regexp.MustCompile(",|;|~|[^\\x20-\\x7E]+")
+	valueDisallowedFn = func(r rune) (rune, bool) {
+		switch {
+		case r == '=':
+			return '~', false
+		case r == ',' || r == '~' || r == ';':
+			return '_', false
+		case r < 0x20 || r > 0x7E:
+			return '_', true
+		}
+		return r, false
+	}
 
-	// originRgx is used to sanitize the value of the datadog origin tag.
+	// originDisallowedFn is used to sanitize the value of the datadog origin tag.
 	// Disallowed characters are comma (reserved as a list-member separator),
 	// semi-colon (reserved for separator between entries in the dd list-member),
 	// equals (reserved for list-member key-value separator),
 	// and characters outside the ASCII range 0x21 to 0x7E.
 	// Equals character must be encoded with a tilde.
 	// Other disallowed characters must be replaced with the underscore.
-	originRgx = regexp.MustCompile(",|~|;|[^\\x21-\\x7E]+")
+	// Equivalent to regexp.MustCompile(",|~|;|[^\\x21-\\x7E]+")
+	originDisallowedFn = func(r rune) (rune, bool) {
+		switch {
+		case r == '=':
+			return '~', false
+		case r == ',' || r == '~' || r == ';':
+			return '_', false
+		case r < 0x21 || r > 0x7E:
+			return '_', true
+		}
+		return r, false
+	}
 )
 
 const (
@@ -819,17 +1022,36 @@ func isValidID(id string) bool {
 // composeTracestate creates a tracestateHeader from the spancontext.
 // The Datadog tracing library is only responsible for managing the list member with key dd,
 // which holds the values of the sampling decision(`s:<value>`), origin(`o:<origin>`),
+// the last parent ID of a Datadog span (`p:<parent_id>`),
 // and propagated tags prefixed with `t.`(e.g. _dd.p.usr.id:usr_id tag will become `t.usr.id:usr_id`).
 func composeTracestate(ctx *spanContext, priority int, oldState string) string {
-	var b strings.Builder
+	var (
+		b  strings.Builder
+		sm = &stringMutator{}
+	)
+
 	b.Grow(128)
-	b.WriteString(fmt.Sprintf("dd=s:%d", priority))
+	b.WriteString("dd=s:")
+	b.WriteString(strconv.Itoa(priority))
 	listLength := 1
 
 	if ctx.origin != "" {
-		oWithSub := originRgx.ReplaceAllString(ctx.origin, "_")
-		b.WriteString(fmt.Sprintf(";o:%s",
-			strings.ReplaceAll(oWithSub, "=", "~")))
+		oWithSub := sm.Mutate(originDisallowedFn, ctx.origin)
+		b.WriteString(";o:")
+		b.WriteString(oWithSub)
+	}
+
+	// if the context is remote and there is a reparentID, set p as reparentId
+	// if the context is remote and there is no reparentID, don't set p
+	// if the context is not remote, set p as context.spanId
+	// this ID can be used by downstream tracers to set a _dd.parent_id tag
+	// to allow the backend to reparent orphaned spans if necessary
+	if !ctx.isRemote {
+		b.WriteString(";p:")
+		b.WriteString(spanIDHexEncoded(ctx.SpanID(), 16))
+	} else if ctx.reparentID != "" {
+		b.WriteString(";p:")
+		b.WriteString(ctx.reparentID)
 	}
 
 	ctx.trace.iteratePropagatingTags(func(k, v string) bool {
@@ -838,14 +1060,15 @@ func composeTracestate(ctx *spanContext, priority int, oldState string) string {
 		}
 		// Datadog propagating tags must be appended to the tracestateHeader
 		// with the `t.` prefix. Tag value must have all `=` signs replaced with a tilde (`~`).
-		tag := fmt.Sprintf("t.%s:%s",
-			keyRgx.ReplaceAllString(k[len("_dd.p."):], "_"),
-			strings.ReplaceAll(valueRgx.ReplaceAllString(v, "_"), "=", "~"))
-		if b.Len()+len(tag) > 256 {
+		key := sm.Mutate(keyDisallowedFn, k[len("_dd.p."):])
+		value := sm.Mutate(valueDisallowedFn, v)
+		if b.Len()+len(key)+len(value)+4 > 256 { // the +4 here is to account for the `t.` prefix, the `;` needed between the tags, and the `:` between the key and value
 			return false
 		}
-		b.WriteString(";")
-		b.WriteString(tag)
+		b.WriteString(";t.")
+		b.WriteString(key)
+		b.WriteString(":")
+		b.WriteString(value)
 		return true
 	})
 	// the old state is split by vendors, must be concatenated with a `,`
@@ -862,7 +1085,8 @@ func composeTracestate(ctx *spanContext, priority int, oldState string) string {
 		if listLength > 32 {
 			break
 		}
-		b.WriteString("," + strings.Trim(s, " \t"))
+		b.WriteString(",")
+		b.WriteString(strings.Trim(s, " \t"))
 	}
 	return b.String()
 }
@@ -880,6 +1104,7 @@ func (*propagatorW3c) extractTextMap(reader TextMapReader) (ddtrace.SpanContext,
 	var parentHeader string
 	var stateHeader string
 	var ctx spanContext
+	ctx.isRemote = true
 	// to avoid parsing tracestate header(s) if traceparent is invalid
 	if err := reader.ForeachKey(func(k, v string) error {
 		key := strings.ToLower(k)
@@ -995,6 +1220,7 @@ func parseTraceparent(ctx *spanContext, header string) error {
 // The keys to the “dd“ values have been shortened as follows to save space:
 // `sampling_priority` = `s`
 // `origin` = `o`
+// `last parent` = `p`
 // `_dd.p.` prefix = `t.`
 func parseTracestate(ctx *spanContext, header string) {
 	if header == "" {
@@ -1011,6 +1237,7 @@ func parseTracestate(ctx *spanContext, header string) {
 		}
 		ddMembers := strings.Split(group[len("dd="):], ";")
 		dropDM := false
+		// indicate that backend could reparent this as a root
 		for _, member := range ddMembers {
 			keyVal := strings.SplitN(member, ":", 2)
 			if len(keyVal) != 2 {
@@ -1044,6 +1271,8 @@ func parseTracestate(ctx *spanContext, header string) {
 					ctx.setSamplingPriority(0, samplernames.Unknown)
 					dropDM = true
 				}
+			} else if key == "p" {
+				ctx.reparentID = val
 			} else if strings.HasPrefix(key, "t.dm") {
 				if ctx.trace.hasPropagatingTag(keyDecisionMaker) || dropDM {
 					continue
@@ -1082,4 +1311,165 @@ func extractTraceID128(ctx *spanContext, v string) error {
 		return ErrSpanContextCorrupted
 	}
 	return nil
+}
+
+const (
+	baggageMaxItems     = 64
+	baggageMaxBytes     = 8192
+	safeCharactersKey   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+-.^_`|~"
+	safeCharactersValue = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&'()*+-./:<>?@[]^_`{|}~"
+)
+
+// encodeKey encodes a key with the specified safe characters
+func encodeKey(key string) string {
+	return urlEncode(strings.TrimSpace(key), safeCharactersKey)
+}
+
+// encodeValue encodes a value with the specified safe characters
+func encodeValue(value string) string {
+	return urlEncode(strings.TrimSpace(value), safeCharactersValue)
+}
+
+// urlEncode performs percent-encoding while respecting the safe characters
+func urlEncode(input string, safeCharacters string) string {
+	var encoded strings.Builder
+	for _, c := range input {
+		if strings.ContainsRune(safeCharacters, c) {
+			encoded.WriteRune(c)
+		} else {
+			encoded.WriteString(url.QueryEscape(string(c)))
+		}
+	}
+	return encoded.String()
+}
+
+// propagatorBaggage implements Propagator and injects/extracts span contexts
+// using baggage headers.
+type propagatorBaggage struct{}
+
+func (p *propagatorBaggage) Inject(spanCtx ddtrace.SpanContext, carrier interface{}) error {
+	switch c := carrier.(type) {
+	case TextMapWriter:
+		return p.injectTextMap(spanCtx, c)
+	default:
+		return ErrInvalidCarrier
+	}
+}
+
+// injectTextMap propagates baggage items from the span context into the writer,
+// in the format of a single HTTP "baggage" header. Baggage consists of key=value pairs,
+// separated by commas. This function enforces a maximum number of baggage items and a maximum overall size.
+// If either limit is exceeded, excess items or bytes are dropped, and a warning is logged.
+//
+// Example of a single "baggage" header:
+// baggage: foo=bar,baz=qux
+//
+// Each key and value pair is encoded and added to the existing baggage header in <key>=<value> format,
+// joined together by commas,
+func (*propagatorBaggage) injectTextMap(spanCtx ddtrace.SpanContext, writer TextMapWriter) error {
+	ctx, _ := spanCtx.(*spanContext)
+	if ctx == nil {
+		return nil
+	}
+
+	// Copy the baggage map under the read lock to avoid data races.
+	ctx.mu.RLock()
+	baggageCopy := make(map[string]string, len(ctx.baggage))
+	for k, v := range ctx.baggage {
+		baggageCopy[k] = v
+	}
+	ctx.mu.RUnlock()
+
+	// If the baggage is empty, do nothing.
+	if len(baggageCopy) == 0 {
+		return nil
+	}
+
+	baggageItems := make([]string, 0, len(baggageCopy))
+	totalSize := 0
+	count := 0
+
+	for key, value := range baggageCopy {
+		if count >= baggageMaxItems {
+			log.Warn("Baggage item limit exceeded. Only the first %d items will be propagated.", baggageMaxItems)
+			break
+		}
+
+		encodedKey := encodeKey(key)
+		encodedValue := encodeValue(value)
+		item := fmt.Sprintf("%s=%s", encodedKey, encodedValue)
+
+		itemSize := len(item)
+		if count > 0 {
+			itemSize++ // account for the comma separator
+		}
+
+		if totalSize+itemSize > baggageMaxBytes {
+			log.Warn("Baggage size limit exceeded. Only the first %d bytes will be propagated.", baggageMaxBytes)
+			break
+		}
+
+		baggageItems = append(baggageItems, item)
+		totalSize += itemSize
+		count++
+	}
+
+	if len(baggageItems) > 0 {
+		writer.Set("baggage", strings.Join(baggageItems, ","))
+	}
+
+	return nil
+}
+
+func (p *propagatorBaggage) Extract(carrier interface{}) (ddtrace.SpanContext, error) {
+	switch c := carrier.(type) {
+	case TextMapReader:
+		return p.extractTextMap(c)
+	default:
+		return nil, ErrInvalidCarrier
+	}
+}
+
+func (*propagatorBaggage) extractTextMap(reader TextMapReader) (ddtrace.SpanContext, error) {
+	var baggageHeader string
+	var ctx spanContext
+	err := reader.ForeachKey(func(k, v string) error {
+		if strings.ToLower(k) == "baggage" {
+			baggageHeader = v
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ctx.baggage = make(map[string]string)
+
+	if baggageHeader == "" {
+		return &ctx, nil
+	}
+
+	pairs := strings.Split(baggageHeader, ",")
+	for _, pair := range pairs {
+		pair = strings.TrimSpace(pair)
+		if !strings.Contains(pair, "=") {
+			// If a pair doesn't contain '=', treat it as invalid.
+			return nil, fmt.Errorf("Invalid baggage item: %s", pair)
+		}
+
+		keyValue := strings.SplitN(pair, "=", 2)
+		rawKey := strings.TrimSpace(keyValue[0])
+		rawValue := strings.TrimSpace(keyValue[1])
+
+		decKey, errKey := url.QueryUnescape(rawKey)
+		decVal, errVal := url.QueryUnescape(rawValue)
+		if errKey != nil || errVal != nil {
+			return nil, fmt.Errorf("Invalid baggage item: %s", pair)
+		}
+		ctx.baggage[decKey] = decVal
+	}
+	if len(ctx.baggage) > 0 {
+		atomic.StoreUint32(&ctx.hasBaggage, 1)
+	}
+	return &ctx, nil
 }
