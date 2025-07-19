@@ -90,6 +90,7 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.StringVar(&params.UpstreamSvcName, "upstreamsvc", "kube-dns", "Service name whose cluster IP is upstream for node-cache")
 	flag.StringVar(&params.HealthPort, "health-port", "8080", "port used by health plugin")
 	flag.BoolVar(&params.SkipTeardown, "skipteardown", false, "indicates whether iptables rules should be torn down on exit")
+	flag.BoolVar(&params.ReloadWithSignal, "reloadwithsignal", false, "use SIGUSR1 on self to reload CoreDNS")
 	flag.Parse()
 
 	for _, ipstr := range strings.Split(params.LocalIPStr, ",") {
