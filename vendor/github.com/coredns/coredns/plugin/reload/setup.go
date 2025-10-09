@@ -20,7 +20,7 @@ func init() { plugin.Register("reload", setup) }
 // channel for QUIT is never changed in purpose.
 // WARNING: this data may be unsync after an invalid attempt of reload Corefile.
 var (
-	r              = reload{dur: defaultInterval, u: unused, quit: make(chan bool)}
+	r              = reload{dur: defaultInterval, u: unused, quit: make(chan bool, 1)}
 	once, shutOnce sync.Once
 )
 

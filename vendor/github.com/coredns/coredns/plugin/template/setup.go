@@ -158,5 +158,5 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 		handler.Templates = append(handler.Templates, t)
 	}
 
-	return
+	return handler, nil
 }

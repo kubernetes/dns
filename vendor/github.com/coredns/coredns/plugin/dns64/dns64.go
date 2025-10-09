@@ -160,10 +160,7 @@ func (d *DNS64) Synthesize(origReq, origResponse, resp *dns.Msg) *dns.Msg {
 		aaaa, _ := to6(d.Prefix, rr.(*dns.A).A)
 
 		// ttl is min of SOA TTL and A TTL
-		ttl := SOATtl
-		if rr.Header().Ttl < ttl {
-			ttl = rr.Header().Ttl
-		}
+		ttl := min(rr.Header().Ttl, SOATtl)
 
 		// Replace A answer with a DNS64 AAAA answer
 		ret.Answer = append(ret.Answer, &dns.AAAA{

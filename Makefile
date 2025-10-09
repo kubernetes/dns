@@ -40,7 +40,7 @@ REGISTRY ?= gcr.io/k8s-staging-dns
 # Default architecture to build for.
 ARCH ?= amd64
 # Image to use for building.
-BUILD_IMAGE ?= golang:1.23.7-bookworm
+BUILD_IMAGE ?= golang:1.24.8-bookworm
 # Containers will be named: $(CONTAINER_PREFIX)-$(BINARY)-$(ARCH):$(VERSION)
 CONTAINER_PREFIX ?= k8s-dns
 # Caching for go builds, disabled for CI

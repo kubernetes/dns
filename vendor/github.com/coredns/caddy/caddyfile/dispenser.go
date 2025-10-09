@@ -111,7 +111,9 @@ func (d *Dispenser) NextLine() bool {
 // not supported.
 func (d *Dispenser) NextBlock() bool {
 	if d.nesting > 0 {
-		d.Next()
+		if !d.Next() {
+			return false
+		}
 		if d.Val() == "}" {
 			d.nesting--
 			return false
@@ -125,7 +127,9 @@ func (d *Dispenser) NextBlock() bool {
 		d.cursor-- // roll back if not opening brace
 		return false
 	}
-	d.Next()
+	if !d.Next() {
+		return false
+	}
 	if d.Val() == "}" {
 		// Open and then closed right away
 		return false

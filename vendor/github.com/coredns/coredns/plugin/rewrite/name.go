@@ -203,8 +203,8 @@ func newPrefixNameRule(nextAction string, auto bool, prefix, replacement string,
 }
 
 func (rule *prefixNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
-	if strings.HasPrefix(state.Name(), rule.prefix) {
-		state.Req.Question[0].Name = rule.replacement + strings.TrimPrefix(state.Name(), rule.prefix)
+	if after, ok := strings.CutPrefix(state.Name(), rule.prefix); ok {
+		state.Req.Question[0].Name = rule.replacement + after
 		return rule.responseRuleFor(state)
 	}
 	return nil, RewriteIgnored
@@ -417,7 +417,7 @@ func parseAnswerRules(name string, args []string) (auto bool, rules ResponseRule
 	if auto && nameRules > 0 {
 		return false, nil, fmt.Errorf("auto name answer rule cannot be combined with explicit name anwer rules")
 	}
-	return
+	return auto, rules, nil
 }
 
 // hasClosingDot returns true if s has a closing dot at the end.

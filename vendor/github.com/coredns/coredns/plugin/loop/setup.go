@@ -31,7 +31,10 @@ func setup(c *caddy.Controller) error {
 		go func() {
 			deadline := time.Now().Add(30 * time.Second)
 			conf := dnsserver.GetConfig(c)
-			lh := conf.ListenHosts[0]
+			lh := ""
+			if len(conf.ListenHosts) > 0 {
+				lh = conf.ListenHosts[0]
+			}
 			addr := net.JoinHostPort(lh, conf.Port)
 
 			for time.Now().Before(deadline) {
@@ -70,7 +73,10 @@ func parse(c *caddy.Controller) (*Loop, error) {
 		}
 
 		if len(c.ServerBlockKeys) > 0 {
-			zones = plugin.Host(c.ServerBlockKeys[0]).NormalizeExact()
+			z := plugin.Host(c.ServerBlockKeys[0]).NormalizeExact()
+			if len(z) > 0 {
+				zones = z
+			}
 		}
 	}
 	return New(zones[0]), nil

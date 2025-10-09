@@ -3,21 +3,23 @@ package runtimemetrics
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"runtime/metrics"
 )
 
-const gogcMetricName = "/gc/gogc:percent"
-const gomemlimitMetricName = "/gc/gomemlimit:bytes"
-const gomaxProcsMetricName = "/sched/gomaxprocs:threads"
-
 func getBaseTags() []string {
+	const gogcMetricName = "/gc/gogc:percent"
+	const gomemlimitMetricName = "/gc/gomemlimit:bytes"
+	const gomaxProcsMetricName = "/sched/gomaxprocs:threads"
+
 	samples := []metrics.Sample{
 		{Name: gogcMetricName},
 		{Name: gomemlimitMetricName},
 		{Name: gomaxProcsMetricName},
 	}
 
-	baseTags := make([]string, 0, len(samples))
+	baseTags := make([]string, 0, len(samples)+1)
+	baseTags = append(baseTags, "goversion:"+runtime.Version())
 
 	metrics.Read(samples)
 
