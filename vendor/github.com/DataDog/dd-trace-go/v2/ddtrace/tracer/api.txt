@@ -1,0 +1,378 @@
+// API Stability Report
+// Package: github.com/DataDog/dd-trace-go/v2/ddtrace/tracer
+// Module: github.com/DataDog/dd-trace-go/v2
+
+// File: context.go
+
+// Package Functions
+func ContextWithSpan(context.Context, *Span) (context.Context)
+func SpanFromContext(context.Context) (*Span, bool)
+func StartSpanFromContext(context.Context, string, ...StartSpanOption) (*Span, context.Context)
+
+// File: data_streams.go
+
+// Package Functions
+func SetDataStreamsCheckpoint(context.Context, ...string) (context.Context, bool)
+func SetDataStreamsCheckpointWithParams(context.Context, options.CheckpointParams, ...string) (context.Context, bool)
+func TrackKafkaCommitOffset(string, int32, int64)
+func TrackKafkaHighWatermarkOffset(string, string, int32, int64)
+func TrackKafkaProduceOffset(string, int32, int64)
+
+// File: logger.go
+
+// Package Functions
+func AdaptLogger(func(LogLevel, string, ...any)()) (Logger)
+func UseLogger(Logger)
+
+// Types
+type LogLevel log.Level
+
+type Logger interface {
+	func Log(string)
+}
+
+// File: noop.go
+
+// Types
+type NoopTracer struct {}
+
+func (NoopTracer) Extract(interface{}) (*SpanContext, error)
+func (NoopTracer) Flush()
+func (NoopTracer) Inject(*SpanContext, interface{}) (error)
+func (NoopTracer) SetServiceInfo(string)
+func (NoopTracer) StartSpan(string, ...StartSpanOption) (*Span)
+func (NoopTracer) Stop()
+func (NoopTracer) TracerConf() (TracerConf)
+
+// File: option.go
+
+// Package Functions
+func AnalyticsRate(float64) (StartSpanOption)
+func ChildOf(*SpanContext) (StartSpanOption)
+func MarkIntegrationImported(string) (bool)
+func Measured() (StartSpanOption)
+func ResourceName(string) (StartSpanOption)
+func ServiceName(string) (StartSpanOption)
+func SpanType(string) (StartSpanOption)
+func StartTime(time.Time) (StartSpanOption)
+func Tag(string, interface{}) (StartSpanOption)
+func WithAgentAddr(string) (StartOption)
+func WithAgentTimeout(int) (StartOption)
+func WithAgentURL(string) (StartOption)
+func WithAnalytics(bool) (StartOption)
+func WithAnalyticsRate(float64) (StartOption)
+func WithAppSecEnabled(bool) (StartOption)
+func WithDebugMode(bool) (StartOption)
+func WithDebugSpansMode(time.Duration) (StartOption)
+func WithDebugStack(bool) (StartOption)
+func WithDogstatsdAddr(string) (StartOption)
+func WithEnv(string) (StartOption)
+func WithFeatureFlags(...string) (StartOption)
+func WithGlobalServiceName(bool) (StartOption)
+func WithGlobalTag(string, interface{}) (StartOption)
+func WithHTTPClient(*http.Client) (StartOption)
+func WithHeaderTags([]string) (StartOption)
+func WithHostname(string) (StartOption)
+func WithLambdaMode(bool) (StartOption)
+func WithLogStartup(bool) (StartOption)
+func WithLogger(Logger) (StartOption)
+func WithPartialFlushing(int) (StartOption)
+func WithPeerServiceDefaults(bool) (StartOption)
+func WithPeerServiceMapping(string) (StartOption)
+func WithProfilerCodeHotspots(bool) (StartOption)
+func WithProfilerEndpoints(bool) (StartOption)
+func WithPropagation() (UserMonitoringOption)
+func WithPropagator(Propagator) (StartOption)
+func WithRetryInterval(int) (StartOption)
+func WithRuntimeMetrics() (StartOption)
+func WithSampler(Sampler) (StartOption)
+func WithSamplerRate(float64) (StartOption)
+func WithSamplingRules([]SamplingRule) (StartOption)
+func WithSendRetries(int) (StartOption)
+func WithService(string) (StartOption)
+func WithServiceMapping(string) (StartOption)
+func WithServiceVersion(string) (StartOption)
+func WithSpanID(uint64) (StartSpanOption)
+func WithSpanLinks([]SpanLink) (StartSpanOption)
+func WithStartSpanConfig(*StartSpanConfig) (StartSpanOption)
+func WithStatsComputation(bool) (StartOption)
+func WithTestDefaults(any) (StartOption)
+func WithTraceEnabled(bool) (StartOption)
+func WithUDS(string) (StartOption)
+func WithUniversalVersion(string) (StartOption)
+func WithUserEmail(string) (UserMonitoringOption)
+func WithUserLogin(string) (UserMonitoringOption)
+func WithUserMetadata(string) (UserMonitoringOption)
+func WithUserName(string) (UserMonitoringOption)
+func WithUserOrg(string) (UserMonitoringOption)
+func WithUserRole(string) (UserMonitoringOption)
+func WithUserScope(string) (UserMonitoringOption)
+func WithUserSessionID(string) (UserMonitoringOption)
+
+// Types
+type StartOption func(*config)()
+
+type UserMonitoringConfig struct {
+	Email string
+	Login string
+	Metadata map[string]string
+	Name string
+	Org string
+	PropagateID bool
+	Role string
+	Scope string
+	SessionID string
+}
+
+type UserMonitoringOption func(*UserMonitoringConfig)()
+
+// File: propagator.go
+
+// Types
+type Propagator interface {
+	func Extract(interface{}) (*SpanContext, error)
+	func Inject(*SpanContext, interface{}) (error)
+}
+
+type TextMapReader interface {
+	func ForeachKey(func(string)(error)) (error)
+}
+
+type TextMapWriter interface {
+	func Set(string)
+}
+
+// File: rules_sampler.go
+
+// Package Functions
+func EqualsFalseNegative([]SamplingRule) (bool)
+func SpanSamplingRules(...Rule) ([]SamplingRule)
+func TraceSamplingRules(...Rule) ([]SamplingRule)
+
+// Types
+type Rule struct {
+	MaxPerSecond float64
+	NameGlob string
+	Rate float64
+	ResourceGlob string
+	ServiceGlob string
+	Tags map[string]string
+}
+
+type SamplingRule struct {
+	MaxPerSecond float64
+	Name *regexp.Regexp
+	Provenance provenance
+	Rate float64
+	Resource *regexp.Regexp
+	Service *regexp.Regexp
+	Tags map[string]*regexp.Regexp
+}
+
+func (*SamplingRule) EqualsFalseNegative(*SamplingRule) (bool)
+func (SamplingRule) MarshalJSON() ([]byte, error)
+func (SamplingRule) String() (string)
+func (*SamplingRule) UnmarshalJSON([]byte) (error)
+
+type SamplingRuleType int
+
+// File: sampler.go
+
+// Package Functions
+func NewAllSampler() (RateSampler)
+func NewRateSampler(float64) (RateSampler)
+
+// Types
+type RateSampler interface {
+	func Rate() (float64)
+	func SetRate(float64)
+}
+
+type Sampler interface {
+	func Sample(*Span) (bool)
+}
+
+// File: span.go
+
+// Types
+type Span struct {}
+
+func (*Span) AddEvent(string, ...SpanEventOption)
+func (*Span) AddLink(SpanLink)
+func (*Span) AsMap() (map[string]interface{})
+func (*Span) BaggageItem(string) (string)
+func (*Span) Context() (*SpanContext)
+func (*Span) Finish(...FinishOption)
+func (*Span) Format(fmt.State, rune)
+func (*Span) Root() (*Span)
+func (*Span) SetBaggageItem(string)
+func (*Span) SetOperationName(string)
+func (*Span) SetTag(string, interface{})
+func (*Span) SetUser(string, ...UserMonitoringOption)
+func (*Span) StartChild(string, ...StartSpanOption) (*Span)
+func (*Span) String() (string)
+
+// File: span_config.go
+
+// Package Functions
+func FinishTime(time.Time) (FinishOption)
+func NewFinishConfig(...FinishOption) (*FinishConfig)
+func NewStartSpanConfig(...StartSpanOption) (*StartSpanConfig)
+func NoDebugStack() (FinishOption)
+func StackFrames(uint) (FinishOption)
+func WithError(error) (FinishOption)
+func WithFinishConfig(*FinishConfig) (FinishOption)
+
+// Types
+type FinishConfig struct {
+	Error error
+	FinishTime time.Time
+	NoDebugStack bool
+	SkipStackFrames uint
+	StackFrames uint
+}
+
+type FinishOption func(*FinishConfig)()
+
+type StartSpanConfig struct {
+	Context context.Context
+	Parent *SpanContext
+	SpanID uint64
+	SpanLinks []SpanLink
+	StartTime time.Time
+	Tags map[string]interface{}
+}
+
+type StartSpanOption func(*StartSpanConfig)()
+
+// File: span_event_config.go
+
+// Package Functions
+func WithSpanEventAttributes(map[string]any) (SpanEventOption)
+func WithSpanEventTimestamp(time.Time) (SpanEventOption)
+
+// Types
+type SpanEventConfig struct {
+	Attributes map[string]any
+	Time time.Time
+}
+
+type SpanEventOption func(*SpanEventConfig)()
+
+// File: spancontext.go
+
+// Package Functions
+func FromGenericCtx(ddtrace.SpanContext) (*SpanContext)
+
+// Types
+type SpanContext struct {}
+
+func (*SpanContext) ForeachBaggageItem(func(string)(bool))
+func (*SpanContext) SamplingPriority() (int, bool)
+func (*SpanContext) SpanID() (uint64)
+func (*SpanContext) SpanLinks() ([]SpanLink)
+func (*SpanContext) TraceID() (string)
+func (*SpanContext) TraceIDBytes() ([16]byte)
+func (*SpanContext) TraceIDLower() (uint64)
+func (*SpanContext) TraceIDUpper() (uint64)
+
+// File: spanlink.go
+
+// Types
+type SpanLink struct {
+	Attributes map[string]string
+	Flags uint32
+	SpanID uint64
+	TraceID uint64
+	TraceIDHigh uint64
+	Tracestate string
+}
+
+// File: sqlcomment.go
+
+// Types
+type DBMPropagationMode string
+
+type SQLCommentCarrier struct {
+	DBServiceName string
+	Mode DBMPropagationMode
+	PeerDBHostname string
+	PeerDBName string
+	PeerService string
+	Query string
+	SpanID uint64
+}
+
+func (*SQLCommentCarrier) Extract() (*SpanContext, error)
+func (*SQLCommentCarrier) Inject(*SpanContext) (error)
+
+// File: textmap.go
+
+// Package Functions
+func NewPropagator(*PropagatorConfig, ...Propagator) (Propagator)
+
+// Types
+type HTTPHeadersCarrier http.Header
+
+type PropagatorConfig struct {
+	B3 bool
+	BaggageHeader string
+	BaggagePrefix string
+	MaxTagsHeaderLen int
+	ParentHeader string
+	PriorityHeader string
+	TraceHeader string
+}
+
+type TextMapCarrier map[string]string
+
+// File: tracer.go
+
+// Package Functions
+func Extract(interface{}) (*SpanContext, error)
+func Flush()
+func Inject(*SpanContext, interface{}) (error)
+func SetUser(*Span, string, ...UserMonitoringOption)
+func Start(...StartOption) (error)
+func StartSpan(string, ...StartSpanOption) (*Span)
+func Stop()
+
+// Types
+type Tracer interface {
+	func Extract(interface{}) (*SpanContext, error)
+	func Flush()
+	func Inject(*SpanContext, interface{}) (error)
+	func StartSpan(string, ...StartSpanOption) (*Span)
+	func Stop()
+	func TracerConf() (TracerConf)
+}
+
+type TracerConf struct {
+	CanComputeStats bool
+	CanDropP0s bool
+	DebugAbandonedSpans bool
+	Disabled bool
+	EnvTag string
+	PartialFlush bool
+	PartialFlushMinSpans int
+	PeerServiceDefaults bool
+	PeerServiceMappings map[string]string
+	ServiceTag string
+	TracingAsTransport bool
+	VersionTag string
+}
+
+// File: tracer_metadata.go
+
+// Types
+type Metadata struct {
+	Hostname string
+	Language string
+	RuntimeID string
+	SchemaVersion uint8
+	ServiceEnvironment string
+	ServiceName string
+	ServiceVersion string
+	Version string
+}
+

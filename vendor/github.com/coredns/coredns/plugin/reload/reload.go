@@ -60,7 +60,7 @@ func parse(corefile caddy.Input) ([]byte, error) {
 	return json.Marshal(serverBlocks)
 }
 
-func hook(event caddy.EventName, info interface{}) error {
+func hook(event caddy.EventName, info any) error {
 	if event != caddy.InstanceStartupEvent {
 		return nil
 	}
@@ -105,6 +105,10 @@ func hook(event caddy.EventName, info interface{}) error {
 					// now lets consider that plugin will not be reload, unless appear in next config file
 					// change status of usage will be reset in setup if the plugin appears in config file
 					r.setUsage(maybeUsed)
+					// If shutdown is in progress, avoid attempting a restart.
+					if shutdownRequested(r.quit) {
+						return
+					}
 					_, err := instance.Restart(corefile)
 					reloadInfo.WithLabelValues("sha512", hex.EncodeToString(sha512sum[:])).Set(1)
 					if err != nil {
@@ -125,4 +129,15 @@ func hook(event caddy.EventName, info interface{}) error {
 	}()
 
 	return nil
+}
+
+// shutdownRequested reports whether a shutdown has been requested via quit channel.
+// helps with unit testing of the shutdown gate logic.
+func shutdownRequested(quit <-chan bool) bool {
+	select {
+	case <-quit:
+		return true
+	default:
+		return false
+	}
 }

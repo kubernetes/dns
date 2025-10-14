@@ -28,14 +28,21 @@ type Limiter interface {
 type TokenTicker struct {
 	tokens    atomic.Int64  // The amount of tokens currently available
 	maxTokens int64         // The maximum amount of tokens the bucket can hold
+	interval  time.Duration // The interval at which the tokens are refilled
 	ticker    *time.Ticker  // The ticker used to update the bucket (nil if not started yet)
 	stopChan  chan struct{} // The channel to stop the ticker updater (nil if not started yet)
 }
 
 // NewTokenTicker is a utility function that allocates a token ticker, initializes necessary fields and returns it
 func NewTokenTicker(tokens, maxTokens int64) *TokenTicker {
+	return NewTokenTickerWithInterval(tokens, maxTokens, time.Second)
+}
+
+// NewTokenTickerWithInterval is a utility function that allocates a token ticker with a custom interval
+func NewTokenTickerWithInterval(tokens, maxTokens int64, interval time.Duration) *TokenTicker {
 	t := &TokenTicker{
 		maxTokens: maxTokens,
+		interval:  interval,
 	}
 	t.tokens.Store(tokens)
 	return t
@@ -44,7 +51,7 @@ func NewTokenTicker(tokens, maxTokens int64) *TokenTicker {
 // updateBucket performs a select loop to update the token amount in the bucket.
 // Used in a goroutine by the rate limiter.
 func (t *TokenTicker) updateBucket(startTime time.Time, ticksChan <-chan time.Time, stopChan <-chan struct{}, syncChan chan<- struct{}) {
-	nsPerToken := time.Second.Nanoseconds() / t.maxTokens
+	nsPerToken := t.interval.Nanoseconds() / t.maxTokens
 	elapsedNs := int64(0)
 	prevStamp := startTime
 

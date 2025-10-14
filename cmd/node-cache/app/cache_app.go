@@ -27,7 +27,6 @@ import (
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
-	utilexec "k8s.io/utils/exec"
 	utilnet "k8s.io/utils/net"
 )
 
@@ -151,12 +150,11 @@ func (c *CacheApp) initIptables() {
 }
 
 func newIPTables(isIPv6 bool) utiliptables.Interface {
-	execer := utilexec.New()
 	protocol := utiliptables.ProtocolIPv4
 	if isIPv6 {
 		protocol = utiliptables.ProtocolIPv6
 	}
-	return utiliptables.New(execer, protocol)
+	return utiliptables.New(protocol)
 }
 
 func handleIPTablesError(err error) {

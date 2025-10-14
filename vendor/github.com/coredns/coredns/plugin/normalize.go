@@ -179,7 +179,11 @@ func OriginsFromArgsOrServerBlock(args, serverblock []string) []string {
 		s := make([]string, len(serverblock))
 		copy(s, serverblock)
 		for i := range s {
-			s[i] = Host(s[i]).NormalizeExact()[0] // expansion of these already happened in dnsserver/register.go
+			sx := Host(s[i]).NormalizeExact() // expansion of these already happened in dnsserver/register.go
+			if len(sx) == 0 {
+				continue
+			}
+			s[i] = sx[0]
 		}
 		return s
 	}

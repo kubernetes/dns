@@ -25,10 +25,13 @@ dnstap SOCKET [full] [writebuffer] [queue] {
 
 * **SOCKET** is the socket (path) supplied to the dnstap command line tool.
 * `full` to include the wire-format DNS message.
+* **writebuffer** sets the TCP write buffer multiplier in MiB. Valid range: [1, 1024].
+* **queue** sets the queue multiplier, applied to 10,000 messages. Valid range: [1, 4096].
 * **IDENTITY** to override the identity of the server. Defaults to the hostname.
 * **VERSION** to override the version field. Defaults to the CoreDNS version.
 * **EXTRA** to define "extra" field in dnstap payload, [metadata](../metadata/) replacement available here.
 * `skipverify` to skip tls verification during connection. Default to be secure
+
 
 ## Examples
 
@@ -38,7 +41,7 @@ Log information about client requests and responses to */tmp/dnstap.sock*.
 dnstap /tmp/dnstap.sock
 ~~~
 
-Log information about client requests and responses and tcp write buffer is 1024*Mb and queue is 2048*10000. 
+Log information about client requests and responses with a custom TCP write buffer (1024 MiB) and queue capacity (2048 x 10000).
 
 ~~~ txt
 dnstap /tmp/dnstap.sock full 1024 2048
