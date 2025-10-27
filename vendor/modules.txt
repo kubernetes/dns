@@ -576,7 +576,7 @@ go.etcd.io/etcd/client/pkg/v3/tlsutil
 go.etcd.io/etcd/client/pkg/v3/transport
 go.etcd.io/etcd/client/pkg/v3/types
 go.etcd.io/etcd/client/pkg/v3/verify
-# go.etcd.io/etcd/client/v2 v2.305.23
+# go.etcd.io/etcd/client/v2 v2.305.24
 ## explicit; go 1.24
 go.etcd.io/etcd/client/v2
 # go.etcd.io/etcd/client/v3 v3.6.5
