@@ -177,9 +177,6 @@ func (c *CacheApp) TeardownNetworking() error {
 		c.exitChan <- struct{}{}
 	}
 	var err error
-	if c.params.SetupInterface {
-		err = c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
-	}
 	if c.params.SetupIptables {
 		for _, rule := range c.iptablesRules {
 			exists := true
@@ -199,6 +196,9 @@ func (c *CacheApp) TeardownNetworking() error {
 			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
 			err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
 		}
+	}
+	if c.params.SetupInterface {
+		err = c.netifHandle.RemoveDummyDevice(c.params.InterfaceName)
 	}
 	return err
 }
