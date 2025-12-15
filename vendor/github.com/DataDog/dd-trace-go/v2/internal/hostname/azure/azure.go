@@ -40,7 +40,7 @@ func GetHostname(ctx context.Context) (string, error) {
 		VMID string
 	}
 	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
-		return "", fmt.Errorf("failed to parse Azure instance metadata: %s", err.Error())
+		return "", fmt.Errorf("failed to parse Azure instance metadata: %s", err)
 	}
 
 	if err := validate.ValidHostname(metadata.VMID); err != nil {
@@ -56,7 +56,7 @@ var instanceMetaFetcher = cachedfetch.Fetcher{
 		metadataJSON, err := getResponse(ctx,
 			metadataURL+"/metadata/instance/compute?api-version=2017-08-01")
 		if err != nil {
-			return "", fmt.Errorf("failed to get Azure instance metadata: %s", err.Error())
+			return "", fmt.Errorf("failed to get Azure instance metadata: %s", err)
 		}
 		return metadataJSON, nil
 	},

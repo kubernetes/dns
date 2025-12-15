@@ -10,9 +10,10 @@ package stableconfig
 import (
 	"os"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
-	"gopkg.in/yaml.v3"
 )
 
 const (

@@ -1,0 +1,34 @@
+# Unless explicitly stated otherwise all files in this repository are licensed
+# under the Apache License Version 2.0.
+# This product includes software developed at Datadog (https://www.datadoghq.com/).
+# Copyright 2025 Datadog, Inc.
+---
+# yaml-language-server: $schema=https://datadoghq.dev/orchestrion/schema.json
+meta:
+  name: error-tracking
+  description: The entry point of a Go program with error tracking.
+
+aspects:
+  - id: Error Tracking
+    join-point:
+      all-of:
+        - package-filter:
+            root: true
+        - function-body:
+            function:
+              - signature-contains:
+                  returns: [error]
+    advice:
+      - prepend-statements:
+          order: 100
+          imports:
+            errortrace: github.com/DataDog/dd-trace-go/v2/instrumentation/errortrace
+          template: |-
+            {{ $ret := .Function.LastResultThatImplements "error" }}
+            {{ with $ret }}
+              defer func() {
+                if {{ $ret }} != nil {
+                  {{ $ret }} = errortrace.Wrap({{ $ret }})
+                }
+              }()
+            {{- end -}}

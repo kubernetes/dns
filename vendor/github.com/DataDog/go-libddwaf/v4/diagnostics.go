@@ -29,6 +29,8 @@ type Diagnostics struct {
 	ExclusionData *Feature
 	// Processors contains information about the loaded processors.
 	Processors *Feature
+	// ProcessorOverrides contains information about the loaded processor overrides.
+	ProcessorOverrides *Feature
 	// Scanners contains information about the loaded scanners.
 	Scanners *Feature
 	// Version is the version of the parsed ruleset if available.
@@ -38,15 +40,16 @@ type Diagnostics struct {
 // EachFeature calls the provided callback for each (non-nil) feature in this diagnostics object.
 func (d *Diagnostics) EachFeature(cb func(string, *Feature)) {
 	byName := map[string]*Feature{
-		"rules":           d.Rules,
-		"custom_rules":    d.CustomRules,
-		"actions":         d.Actions,
-		"exclusions":      d.Exclusions,
-		"rules_overrides": d.RulesOverrides,
-		"rules_data":      d.RulesData,
-		"exclusion_data":  d.ExclusionData,
-		"processors":      d.Processors,
-		"scanners":        d.Scanners,
+		"rules":               d.Rules,
+		"custom_rules":        d.CustomRules,
+		"actions":             d.Actions,
+		"exclusions":          d.Exclusions,
+		"rules_overrides":     d.RulesOverrides,
+		"rules_data":          d.RulesData,
+		"exclusion_data":      d.ExclusionData,
+		"processors":          d.Processors,
+		"processor_overrides": d.ProcessorOverrides,
+		"scanners":            d.Scanners,
 	}
 
 	for name, feat := range byName {

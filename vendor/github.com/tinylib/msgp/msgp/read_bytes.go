@@ -358,7 +358,7 @@ func ReadFloat64Bytes(b []byte) (f float64, o []byte, err error) {
 	return
 }
 
-// ReadFloat32Bytes tries to read a float64
+// ReadFloat32Bytes tries to read a float32
 // from 'b' and return the value and the remaining bytes.
 //
 // Possible errors:
@@ -381,7 +381,7 @@ func ReadFloat32Bytes(b []byte) (f float32, o []byte, err error) {
 	return
 }
 
-// ReadBoolBytes tries to read a float64
+// ReadBoolBytes tries to read a bool
 // from 'b' and return the value and the remaining bytes.
 //
 // Possible errors:
@@ -1064,6 +1064,12 @@ func ReadComplex64Bytes(b []byte) (c complex64, o []byte, err error) {
 		math.Float32frombits(big.Uint32(b[6:])))
 	o = b[10:]
 	return
+}
+
+// ReadTimeUTCBytes does the same as ReadTimeBytes, but returns the value as UTC.
+func ReadTimeUTCBytes(b []byte) (t time.Time, o []byte, err error) {
+	t, o, err = ReadTimeBytes(b)
+	return t.UTC(), o, err
 }
 
 // ReadTimeBytes reads a time.Time

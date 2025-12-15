@@ -55,7 +55,7 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 		return nil, fmt.Errorf("handle was released")
 	}
 
-	cContext := wafLib.ContextInit(handle.cHandle)
+	cContext := bindings.Lib.ContextInit(handle.cHandle)
 	if cContext == 0 {
 		handle.Close() // We couldn't get a context, so we no longer have an implicit reference to the Handle in it...
 		return nil, fmt.Errorf("could not get C context")
@@ -77,13 +77,13 @@ func (handle *Handle) NewContext(timerOptions ...timer.Option) (*Context, error)
 // Addresses returns the list of addresses the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Addresses() []string {
-	return wafLib.KnownAddresses(handle.cHandle)
+	return bindings.Lib.KnownAddresses(handle.cHandle)
 }
 
 // Actions returns the list of actions the WAF has been configured to monitor based on the input
 // ruleset.
 func (handle *Handle) Actions() []string {
-	return wafLib.KnownActions(handle.cHandle)
+	return bindings.Lib.KnownActions(handle.cHandle)
 }
 
 // Close decrements the reference counter of this [Handle], possibly allowing it to be destroyed
@@ -95,7 +95,7 @@ func (handle *Handle) Close() {
 		return
 	}
 
-	wafLib.Destroy(handle.cHandle)
+	bindings.Lib.Destroy(handle.cHandle)
 	handle.cHandle = 0 // Makes it easy to spot use-after-free/double-free issues
 }
 

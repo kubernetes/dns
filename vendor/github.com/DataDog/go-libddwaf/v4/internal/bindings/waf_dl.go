@@ -28,10 +28,10 @@ type WAFLib struct {
 	handle uintptr
 }
 
-// NewWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
+// newWAFLib loads the libddwaf shared library and resolves all tge relevant symbols.
 // The caller is responsible for calling wafDl.Close on the returned object once they
 // are done with it so that associated resources can be released.
-func NewWAFLib() (dl *WAFLib, err error) {
+func newWAFLib() (dl *WAFLib, err error) {
 	path, closer, err := lib.DumpEmbeddedWAF()
 	if err != nil {
 		return nil, fmt.Errorf("dump embedded WAF: %w", err)
@@ -43,7 +43,7 @@ func NewWAFLib() (dl *WAFLib, err error) {
 	}()
 
 	var handle uintptr
-	if handle, err = purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+	if handle, err = purego.Dlopen(path, purego.RTLD_LOCAL|purego.RTLD_NOW); err != nil {
 		return nil, fmt.Errorf("load a dynamic library file: %w", err)
 	}
 
@@ -235,6 +235,20 @@ func (waf *WAFLib) Run(context WAFContext, persistentData, ephemeralData *WAFObj
 
 func (waf *WAFLib) Handle() uintptr {
 	return waf.handle
+}
+
+func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) {
+	var (
+		obj    WAFObject
+		pinner runtime.Pinner
+	)
+
+	defer pinner.Unpin()
+	pinner.Pin(&json)
+	pinner.Pin(&obj)
+
+	success := waf.syscall(waf.objectFromJSON, unsafe.PtrToUintptr(&obj), unsafe.SliceToUintptr(json), uintptr(len(json))) != 0
+	return obj, success
 }
 
 // syscall is the only way to make C calls with this interface.

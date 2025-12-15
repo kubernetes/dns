@@ -11,9 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"os"
 	"strconv"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
 
@@ -59,23 +59,23 @@ func String(env string, def string) (string, telemetry.Origin) {
 	return reportTelemetryAndReturn(env, def, telemetry.OriginDefault, telemetry.EmptyID)
 }
 
-func stableConfigByPriority(env string) iter.Seq[ConfigData] {
+func stableConfigByPriority(key string) iter.Seq[ConfigData] {
 	return func(yield func(ConfigData) bool) {
-		if v := ManagedConfig.Get(env); v != "" && !yield(ConfigData{
+		if v := ManagedConfig.Get(key); v != "" && !yield(ConfigData{
 			Origin:   telemetry.OriginManagedStableConfig,
 			Value:    v,
 			ConfigID: ManagedConfig.GetID(),
 		}) {
 			return
 		}
-		if v, ok := os.LookupEnv(env); ok && !yield(ConfigData{
+		if v, ok := env.Lookup(key); ok && !yield(ConfigData{
 			Origin:   telemetry.OriginEnvVar,
 			Value:    v,
 			ConfigID: telemetry.EmptyID, // environment variables do not have config ID
 		}) {
 			return
 		}
-		if v := LocalConfig.Get(env); v != "" && !yield(ConfigData{
+		if v := LocalConfig.Get(key); v != "" && !yield(ConfigData{
 			Origin:   telemetry.OriginLocalStableConfig,
 			Value:    v,
 			ConfigID: LocalConfig.GetID(),

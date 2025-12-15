@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/hostname/azure"
 	"github.com/DataDog/dd-trace-go/v2/internal/hostname/ec2"
 	"github.com/DataDog/dd-trace-go/v2/internal/hostname/ecs"
@@ -171,7 +172,7 @@ func updateHostname(now time.Time) {
 }
 
 func fromConfig(_ context.Context, _ string) (string, error) {
-	hn := os.Getenv("DD_HOSTNAME")
+	hn := env.Get("DD_HOSTNAME")
 	err := validate.ValidHostname(hn)
 	if err != nil {
 		return "", err
@@ -184,7 +185,7 @@ func fromFargate(ctx context.Context, _ string) (string, error) {
 }
 
 func fargate(ctx context.Context) (string, error) {
-	if _, ok := os.LookupEnv("ECS_CONTAINER_METADATA_URI_V4"); !ok {
+	if _, ok := env.Lookup("ECS_CONTAINER_METADATA_URI_V4"); !ok {
 		return "", fmt.Errorf("not running in fargate")
 	}
 	launchType, err := ecs.GetLaunchType(ctx)
@@ -210,7 +211,7 @@ func fromFQDN(_ context.Context, _ string) (string, error) {
 	//TODO: test this on windows
 	fqdn, err := getSystemFQDN()
 	if err != nil {
-		return "", fmt.Errorf("unable to get FQDN from system: %s", err.Error())
+		return "", fmt.Errorf("unable to get FQDN from system: %s", err)
 	}
 	return fqdn, nil
 }
@@ -233,11 +234,11 @@ func fromEC2(ctx context.Context, currentHostname string) (string, error) {
 		// If the current hostname is a default one we try to get the instance id
 		instanceID, err := ec2.GetInstanceID(ctx)
 		if err != nil {
-			return "", fmt.Errorf("unable to determine hostname from EC2: %s", err.Error())
+			return "", fmt.Errorf("unable to determine hostname from EC2: %s", err)
 		}
 		err = validate.ValidHostname(instanceID)
 		if err != nil {
-			return "", fmt.Errorf("EC2 instance id is not a valid hostname: %s", err.Error())
+			return "", fmt.Errorf("EC2 instance id is not a valid hostname: %s", err)
 		}
 		return instanceID, nil
 	}

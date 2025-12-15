@@ -16,6 +16,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
@@ -239,12 +240,12 @@ func (w *writer) newRequest(endpoint *http.Request, requestType transport.Reques
 // SumReaderCloser is a ReadCloser that wraps another ReadCloser and counts the number of bytes read.
 type SumReaderCloser struct {
 	io.ReadCloser
-	n int
+	n atomic.Uint64
 }
 
 func (s *SumReaderCloser) Read(p []byte) (n int, err error) {
 	n, err = s.ReadCloser.Read(p)
-	s.n += n
+	s.n.Add(uint64(n))
 	return
 }
 
@@ -293,7 +294,7 @@ func (w *writer) Flush(payload transport.Payload) ([]EndpointRequestResult, erro
 		}
 
 		results = append(results, EndpointRequestResult{
-			PayloadByteSize: sumReaderCloser.n,
+			PayloadByteSize: int(sumReaderCloser.n.Load()),
 			CallDuration:    time.Since(now),
 			StatusCode:      response.StatusCode,
 		})

@@ -15,6 +15,7 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/appsec/events"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/dyngo"
+	"github.com/DataDog/dd-trace-go/v2/instrumentation/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 )
 
@@ -34,8 +35,8 @@ const (
 )
 
 func init() {
-	for env, template := range map[string]*[]byte{envBlockedTemplateJSON: &blockedTemplateJSON, envBlockedTemplateHTML: &blockedTemplateHTML} {
-		if path, ok := os.LookupEnv(env); ok {
+	for key, template := range map[string]*[]byte{envBlockedTemplateJSON: &blockedTemplateJSON, envBlockedTemplateHTML: &blockedTemplateHTML} {
+		if path, ok := env.Lookup(key); ok {
 			if t, err := os.ReadFile(path); err != nil {
 				log.Error("Could not read template at %q: %v", path, err.Error())
 			} else {

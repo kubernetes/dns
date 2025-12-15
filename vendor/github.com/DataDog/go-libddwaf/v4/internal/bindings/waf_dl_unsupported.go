@@ -16,7 +16,7 @@ import (
 
 type WAFLib struct{}
 
-func NewWAFLib() (*WAFLib, error) {
+func newWAFLib() (*WAFLib, error) {
 	return nil, errors.New("go-libddwaf is not supported on this platform")
 }
 
@@ -55,5 +55,7 @@ func (*WAFLib) ObjectFree(*WAFObject) {}
 func (*WAFLib) Run(WAFContext, *WAFObject, *WAFObject, *WAFObject, uint64) WAFReturnCode {
 	return WAFErrInternal
 }
+
+func (waf *WAFLib) ObjectFromJSON(json []byte) (WAFObject, bool) { return WAFObject{}, false }
 
 func (*WAFLib) Handle() uintptr { return 0 }

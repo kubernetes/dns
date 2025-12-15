@@ -12,7 +12,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"runtime"
 	"runtime/pprof"
@@ -25,7 +24,9 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/errortrace"
 	sharedinternal "github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/globalconfig"
+	illmobs "github.com/DataDog/dd-trace-go/v2/internal/llmobs"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/orchestrion"
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
@@ -197,6 +198,11 @@ func (s *Span) SetTag(key string, value interface{}) {
 			noDebugStack: s.noDebugStack,
 		})
 		return
+	case ext.ErrorNoStackTrace:
+		s.setTagError(value, errorConfig{
+			noDebugStack: true,
+		})
+		return
 	case ext.Component:
 		integration, ok := value.(string)
 		if ok {
@@ -301,6 +307,12 @@ func (s *Span) setSamplingPriority(priority int, sampler samplernames.SamplerNam
 	s.setSamplingPriorityLocked(priority, sampler)
 }
 
+func (s *Span) setProcessTags(pTags string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setMeta(keyProcessTags, pTags)
+}
+
 // root returns the root span of the span's trace. The return value shouldn't be
 // nil as long as the root span is valid and not finished.
 func (s *Span) Root() *Span {
@@ -396,6 +408,21 @@ func (s *Span) setSamplingPriorityLocked(priority int, sampler samplernames.Samp
 	s.context.setSamplingPriority(priority, sampler)
 }
 
+// forceSetSamplingPriorityLocked updates the sampling priority.
+// If the trace is locked, the sampling priority is forced to the given value.
+//
+// This function is should only be used when applying a manual keep or drop decision.
+func (s *Span) forceSetSamplingPriorityLocked(priority int, sampler samplernames.SamplerName) {
+	// We don't lock spans when flushing, so we could have a data race when
+	// modifying a span as it's being flushed. This protects us against that
+	// race, since spans are marked `finished` before we flush them.
+	if s.finished {
+		return
+	}
+	s.setMetric(keySamplingPriority, float64(priority))
+	s.context.forceSetSamplingPriority(priority, sampler)
+}
+
 // setTagError sets the error tag. It accounts for various valid scenarios.
 // This method is not safe for concurrent use.
 func (s *Span) setTagError(value interface{}, cfg errorConfig) {
@@ -427,9 +454,13 @@ func (s *Span) setTagError(value interface{}, cfg errorConfig) {
 	case error:
 		// if anyone sets an error value as the tag, be nice here
 		// and provide all the benefits.
+		// TODO: once Error Tracking fix is resolved, update relevant tags here. See #4095
 		setError(true)
 		s.setMeta(ext.ErrorMsg, v.Error())
 		s.setMeta(ext.ErrorType, reflect.TypeOf(v).String())
+		if cfg.noDebugStack {
+			return
+		}
 		switch err := v.(type) {
 		case xerrors.Formatter:
 			s.setMeta(ext.ErrorDetails, fmt.Sprintf("%+v", v))
@@ -438,15 +469,12 @@ func (s *Span) setTagError(value interface{}, cfg errorConfig) {
 			s.setMeta(ext.ErrorDetails, fmt.Sprintf("%+v", v))
 		case *errortrace.TracerError:
 			// instrumentation/errortrace approach
-			s.setMeta(ext.ErrorDetails, fmt.Sprintf("%+v", v))
-			if !cfg.noDebugStack {
-				s.setMeta(ext.ErrorStack, err.Format())
-			}
+			s.setMeta(ext.ErrorStack, fmt.Sprintf("%+v", v))
+			s.setMeta(ext.ErrorHandlingStack, err.Format())
 			return
 		}
-		if !cfg.noDebugStack {
-			s.setMeta(ext.ErrorStack, takeStacktrace(cfg.stackFrames, cfg.stackSkip))
-		}
+		stack := takeStacktrace(cfg.stackFrames, cfg.stackSkip)
+		s.setMeta(ext.ErrorStack, stack)
 	case nil:
 		// no error
 		setError(false)
@@ -537,11 +565,11 @@ func (s *Span) setTagBool(key string, v bool) {
 		}
 	case ext.ManualDrop:
 		if v {
-			s.setSamplingPriorityLocked(ext.PriorityUserReject, samplernames.Manual)
+			s.forceSetSamplingPriorityLocked(ext.PriorityUserReject, samplernames.Manual)
 		}
 	case ext.ManualKeep:
 		if v {
-			s.setSamplingPriorityLocked(ext.PriorityUserKeep, samplernames.Manual)
+			s.forceSetSamplingPriorityLocked(ext.PriorityUserKeep, samplernames.Manual)
 		}
 	default:
 		if v {
@@ -872,12 +900,12 @@ func (s *Span) Format(f fmt.State, c rune) {
 			tc := tr.TracerConf()
 			if tc.EnvTag != "" {
 				fmt.Fprintf(f, "dd.env=%s ", tc.EnvTag)
-			} else if env := os.Getenv("DD_ENV"); env != "" {
+			} else if env := env.Get("DD_ENV"); env != "" {
 				fmt.Fprintf(f, "dd.env=%s ", env)
 			}
 			if tc.VersionTag != "" {
 				fmt.Fprintf(f, "dd.version=%s ", tc.VersionTag)
-			} else if v := os.Getenv("DD_VERSION"); v != "" {
+			} else if v := env.Get("DD_VERSION"); v != "" {
 				fmt.Fprintf(f, "dd.version=%s ", v)
 			}
 		}
@@ -928,6 +956,16 @@ func (s *Span) AddEvent(name string, opts ...SpanEventOption) {
 	s.spanEvents = append(s.spanEvents, event)
 }
 
+func setLLMObsPropagatingTags(ctx context.Context, spanCtx *SpanContext) {
+	llmSpan, ok := illmobs.ActiveLLMSpanFromContext(ctx)
+	if !ok {
+		return
+	}
+	spanCtx.trace.setPropagatingTag(keyPropagatedLLMObsParentID, llmSpan.SpanID())
+	spanCtx.trace.setPropagatingTag(keyPropagatedLLMObsTraceID, llmSpan.TraceID())
+	spanCtx.trace.setPropagatingTag(keyPropagatedLLMObsMLAPP, llmSpan.MLApp())
+}
+
 // used in internal/civisibility/integrations/manual_api_common.go using linkname
 func getMeta(s *Span, key string) (string, bool) {
 	s.mu.RLock()
@@ -948,7 +986,6 @@ const (
 	keySamplingPriority     = "_sampling_priority_v1"
 	keySamplingPriorityRate = "_dd.agent_psr"
 	keyDecisionMaker        = "_dd.p.dm"
-	keyServiceHash          = "_dd.dm.service_hash"
 	keyOrigin               = "_dd.origin"
 	keyReparentID           = "_dd.parent_id"
 	// keyHostname can be used to override the agent's hostname detection when using `WithHostname`.
@@ -984,8 +1021,17 @@ const (
 	keyPeerServiceRemappedFrom = "_dd.peer.service.remapped_from"
 	// keyBaseService contains the globally configured tracer service name. It is only set for spans that override it.
 	keyBaseService = "_dd.base_service"
-	// keyProcessTags contains a list of process tags to indentify the service.
+	// keyProcessTags contains a list of process tags to identify the service.
 	keyProcessTags = "_dd.tags.process"
+	// keyKnuthSamplingRate holds the propagated Knuth-based sampling rate applied by agent or trace sampling rules.
+	// Value is a string with up to 6 decimal digits and is forwarded unchanged.
+	keyKnuthSamplingRate = "_dd.p.ksr"
+	// keyPropagatedLLMObsParentID contains the propagated llmobs span ID.
+	keyPropagatedLLMObsParentID = "_dd.p.llmobs_parent_id"
+	// keyPropagatedLLMObsMLAPP contains the propagated ML App.
+	keyPropagatedLLMObsMLAPP = "_dd.p.llmobs_ml_app"
+	// keyPropagatedLLMObsTraceID contains the propagated llmobs trace ID.
+	keyPropagatedLLMObsTraceID = "_dd.p.llmobs_trace_id"
 )
 
 // The following set of tags is used for user monitoring and set through calls to span.SetUser().
@@ -994,7 +1040,6 @@ const (
 	keyUserLogin     = "usr.login"
 	keyUserEmail     = "usr.email"
 	keyUserName      = "usr.name"
-	keyUserOrg       = "usr.org"
 	keyUserRole      = "usr.role"
 	keyUserScope     = "usr.scope"
 	keyUserSessionID = "usr.session_id"

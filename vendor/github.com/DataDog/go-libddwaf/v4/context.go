@@ -225,12 +225,12 @@ func (context *Context) run(persistentData, ephemeralData *bindings.WAFObject, r
 
 	var result bindings.WAFObject
 	pinner.Pin(&result)
-	defer wafLib.ObjectFree(&result)
+	defer bindings.Lib.ObjectFree(&result)
 
 	// The value of the timeout cannot exceed 2^55
 	// cf. https://en.cppreference.com/w/cpp/chrono/duration
 	timeout := uint64(runTimer.SumRemaining().Microseconds()) & 0x008FFFFFFFFFFFFF
-	ret := wafLib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
+	ret := bindings.Lib.Run(context.cContext, persistentData, ephemeralData, &result, timeout)
 
 	decodeTimer := runTimer.MustLeaf(DecodeTimeKey)
 	decodeTimer.Start()
@@ -324,7 +324,7 @@ func (context *Context) Close() {
 	context.mutex.Lock()
 	defer context.mutex.Unlock()
 
-	wafLib.ContextDestroy(context.cContext)
+	bindings.Lib.ContextDestroy(context.cContext)
 	defer context.handle.Close() // Reduce the reference counter of the Handle.
 	context.cContext = 0         // Makes it easy to spot use-after-free/double-free issues
 

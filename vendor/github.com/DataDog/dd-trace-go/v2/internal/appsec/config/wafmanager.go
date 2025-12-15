@@ -8,10 +8,11 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"runtime"
 	"sync"
 
-	"github.com/DataDog/appsec-internal-go/appsec"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 	telemetryLog "github.com/DataDog/dd-trace-go/v2/internal/telemetry/log"
 	"github.com/DataDog/go-libddwaf/v4"
@@ -21,7 +22,7 @@ type (
 	// WAFManager holds a [libddwaf.Builder] and allows managing its configuration.
 	WAFManager struct {
 		builder      *libddwaf.Builder
-		initRules    []byte
+		staticRules  []byte // nullable
 		rulesVersion string
 		closed       bool
 		mu           sync.RWMutex
@@ -30,17 +31,21 @@ type (
 
 const defaultRulesPath = "ASM_DD/default"
 
-// NewWAFManager creates a new [WAFManager] with the provided [appsec.ObfuscatorConfig] and initial
+// NewWAFManager creates a new [WAFManager] with the provided [config.ObfuscatorConfig] and initial
 // rules (if any).
-func NewWAFManager(obfuscator appsec.ObfuscatorConfig, defaultRules []byte) (*WAFManager, error) {
+func NewWAFManager(obfuscator ObfuscatorConfig) (*WAFManager, error) {
+	return NewWAFManagerWithStaticRules(obfuscator, nil)
+}
+
+func NewWAFManagerWithStaticRules(obfuscator ObfuscatorConfig, staticRules []byte) (*WAFManager, error) {
 	builder, err := libddwaf.NewBuilder(obfuscator.KeyRegex, obfuscator.ValueRegex)
 	if err != nil {
 		return nil, err
 	}
 
 	mgr := &WAFManager{
-		builder:   builder,
-		initRules: defaultRules,
+		builder:     builder,
+		staticRules: staticRules,
 	}
 
 	if err := mgr.RestoreDefaultConfig(); err != nil {
@@ -118,54 +123,70 @@ func (m *WAFManager) RemoveDefaultConfig() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.builder.RemoveConfig(defaultRulesPath)
+	if m.staticRules != nil {
+		return m.builder.RemoveConfig(defaultRulesPath)
+	}
+
+	return m.builder.RemoveDefaultRecommendedRuleset()
 }
 
 // AddOrUpdateConfig adds or updates a configuration in the receiving [WAFManager].
 func (m *WAFManager) AddOrUpdateConfig(path string, fragment any) (libddwaf.Diagnostics, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	diag, err := m.builder.AddOrUpdateConfig(path, fragment)
-	if err == nil && diag.Version != "" {
-		m.rulesVersion = diag.Version
+	diags, err := m.builder.AddOrUpdateConfig(path, fragment)
+	if err != nil {
+		return diags, err
 	}
 
 	// Submit the telemetry metrics for error counts obtained from the [libddwaf.Diagnostics] object.
 	// See: https://docs.google.com/document/d/1lcCvURsWTS_p01-MvrI6SmDB309L1e8bx9txuUR1zCk/edit?tab=t.0#heading=h.nwzm8andnx41
-	eventRulesVersion := diag.Version
-	if eventRulesVersion == "" {
-		eventRulesVersion = m.rulesVersion
+	if diags.Version != "" {
+		m.rulesVersion = diags.Version
 	}
-	diag.EachFeature(updateTelemetryMetrics(eventRulesVersion))
-
-	return diag, err
+	diags.EachFeature(updateTelemetryMetrics(m.rulesVersion))
+	return diags, err
 }
 
 // RestoreDefaultConfig restores the initial configurations to the receiving [WAFManager].
 func (m *WAFManager) RestoreDefaultConfig() error {
-	if m.initRules == nil {
-		return nil
+	var diags libddwaf.Diagnostics
+	var err error
+	if m.staticRules == nil {
+		diags, err = m.builder.AddDefaultRecommendedRuleset()
+	} else {
+		var rules map[string]any
+		dec := json.NewDecoder(bytes.NewReader(m.staticRules))
+		dec.UseNumber()
+		if err := dec.Decode(&rules); err != nil {
+			return err
+		}
+		diags, err = m.AddOrUpdateConfig(defaultRulesPath, rules)
 	}
-	var rules map[string]any
-	dec := json.NewDecoder(bytes.NewReader(m.initRules))
-	dec.UseNumber()
-	if err := dec.Decode(&rules); err != nil {
+	if err != nil {
 		return err
 	}
-	diag, err := m.AddOrUpdateConfig(defaultRulesPath, rules)
-	diag.EachFeature(logLocalDiagnosticMessages)
+
+	if diags.Version != "" {
+		m.rulesVersion = diags.Version
+	}
+
+	diags.EachFeature(updateTelemetryMetrics(m.rulesVersion))
+	diags.EachFeature(logLocalDiagnosticMessages)
 	return err
 }
 
 func logLocalDiagnosticMessages(name string, feature *libddwaf.Feature) {
+	logger := telemetryLog.With(telemetry.WithTags([]string{"appsec_config_key:" + name, "log_type:local::diagnostic"}))
+
 	if feature.Error != "" {
-		telemetryLog.Error("%s", feature.Error, telemetry.WithTags([]string{"appsec_config_key:" + name, "log_type:local::diagnostic"}))
+		logger.Error("feature error", slog.String("message", feature.Error))
 	}
 	for msg, ids := range feature.Errors {
-		telemetryLog.Error("%s: %q", msg, ids, telemetry.WithTags([]string{"appsec_config_key:" + name, "log_type:local::diagnostic"}))
+		logger.Error("feature error", slog.String("message", msg), slog.String("affected_rule_ids", fmt.Sprintf("%v", ids)))
 	}
 	for msg, ids := range feature.Warnings {
-		telemetryLog.Warn("%s: %q", msg, ids, telemetry.WithTags([]string{"appsec_config_key:" + name, "log_type:local::diagnostic"}))
+		logger.Warn("feature warning", slog.String("message", msg), slog.String("affected_rule_ids", fmt.Sprintf("%v", ids)))
 	}
 }
 
