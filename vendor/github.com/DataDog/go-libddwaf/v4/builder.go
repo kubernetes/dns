@@ -37,7 +37,7 @@ func NewBuilder(keyObfuscatorRegex string, valueObfuscatorRegex string) (*Builde
 
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
-	hdl := wafLib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
+	hdl := bindings.Lib.BuilderInit(newConfig(&pinner, keyObfuscatorRegex, valueObfuscatorRegex))
 
 	if hdl == 0 {
 		return nil, errors.New("failed to initialize the WAF builder")
@@ -51,7 +51,7 @@ func (b *Builder) Close() {
 	if b == nil || b.handle == 0 {
 		return
 	}
-	wafLib.BuilderDestroy(b.handle)
+	bindings.Lib.BuilderDestroy(b.handle)
 	b.handle = 0
 }
 
@@ -65,15 +65,13 @@ const defaultRecommendedRulesetPath = "::/go-libddwaf/default/recommended.json"
 // AddDefaultRecommendedRuleset adds the default recommended ruleset to the
 // receiving [Builder], and returns the [Diagnostics] produced in the process.
 func (b *Builder) AddDefaultRecommendedRuleset() (Diagnostics, error) {
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
-	ruleset, err := ruleset.DefaultRuleset(&pinner)
+	defaultRuleset, err := ruleset.DefaultRuleset()
+	defer bindings.Lib.ObjectFree(&defaultRuleset)
 	if err != nil {
 		return Diagnostics{}, fmt.Errorf("failed to load default recommended ruleset: %w", err)
 	}
 
-	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &ruleset)
+	diag, err := b.addOrUpdateConfig(defaultRecommendedRulesetPath, &defaultRuleset)
 	if err == nil {
 		b.defaultLoaded = true
 	}
@@ -122,9 +120,9 @@ func (b *Builder) AddOrUpdateConfig(path string, fragment any) (Diagnostics, err
 // Returns the [Diagnostics] produced by adding or updating this configuration.
 func (b *Builder) addOrUpdateConfig(path string, cfg *bindings.WAFObject) (Diagnostics, error) {
 	var diagnosticsWafObj bindings.WAFObject
-	defer wafLib.ObjectFree(&diagnosticsWafObj)
+	defer bindings.Lib.ObjectFree(&diagnosticsWafObj)
 
-	res := wafLib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
+	res := bindings.Lib.BuilderAddOrUpdateConfig(b.handle, path, cfg, &diagnosticsWafObj)
 
 	var diags Diagnostics
 	if !diagnosticsWafObj.IsInvalid() {
@@ -150,7 +148,7 @@ func (b *Builder) RemoveConfig(path string) bool {
 		return false
 	}
 
-	return wafLib.BuilderRemoveConfig(b.handle, path)
+	return bindings.Lib.BuilderRemoveConfig(b.handle, path)
 }
 
 // ConfigPaths returns the list of currently loaded configuration paths.
@@ -159,7 +157,7 @@ func (b *Builder) ConfigPaths(filter string) []string {
 		return nil
 	}
 
-	return wafLib.BuilderGetConfigPaths(b.handle, filter)
+	return bindings.Lib.BuilderGetConfigPaths(b.handle, filter)
 }
 
 // Build creates a new [Handle] instance that uses the current configuration.
@@ -171,7 +169,7 @@ func (b *Builder) Build() *Handle {
 		return nil
 	}
 
-	hdl := wafLib.BuilderBuildInstance(b.handle)
+	hdl := bindings.Lib.BuilderBuildInstance(b.handle)
 	if hdl == 0 {
 		return nil
 	}

@@ -1,0 +1,7 @@
+language: go
+go_import_path: github.com/theckman/httpforwarded
+go:
+  - 1.7.1
+  - tip
+
+script: go test -v ./... -check.vv

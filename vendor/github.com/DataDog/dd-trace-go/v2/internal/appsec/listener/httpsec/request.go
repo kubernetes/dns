@@ -8,11 +8,11 @@ package httpsec
 import (
 	"net/http"
 	"net/netip"
-	"os"
 	"strings"
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/trace"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 )
 
 const (
@@ -22,13 +22,15 @@ const (
 
 var (
 	// defaultIPHeaders is the default list of IP-related headers leveraged to
-	// retrieve the public client IP address in RemoteAddr.
+	// retrieve the public client IP address in RemoteAddr. The headers are
+	// checked in the order they are listed; do not re-order unless you know what
+	// you are doing.
 	defaultIPHeaders = []string{
 		"x-forwarded-for",
 		"x-real-ip",
 		"true-client-ip",
 		"x-client-ip",
-		"x-forwarded",
+		"forwarded",
 		"forwarded-for",
 		"x-cluster-client-ip",
 		"fastly-client-ip",
@@ -39,23 +41,23 @@ var (
 	// defaultCollectedHeaders is the default list of HTTP headers collected as
 	// request span tags when appsec is enabled.
 	defaultCollectedHeaders = append([]string{
-		"host",
-		"content-length",
-		"content-type",
-		"content-encoding",
-		"content-language",
-		"forwarded",
-		"via",
-		"user-agent",
-		"accept",
 		"accept-encoding",
 		"accept-language",
-		"x-amzn-trace-id",
-		"cloudfront-viewer-ja3-fingerprint",
-		"cf-ray",
-		"x-cloud-trace-context",
-		"x-appgw-trace-id",
+		"accept",
 		"akamai-user-risk",
+		"cf-ray",
+		"cloudfront-viewer-ja3-fingerprint",
+		"content-encoding",
+		"content-language",
+		"content-length",
+		"content-type",
+		"host",
+		"user-agent",
+		"via",
+		"x-amzn-trace-id",
+		"x-appgw-trace-id",
+		"x-cloud-trace-context",
+		"x-forwarded",
 		"x-sigsci-requestid",
 		"x-sigsci-tags",
 	}, defaultIPHeaders...)
@@ -132,6 +134,14 @@ func headersRemoveCookies(headers http.Header) map[string][]string {
 	return headersNoCookies
 }
 
+func headersToLower(headers map[string][]string) map[string][]string {
+	headersNoCookies := make(map[string][]string, len(headers))
+	for k, v := range headers {
+		headersNoCookies[strings.ToLower(k)] = v
+	}
+	return headersNoCookies
+}
+
 func normalizeHTTPHeaderName(name string) string {
 	return strings.ToLower(name)
 }
@@ -153,7 +163,7 @@ func makeCollectedHTTPHeadersLookupMap() {
 }
 
 func readMonitoredClientIPHeadersConfig() {
-	if header := os.Getenv(envClientIPHeader); header != "" {
+	if header := env.Get(envClientIPHeader); header != "" {
 		// Make this header the only one to consider in RemoteAddr
 		monitoredClientIPHeadersCfg = []string{header}
 

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/internal"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/utils/telemetry"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/urlsanitizer"
 	"github.com/DataDog/dd-trace-go/v2/internal/version"
@@ -78,7 +78,7 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 	testCycleURL := ""
 	if agentlessEnabled {
 		// Agentless mode is enabled.
-		APIKeyValue := os.Getenv(constants.APIKeyEnvironmentVariable)
+		APIKeyValue := env.Get(constants.APIKeyEnvironmentVariable)
 		if APIKeyValue == "" {
 			log.Error("An API key is required for agentless mode. Use the DD_API_KEY env variable to set it")
 		}
@@ -87,14 +87,14 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 
 		// Check for a custom agentless URL.
 		agentlessURL := ""
-		if v := os.Getenv(constants.CIVisibilityAgentlessURLEnvironmentVariable); v != "" {
+		if v := env.Get(constants.CIVisibilityAgentlessURLEnvironmentVariable); v != "" {
 			agentlessURL = v
 		}
 
 		if agentlessURL == "" {
 			// Use the standard agentless URL format.
 			site := "datadoghq.com"
-			if v := os.Getenv("DD_SITE"); v != "" {
+			if v := env.Get("DD_SITE"); v != "" {
 				site = v
 			}
 
@@ -128,8 +128,8 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 // Returns:
 //
 //	An io.ReadCloser for reading the response body, and an error if the operation fails.
-func (t *ciVisibilityTransport) send(p *payload) (body io.ReadCloser, err error) {
-	ciVisibilityPayload := &ciVisibilityPayload{p, 0}
+func (t *ciVisibilityTransport) send(p payload) (body io.ReadCloser, err error) {
+	ciVisibilityPayload := &ciVisibilityPayload{payload: p, serializationTime: 0}
 	buffer, bufferErr := ciVisibilityPayload.getBuffer(t.config)
 	if bufferErr != nil {
 		return nil, fmt.Errorf("cannot create buffer payload: %v", bufferErr)

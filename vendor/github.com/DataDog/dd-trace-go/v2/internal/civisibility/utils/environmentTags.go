@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/osinfo"
 )
@@ -248,7 +249,7 @@ func createCITagsMap() map[string]string {
 	log.Debug("civisibility: test command: %s", cmd)
 
 	// Populate the test session name
-	if testSessionName, ok := os.LookupEnv(constants.CIVisibilityTestSessionNameEnvironmentVariable); ok {
+	if testSessionName, ok := env.Lookup(constants.CIVisibilityTestSessionNameEnvironmentVariable); ok {
 		localTags[constants.TestSessionName] = testSessionName
 	} else if jobName, ok := localTags[constants.CIJobName]; ok {
 		localTags[constants.TestSessionName] = fmt.Sprintf("%s-%s", jobName, cmd)
@@ -258,7 +259,7 @@ func createCITagsMap() map[string]string {
 	log.Debug("civisibility: test session name: %s", localTags[constants.TestSessionName])
 
 	// Check if the user provided the test service
-	if ddService := os.Getenv("DD_SERVICE"); ddService != "" {
+	if ddService := env.Get("DD_SERVICE"); ddService != "" {
 		localTags[constants.UserProvidedTestServiceTag] = "true"
 	} else {
 		localTags[constants.UserProvidedTestServiceTag] = "false"

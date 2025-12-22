@@ -16,6 +16,7 @@ const (
 const (
 	MessagingSystemGCPPubsub = "googlepubsub"
 	MessagingSystemKafka     = "kafka"
+	MessagingSystemSQS       = "amazonsqs"
 )
 
 // Kafka tags.

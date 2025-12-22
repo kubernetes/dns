@@ -3,17 +3,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build !(linux || darwin)
+//go:build !(linux || darwin) || datadog.no_waf
 
 package ruleset
 
 import (
 	"errors"
-	"runtime"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
 )
 
-func DefaultRuleset(pinner *runtime.Pinner) (bindings.WAFObject, error) {
+func DefaultRuleset() (bindings.WAFObject, error) {
 	return bindings.WAFObject{}, errors.New("the default ruleset is not available on unsupported platforms")
 }

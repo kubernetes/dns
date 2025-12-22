@@ -14,6 +14,7 @@ const (
 	AWSService    = "aws_service"
 	AWSOperation  = "aws.operation"
 	AWSRegion     = "region"
+	AWSPartition  = "aws.partition"
 	AWSRequestID  = "aws.request_id"
 	AWSRetryCount = "aws.retry_count"
 

@@ -6,9 +6,8 @@
 package telemetry
 
 import (
-	"os"
-
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
 
@@ -84,7 +83,7 @@ func getProviderTestSessionTypeFromProviderString(provider string) TestSessionTy
 func TestSession(providerName string) {
 	var tags []string
 	tags = append(tags, getProviderTestSessionTypeFromProviderString(providerName)...)
-	if os.Getenv(constants.CIVisibilityAutoInstrumentationProviderEnvironmentVariable) != "" {
+	if env.Get(constants.CIVisibilityAutoInstrumentationProviderEnvironmentVariable) != "" {
 		tags = append(tags, IsAutoInstrumentationTestSessionType...)
 	}
 	telemetry.Count(telemetry.NamespaceCIVisibility, "test_session", removeEmptyStrings(tags)).Submit(1.0)

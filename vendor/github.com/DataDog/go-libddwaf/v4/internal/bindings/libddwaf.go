@@ -16,7 +16,6 @@ type wafSymbols struct {
 	builderBuildInstance     uintptr
 	builderGetConfigPaths    uintptr
 	builderDestroy           uintptr
-	setLogCb                 uintptr
 	destroy                  uintptr
 	knownAddresses           uintptr
 	knownActions             uintptr
@@ -24,7 +23,9 @@ type wafSymbols struct {
 	contextInit              uintptr
 	contextDestroy           uintptr
 	objectFree               uintptr
+	objectFromJSON           uintptr
 	run                      uintptr
+	setLogCb                 uintptr
 }
 
 // newWafSymbols resolves the symbols of [wafSymbols] from the provided
@@ -67,6 +68,9 @@ func newWafSymbols(handle uintptr) (syms wafSymbols, err error) {
 		return syms, err
 	}
 	if syms.objectFree, err = purego.Dlsym(handle, "ddwaf_object_free"); err != nil {
+		return syms, err
+	}
+	if syms.objectFromJSON, err = purego.Dlsym(handle, "ddwaf_object_from_json"); err != nil {
 		return syms, err
 	}
 	if syms.run, err = purego.Dlsym(handle, "ddwaf_run"); err != nil {

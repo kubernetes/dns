@@ -7,8 +7,9 @@ package tracer
 
 import (
 	"bytes"
-	"sync/atomic"
 	"time"
+
+	"github.com/tinylib/msgp/msgp"
 
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/utils"
@@ -16,13 +17,12 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/internal/globalconfig"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/version"
-	"github.com/tinylib/msgp/msgp"
 )
 
 // ciVisibilityPayload represents a payload specifically designed for CI Visibility events.
-// It embeds the generic payload structure and adds methods to handle CI Visibility specific data.
+// It uses the generic payload interface and adds methods to handle CI Visibility specific data.
 type ciVisibilityPayload struct {
-	*payload
+	payload           payload
 	serializationTime time.Duration
 }
 
@@ -36,18 +36,17 @@ type ciVisibilityPayload struct {
 // Returns:
 //
 //	An error if encoding the event fails.
-func (p *ciVisibilityPayload) push(event *ciVisibilityEvent) error {
-	p.buf.Grow(event.Msgsize())
+func (p *ciVisibilityPayload) push(event *ciVisibilityEvent) (size int, err error) {
+	p.payload.grow(event.Msgsize())
 	startTime := time.Now()
 	defer func() {
 		p.serializationTime += time.Since(startTime)
 	}()
-	if err := msgp.Encode(&p.buf, event); err != nil {
-		return err
+	if err := msgp.Encode(p.payload, event); err != nil {
+		return 0, err
 	}
-	atomic.AddUint32(&p.count, 1)
-	p.updateHeader()
-	return nil
+	p.payload.recordItem() // This already calls updateHeader() internally.
+	return p.size(), nil
 }
 
 // newCiVisibilityPayload creates a new instance of civisibilitypayload.
@@ -57,7 +56,7 @@ func (p *ciVisibilityPayload) push(event *ciVisibilityEvent) error {
 //	A pointer to a newly initialized civisibilitypayload instance.
 func newCiVisibilityPayload() *ciVisibilityPayload {
 	log.Debug("ciVisibilityPayload: creating payload instance")
-	return &ciVisibilityPayload{newPayload(), 0}
+	return &ciVisibilityPayload{payload: newPayload(traceProtocolV04), serializationTime: 0}
 }
 
 // getBuffer retrieves the complete body of the CI Visibility payload, including metadata.
@@ -73,7 +72,7 @@ func newCiVisibilityPayload() *ciVisibilityPayload {
 //	An error if reading from the buffer or encoding the payload fails.
 func (p *ciVisibilityPayload) getBuffer(config *config) (*bytes.Buffer, error) {
 	startTime := time.Now()
-	log.Debug("ciVisibilityPayload: .getBuffer (count: %d)", p.itemCount())
+	log.Debug("ciVisibilityPayload: .getBuffer (count: %d)", p.payload.stats().itemCount)
 
 	// Create a buffer to read the current payload
 	payloadBuf := new(bytes.Buffer)
@@ -90,7 +89,7 @@ func (p *ciVisibilityPayload) getBuffer(config *config) (*bytes.Buffer, error) {
 		return nil, err
 	}
 
-	telemetry.EndpointPayloadEventsCount(telemetry.TestCycleEndpointType, float64(p.itemCount()))
+	telemetry.EndpointPayloadEventsCount(telemetry.TestCycleEndpointType, float64(p.payload.stats().itemCount))
 	telemetry.EndpointPayloadBytes(telemetry.TestCycleEndpointType, float64(encodedBuf.Len()))
 	telemetry.EndpointEventsSerializationMs(telemetry.TestCycleEndpointType, float64((p.serializationTime + time.Since(startTime)).Milliseconds()))
 	return encodedBuf, nil
@@ -149,4 +148,44 @@ func (p *ciVisibilityPayload) writeEnvelope(env string, events []byte) *ciTestCy
 	}
 
 	return visibilityPayload
+}
+
+// stats returns the current stats of the payload.
+func (p *ciVisibilityPayload) stats() payloadStats {
+	return p.payload.stats()
+}
+
+// size returns the payload size in bytes (for backward compatibility).
+func (p *ciVisibilityPayload) size() int {
+	return p.payload.size()
+}
+
+// itemCount returns the number of items available in the stream (for backward compatibility).
+func (p *ciVisibilityPayload) itemCount() int {
+	return p.payload.itemCount()
+}
+
+// protocol returns the protocol version of the payload.
+func (p *ciVisibilityPayload) protocol() float64 {
+	return p.payload.protocol()
+}
+
+// clear empties the payload buffers.
+func (p *ciVisibilityPayload) clear() {
+	p.payload.clear()
+}
+
+// reset sets up the payload to be read a second time.
+func (p *ciVisibilityPayload) reset() {
+	p.payload.reset()
+}
+
+// Read implements io.Reader by reading from the underlying payload.
+func (p *ciVisibilityPayload) Read(b []byte) (n int, err error) {
+	return p.payload.Read(b)
+}
+
+// Close implements io.Closer by closing the underlying payload.
+func (p *ciVisibilityPayload) Close() error {
+	return p.payload.Close()
 }

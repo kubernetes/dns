@@ -13,8 +13,24 @@ This repository contains a hand written SQL Lexer that tokenizes SQL queries wit
 
 ## Installation
 
+### As a Library
+
 ```bash
 go get github.com/DataDog/go-sqllexer
+```
+
+### As a Command-Line Tool
+
+```bash
+# Clone the repository
+git clone https://github.com/DataDog/go-sqllexer.git
+cd go-sqllexer
+
+# Build the binary
+make build
+
+# Or install directly to your PATH
+make install
 ```
 
 ## Usage
@@ -75,6 +91,45 @@ func main() {
     fmt.Println(normalized)
 }
 ```
+
+## Command-Line Usage
+
+The `sqllexer` binary provides a command-line interface for all the library functionality:
+
+```bash
+# Show help
+sqllexer -help
+
+# Obfuscate SQL from stdin
+echo "SELECT * FROM users WHERE id = 1" | sqllexer
+
+# Obfuscate SQL from file
+sqllexer -input query.sql -output obfuscated.sql
+
+# Normalize SQL for PostgreSQL
+sqllexer -mode normalize -dbms postgresql -input query.sql
+
+# Tokenize SQL
+sqllexer -mode tokenize -input query.sql
+
+# Obfuscate with custom options
+sqllexer -replace-digits=false -keep-json-path=true -input query.sql
+```
+
+### Available Modes
+
+- **obfuscate** (default): Replace sensitive data with placeholders
+- **normalize**: Normalize SQL queries for consistent formatting
+- **tokenize**: Show all tokens in the SQL query
+
+### Database Support
+
+Use the `-dbms` flag to specify the database type:
+- `mssql` - Microsoft SQL Server
+- `postgresql` - PostgreSQL
+- `mysql` - MySQL
+- `oracle` - Oracle
+- `snowflake` - Snowflake
 
 ## Testing
 

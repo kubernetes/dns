@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime/debug"
 	"time"
 
 	globalinternal "github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry/internal"
 )
@@ -168,10 +168,7 @@ func defaultConfig(config ClientConfig) ClientConfig {
 	}
 
 	if config.APIKey == "" {
-		config.APIKey = os.Getenv("DD_API_KEY")
-		if config.APIKey == "" {
-			config.APIKey = os.Getenv("DD-API-KEY")
-		}
+		config.APIKey = env.Get("DD_API_KEY")
 	}
 
 	if config.FlushInterval.Min == 0 {
@@ -255,13 +252,13 @@ func newWriterConfig(config ClientConfig, tracerConfig internal.TracerConfig) (i
 	if config.AgentURL != "" {
 		baseURL, err := url.Parse(config.AgentURL)
 		if err != nil {
-			return internal.WriterConfig{}, fmt.Errorf("invalid agent URL: %s", err.Error())
+			return internal.WriterConfig{}, fmt.Errorf("invalid agent URL: %s", err)
 		}
 
 		baseURL.Path = agentProxyAPIPath
 		request, err := http.NewRequest(http.MethodPost, baseURL.String(), nil)
 		if err != nil {
-			return internal.WriterConfig{}, fmt.Errorf("failed to create request: %s", err.Error())
+			return internal.WriterConfig{}, fmt.Errorf("failed to create request: %s", err)
 		}
 
 		endpoints = append(endpoints, request)
@@ -270,7 +267,7 @@ func newWriterConfig(config ClientConfig, tracerConfig internal.TracerConfig) (i
 	if config.AgentlessURL != "" && config.APIKey != "" {
 		request, err := http.NewRequest(http.MethodPost, config.AgentlessURL, nil)
 		if err != nil {
-			return internal.WriterConfig{}, fmt.Errorf("failed to create request: %s", err.Error())
+			return internal.WriterConfig{}, fmt.Errorf("failed to create request: %s", err)
 		}
 
 		request.Header.Set("DD-API-KEY", config.APIKey)
