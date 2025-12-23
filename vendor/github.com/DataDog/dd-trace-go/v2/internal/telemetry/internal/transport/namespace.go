@@ -15,6 +15,6 @@ const (
 	NamespaceIAST         Namespace = "iast"
 	NamespaceTelemetry    Namespace = "telemetry"
 	NamespaceCIVisibility Namespace = "civisibility"
-	NamespaceMLOps        Namespace = "mlops"
+	NamespaceMLObs        Namespace = "mlobs"
 	NamespaceRUM          Namespace = "rum"
 )

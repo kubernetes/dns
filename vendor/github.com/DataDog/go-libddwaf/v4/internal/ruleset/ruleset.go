@@ -3,34 +3,47 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016-present Datadog, Inc.
 
-//go:build linux || darwin
+//go:build (linux || darwin) && !datadog.no_waf
 
 package ruleset
 
 import (
 	"bytes"
 	"compress/gzip"
-	_ "embed"
-	"runtime"
+	_ "embed" // For go:embed
+	"fmt"
+	"io"
 
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/json"
-) // For go:embed
+)
 
 //go:embed recommended.json.gz
 var defaultRuleset []byte
 
-func DefaultRuleset(pinner *runtime.Pinner) (bindings.WAFObject, error) {
+// DefaultRuleset returns the default ruleset as a WAFObject
+// It is the caller's responsibility to free the returned WAFObject using [bindings.Lib.ObjectFree]
+// when it is no longer needed.
+// The returned error is non-nil if the ruleset could not be decompressed or parsed.
+func DefaultRuleset() (bindings.WAFObject, error) {
+	if ok, err := bindings.Load(); !ok {
+		return bindings.WAFObject{}, fmt.Errorf("loading default ruleset: %w", err)
+	}
+
 	gz, err := gzip.NewReader(bytes.NewReader(defaultRuleset))
 	if err != nil {
 		return bindings.WAFObject{}, err
 	}
 
-	dec := json.NewDecoder(gz, pinner)
+	defer gz.Close()
 
-	var ruleset bindings.WAFObject
-	if err := dec.Decode(&ruleset); err != nil {
+	decompressedRuleset, err := io.ReadAll(gz)
+	if err != nil {
 		return bindings.WAFObject{}, err
 	}
-	return ruleset, nil
+
+	parsedRuleset, ok := bindings.Lib.ObjectFromJSON(decompressedRuleset)
+	if !ok {
+		return bindings.WAFObject{}, fmt.Errorf("could not parse default ruleset: ddwaf_object_from_json failed")
+	}
+	return parsedRuleset, nil
 }

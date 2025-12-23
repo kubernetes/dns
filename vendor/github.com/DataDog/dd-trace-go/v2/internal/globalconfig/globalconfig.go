@@ -9,10 +9,10 @@ package globalconfig
 
 import (
 	"math"
-	"os"
 	"sync"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 
 	"github.com/google/uuid"
 )
@@ -134,15 +134,15 @@ func ClearHeaderTags() {
 
 // InstrumentationInstallID returns the install ID as described in DD_INSTRUMENTATION_INSTALL_ID
 func InstrumentationInstallID() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_ID")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_ID")
 }
 
 // InstrumentationInstallType returns the install type as described in DD_INSTRUMENTATION_INSTALL_TYPE
 func InstrumentationInstallType() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TYPE")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_TYPE")
 }
 
 // InstrumentationInstallTime returns the install time as described in DD_INSTRUMENTATION_INSTALL_TIME
 func InstrumentationInstallTime() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TIME")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_TIME")
 }

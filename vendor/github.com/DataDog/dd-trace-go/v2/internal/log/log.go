@@ -187,6 +187,7 @@ var (
 )
 
 func init() {
+	// This cannot use env.Get because it would cause a cyclic import
 	if v := os.Getenv("DD_LOGGING_RATE"); v != "" {
 		setLoggingRate(v)
 	}

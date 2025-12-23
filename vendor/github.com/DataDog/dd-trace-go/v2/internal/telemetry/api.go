@@ -46,7 +46,7 @@ const (
 	NamespaceAppSec       Namespace = transport.NamespaceAppSec
 	NamespaceIAST         Namespace = transport.NamespaceIAST
 	NamespaceCIVisibility Namespace = transport.NamespaceCIVisibility
-	NamespaceMLOps        Namespace = transport.NamespaceMLOps
+	NamespaceMLObs        Namespace = transport.NamespaceMLObs
 	NamespaceRUM          Namespace = transport.NamespaceRUM
 )
 
@@ -136,9 +136,9 @@ type Client interface {
 	// Tags cannot contain commas.
 	Distribution(namespace Namespace, name string, tags []string) MetricHandle
 
-	// Log sends a telemetry log at the desired level with the given text and options.
+	// Log sends a telemetry log with the given [slog.Record] and options.
 	// Options include sending key-value pairs as tags, and a stack trace frozen from inside the Log function.
-	Log(level LogLevel, text string, options ...LogOption)
+	Log(record Record, options ...LogOption)
 
 	// ProductStarted declares a product to have started at the customer's request
 	ProductStarted(product Namespace)

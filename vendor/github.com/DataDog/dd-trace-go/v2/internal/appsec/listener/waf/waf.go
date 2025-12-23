@@ -7,10 +7,10 @@ package waf
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/DataDog/appsec-internal-go/limiter"
 	"github.com/DataDog/dd-trace-go/v2/appsec/events"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/dyngo"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/emitter/waf/actions"
@@ -18,6 +18,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/internal"
 	"github.com/DataDog/dd-trace-go/v2/internal/appsec/config"
 	"github.com/DataDog/dd-trace-go/v2/internal/appsec/emitter/waf"
+	"github.com/DataDog/dd-trace-go/v2/internal/appsec/limiter"
 	"github.com/DataDog/dd-trace-go/v2/internal/appsec/listener"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/stacktrace"
@@ -51,18 +52,20 @@ func NewWAFFeature(cfg *config.Config, rootOp dyngo.Operation) (listener.Feature
 			return nil, fmt.Errorf("error while loading libddwaf: %w", err)
 		}
 		// 2. If there is an error and the loading is ok: log as an informative error where appsec can be used
-		telemetrylog.Warn("appsec: non-critical error while loading libddwaf: %s", err.Error(), telemetry.WithTags([]string{"product:appsec"}))
+		logger := telemetrylog.With(telemetry.WithTags([]string{"product:appsec"}))
+		logger.Warn("appsec: non-critical error while loading libddwaf", slog.Any("error", telemetrylog.NewSafeError(err)))
 	}
 
 	newHandle, rulesVersion := cfg.NewHandle()
 	telemetryMetrics := waf.NewMetricsInstance(newHandle, rulesVersion)
 	if newHandle == nil {
 		// As specified @ https://docs.google.com/document/d/1t6U7WXko_QChhoNIApn0-CRNe6SAKuiiAQIyCRPUXP4/edit?tab=t.0#bookmark=id.vddhd140geg7
-		telemetrylog.Error("Failed to build WAF instance: no valid rules or processors available", telemetry.WithTags([]string{
+		logger := telemetrylog.With(telemetry.WithTags([]string{
 			"log_type:rc::asm_dd::diagnostic",
 			"appsec_config_key:*",
 			"rc_config_id:*",
 		}))
+		logger.Error("Failed to build WAF instance: no valid rules or processors available")
 		return nil, fmt.Errorf("failed to obtain WAF instance from the waf.Builder (loaded paths: %q)", cfg.WAFManager.ConfigPaths(""))
 	}
 

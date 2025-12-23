@@ -8,11 +8,11 @@
 package namingschema
 
 import (
-	"os"
 	"strings"
 	"sync/atomic"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/globalconfig"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 )
@@ -39,7 +39,7 @@ var (
 )
 
 func LoadFromEnv() {
-	schemaVersionStr := os.Getenv("DD_TRACE_SPAN_ATTRIBUTE_SCHEMA")
+	schemaVersionStr := env.Get("DD_TRACE_SPAN_ATTRIBUTE_SCHEMA")
 	if v, ok := parseVersionStr(schemaVersionStr); ok {
 		setVersion(v)
 	} else {
@@ -54,7 +54,7 @@ func LoadFromEnv() {
 // ReloadConfig is used to reload the configuration in tests.
 func ReloadConfig() {
 	LoadFromEnv()
-	globalconfig.SetServiceName(os.Getenv("DD_SERVICE"))
+	globalconfig.SetServiceName(env.Get("DD_SERVICE"))
 }
 
 // GetConfig returns the naming schema config.

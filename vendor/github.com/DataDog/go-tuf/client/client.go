@@ -398,6 +398,10 @@ func (c *Client) getLocalMeta() error {
 			c.localMeta["timestamp.json"] = meta["timestamp.json"]
 			c.timestampVer = timestamp.Version
 		}
+	} else {
+		// 5.3.11 If the timestamp meta has been deleted from the local store as a result of a key rotation,
+		// we reset the timestamp version to 0 to allow recovery from a fast-forward attack.
+		c.timestampVer = 0
 	}
 
 	snapshot := &data.Snapshot{}
@@ -409,6 +413,10 @@ func (c *Client) getLocalMeta() error {
 			c.localMeta["snapshot.json"] = meta["snapshot.json"]
 			c.snapshotVer = snapshot.Version
 		}
+	} else {
+		// 5.3.11 If the snapshot meta has been deleted from the local store as a result of a key rotation,
+		// we reset the snapshot version to 0 to allow recovery from a fast-forward attack.
+		c.snapshotVer = 0
 	}
 
 	if targetsJSON, ok := meta["targets.json"]; ok {
@@ -423,6 +431,10 @@ func (c *Client) getLocalMeta() error {
 			// c.targets = targets.Targets
 			c.loadTargets(targets.Targets)
 		}
+	} else {
+		// 5.3.11 If the targets meta has been deleted from the local store as a result of a key rotation,
+		// we reset the targets version to 0 to allow recovery from a fast-forward attack.
+		c.targetsVer = 0
 	}
 
 	if loadFailed {

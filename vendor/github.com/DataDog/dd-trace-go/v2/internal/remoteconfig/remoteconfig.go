@@ -518,7 +518,7 @@ func (c *Client) applyUpdate(pbUpdate *clientGetConfigsResponse) error {
 	// are provided with this information in this case
 	stateBefore, err := c.repository.CurrentState()
 	if err != nil {
-		return fmt.Errorf("repository current state error: %s", err.Error())
+		return fmt.Errorf("repository current state error: %s", err)
 	}
 	products, err := c.repository.Update(rc.Update{
 		TUFRoots:      pbUpdate.Roots,
@@ -527,11 +527,11 @@ func (c *Client) applyUpdate(pbUpdate *clientGetConfigsResponse) error {
 		ClientConfigs: pbUpdate.ClientConfigs,
 	})
 	if err != nil {
-		return fmt.Errorf("repository update error: %s", err.Error())
+		return fmt.Errorf("repository update error: %s", err)
 	}
 	stateAfter, err := c.repository.CurrentState()
 	if err != nil {
-		return fmt.Errorf("repository current state error after update: %s", err.Error())
+		return fmt.Errorf("repository current state error after update: %s", err)
 	}
 
 	// Create a config files diff between before/after the update to see which config files are missing

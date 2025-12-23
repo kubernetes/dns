@@ -162,11 +162,64 @@ func (b *RunAddressDataBuilder) WithFilePath(file string) *RunAddressDataBuilder
 	return b
 }
 
-func (b *RunAddressDataBuilder) WithURL(url string) *RunAddressDataBuilder {
+func (b *RunAddressDataBuilder) WithDownwardMethod(method string) *RunAddressDataBuilder {
+	if method == "" {
+		return b
+	}
+	b.Ephemeral[ServerIONetRequestMethodAddr] = method
+	b.TimerKey = RASPScope
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardRequestHeaders(headers map[string][]string) *RunAddressDataBuilder {
+	if len(headers) == 0 {
+		return b
+	}
+	b.Ephemeral[ServerIONetRequestHeadersAddr] = headers
+	b.TimerKey = RASPScope
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardURL(url string) *RunAddressDataBuilder {
 	if url == "" {
 		return b
 	}
-	b.Ephemeral[ServerIoNetURLAddr] = url
+	b.Ephemeral[ServerIONetURLAddr] = url
+	b.TimerKey = RASPScope
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardRequestBody(body any) *RunAddressDataBuilder {
+	if body == nil {
+		return b
+	}
+	b.Ephemeral[ServerIONetRequestBodyAddr] = body
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardResponseStatus(status int) *RunAddressDataBuilder {
+	if status == 0 {
+		return b
+	}
+	b.Ephemeral[ServerIONetResponseStatusAddr] = strconv.Itoa(status)
+	b.TimerKey = RASPScope
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardResponseHeaders(headers map[string][]string) *RunAddressDataBuilder {
+	if len(headers) == 0 {
+		return b
+	}
+	b.Ephemeral[ServerIONetResponseHeadersAddr] = headers
+	b.TimerKey = RASPScope
+	return b
+}
+
+func (b *RunAddressDataBuilder) WithDownwardResponseBody(body any) *RunAddressDataBuilder {
+	if body == nil {
+		return b
+	}
+	b.Ephemeral[ServerIONetResponseBodyAddr] = body
 	b.TimerKey = RASPScope
 	return b
 }

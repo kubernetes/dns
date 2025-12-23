@@ -175,6 +175,7 @@ func (r *gRPCresponse) Write(b []byte) (int, error) {
 }
 
 // These methods implement the dns.ResponseWriter interface from Go DNS.
+
 func (r *gRPCresponse) Close() error              { return nil }
 func (r *gRPCresponse) TsigStatus() error         { return nil }
 func (r *gRPCresponse) TsigTimersOnly(b bool)     {}

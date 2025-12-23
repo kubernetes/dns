@@ -9,7 +9,11 @@ import (
 	"net"
 	"net/netip"
 	"net/textproto"
+	"regexp"
 	"strings"
+
+	"github.com/DataDog/dd-trace-go/v2/internal/log"
+	"github.com/theckman/httpforwarded"
 )
 
 // ClientIP returns the first public IP address found in the given headers. If
@@ -33,8 +37,12 @@ headersLoop:
 		// Assuming a list of comma-separated IP addresses, split them and build
 		// the list of values to try to parse as IP addresses
 		var ips []string
-		for _, ip := range headerValues {
-			ips = append(ips, strings.Split(ip, ",")...)
+		for _, headerValue := range headerValues {
+			if strings.ToLower(headerName) == "forwarded" {
+				ips = append(ips, parseForwardedHeader(headerValue)...)
+			} else {
+				ips = append(ips, strings.Split(headerValue, ",")...)
+			}
 		}
 
 		// Look for the first valid or global IP address in the comma-separated list
@@ -66,6 +74,41 @@ headersLoop:
 	}
 
 	return remoteIP, clientIP
+}
+
+var (
+	forwardedPortRe = regexp.MustCompile(`^(?:\[([a-f0-9:]+)\]|(\d+\.\d+\.\d+\.\d+))(?::\d+)?$`)
+)
+
+// parseForwardedHeader parses the value of the `Forwarded` header, returning
+// the values of all `for` directives it contains, in the order they appear.
+// Values may not always be IP addresses; but those values that are will have
+// any quoting and port information removed.
+//
+// If the value is found to be syntactically incorrect, a null slice is returned.
+//
+// See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Forwarded
+func parseForwardedHeader(value string) []string {
+	result, err := httpforwarded.ParseParameter("for", []string{value})
+	if err != nil {
+		log.Debug("invalid Forwarded header value: %v", err.Error())
+		return nil
+	}
+
+	for idx, val := range result {
+		matches := forwardedPortRe.FindStringSubmatch(val)
+		if matches == nil {
+			continue
+		}
+		// Remove the port information from the value, and un-brace IPv6 addresses.
+		if matches[1] != "" {
+			result[idx] = matches[1]
+		} else {
+			result[idx] = matches[2]
+		}
+	}
+
+	return result
 }
 
 func parseIP(s string) netip.Addr {

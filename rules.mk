@@ -33,7 +33,7 @@ ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Find the latest hash by opening in browser https://gcr.io/distroless/static-debian12:latest
 BASEIMAGE ?= gcr.io/distroless/static-debian12@sha256:87bce11be0af225e4ca761c40babb06d6d559f5767fbf7dc3c47f0f1a466b92c
 # Find the correct tag at https://github.com/kubernetes/release/blob/master/images/build/distroless-iptables/variants.yaml
-IPTIMAGE ?= registry.k8s.io/build-image/distroless-iptables:v0.7.10@sha256:1a19fbdbdb566bf26dd1e4f2f26c21db1a63991d5cb5d17f3ba158c8465810c1
+IPTIMAGE ?= registry.k8s.io/build-image/distroless-iptables:v0.7.13@sha256:10f92b606f76a683b22ff8b68129ec882ee106f4a6bc1947102f64377b2cf157
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.

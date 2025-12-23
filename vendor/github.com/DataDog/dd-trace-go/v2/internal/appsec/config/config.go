@@ -7,15 +7,14 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
-
-	internal "github.com/DataDog/appsec-internal-go/appsec"
 
 	sharedinternal "github.com/DataDog/dd-trace-go/v2/internal"
 	"github.com/DataDog/dd-trace-go/v2/internal/remoteconfig"
 	"github.com/DataDog/dd-trace-go/v2/internal/stableconfig"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
-	"github.com/DataDog/dd-trace-go/v2/internal/telemetry/log"
+	telemetrylog "github.com/DataDog/dd-trace-go/v2/internal/telemetry/log"
 )
 
 func init() {
@@ -28,7 +27,7 @@ func init() {
 func registerSCAAppConfigTelemetry() {
 	_, _, err := stableconfig.Bool(EnvSCAEnabled, false)
 	if err != nil {
-		log.Error("appsec: %s", err.Error())
+		telemetrylog.Error("appsec: failed to get SCA config", slog.Any("error", telemetrylog.NewSafeError(err)))
 		return
 	}
 }
@@ -53,7 +52,7 @@ type StartConfig struct {
 	// MetaStructAvailable is true if meta struct is supported by the trace agent.
 	MetaStructAvailable bool
 
-	APISecOptions []internal.APISecOption
+	APISecOptions []APISecOption
 
 	// BlockingUnavailable is true when the application run in an environment where blocking is not possible
 	BlockingUnavailable bool
@@ -121,7 +120,7 @@ func WithMetaStructAvailable(available bool) StartOption {
 	}
 }
 
-func WithAPISecOptions(opts ...internal.APISecOption) StartOption {
+func WithAPISecOptions(opts ...APISecOption) StartOption {
 	return func(c *StartConfig) {
 		c.APISecOptions = append(c.APISecOptions, opts...)
 	}
@@ -135,7 +134,7 @@ func WithBlockingUnavailable(unavailable bool) StartOption {
 
 func WithProxyEnvironment() StartOption {
 	return func(c *StartConfig) {
-		c.APISecOptions = append(c.APISecOptions, internal.WithProxy())
+		c.APISecOptions = append(c.APISecOptions, WithProxy())
 	}
 }
 
@@ -148,7 +147,7 @@ type Config struct {
 	// TraceRateLimit is the AppSec trace rate limit (traces per second).
 	TraceRateLimit int64
 	// APISec configuration
-	APISec internal.APISecConfig
+	APISec APISecConfig
 	// RC is the remote configuration client used to receive product configuration updates. Nil if RC is disabled (default)
 	RC *remoteconfig.ClientConfig
 	// RASP determines whether RASP features are enabled or not.
@@ -200,21 +199,21 @@ func IsEnabledByEnvironment() (enabled bool, set bool, err error) {
 
 // NewConfig returns a fresh appsec configuration read from the env
 func (c *StartConfig) NewConfig() (*Config, error) {
-	data, err := internal.RulesFromEnv()
+	data, err := RulesFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("reading WAF rules from environment: %w", err)
 	}
-	manager, err := NewWAFManager(internal.NewObfuscatorConfig(), data)
+	manager, err := NewWAFManagerWithStaticRules(NewObfuscatorConfig(), data)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Config{
 		WAFManager:          manager,
-		WAFTimeout:          internal.WAFTimeoutFromEnv(),
-		TraceRateLimit:      int64(internal.RateLimitFromEnv()),
-		APISec:              internal.NewAPISecConfig(c.APISecOptions...),
-		RASP:                internal.RASPEnabled(),
+		WAFTimeout:          WAFTimeoutFromEnv(),
+		TraceRateLimit:      RateLimitFromEnv(),
+		APISec:              NewAPISecConfig(c.APISecOptions...),
+		RASP:                RASPEnabled(),
 		RC:                  c.RC,
 		MetaStructAvailable: c.MetaStructAvailable,
 		BlockingUnavailable: c.BlockingUnavailable,

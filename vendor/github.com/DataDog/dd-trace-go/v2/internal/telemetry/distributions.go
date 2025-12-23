@@ -70,7 +70,7 @@ func (d *distribution) Submit(value float64) {
 	if !d.values.Enqueue(value) {
 		d.logLoss.Do(func() {
 			log.Debug("telemetry: distribution %q is losing values because the buffer is full", d.key.name)
-			Log(LogWarn, fmt.Sprintf("telemetry: distribution %s is losing values because the buffer is full", d.key), WithStacktrace())
+			Log(NewRecord(LogWarn, fmt.Sprintf("telemetry: distribution %s is losing values because the buffer is full", d.key)), WithStacktrace())
 		})
 	}
 }

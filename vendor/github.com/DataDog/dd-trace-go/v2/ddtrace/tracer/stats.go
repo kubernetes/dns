@@ -12,6 +12,7 @@ import (
 
 	"github.com/DataDog/datadog-agent/pkg/obfuscate"
 	"github.com/DataDog/datadog-agent/pkg/trace/stats"
+	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/internal"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/utils"
@@ -166,8 +167,25 @@ func (c *concentrator) newTracerStatSpan(s *Span, obfuscator *obfuscate.Obfuscat
 	if c.shouldObfuscate() {
 		resource = obfuscatedResource(obfuscator, s.spanType, s.resource)
 	}
-	statSpan, ok := c.spanConcentrator.NewStatSpan(s.service, resource,
-		s.name, s.spanType, s.parentID, s.start, s.duration, s.error, s.meta, s.metrics, c.cfg.agent.peerTags)
+
+	httpMethod := s.meta[ext.HTTPMethod]
+	httpEndpoint := s.meta[ext.HTTPEndpoint]
+
+	statSpan, ok := c.spanConcentrator.NewStatSpanWithConfig(stats.StatSpanConfig{
+		Service:      s.service,
+		Resource:     resource,
+		Name:         s.name,
+		Type:         s.spanType,
+		ParentID:     s.parentID,
+		Start:        s.start,
+		Duration:     s.duration,
+		Error:        s.error,
+		Meta:         s.meta,
+		Metrics:      s.metrics,
+		PeerTags:     c.cfg.agent.peerTags,
+		HTTPMethod:   httpMethod,
+		HTTPEndpoint: httpEndpoint,
+	})
 	if !ok {
 		return nil, false
 	}
