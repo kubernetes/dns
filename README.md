@@ -35,23 +35,24 @@ This is the repository for [Kubernetes DNS(kube-dns and nodelocaldns)](https://k
 
 ## Vulnerability patching
 
-Follow the instructions below depending on the vulnerability, then send a PR.
-Once the PR has merged, a new release tag should be cut.
+Follow the instructions below depending on the vulnerability, then send a PR
+([example PR](https://github.com/kubernetes/dns/pull/723)).
+Once the PR has merged, a new release tag should be cut by a maintainer.
 The rest of the release process is described further down.
 
 ### Bumping Go compiler/standard library
 
-Update the `BUILD_IMAGE` in [Makefile](./Makefile)
+Update the `BUILD_IMAGE` in [Makefile](./Makefile).
 
 ### Bumping base images
 
 Hints for finding up to date images are placed in relevant files next to the variables.
 
-**For node-cache:** Update the `IPTIMAGE` in [rules.mk](./rules.mk)
+**For node-cache:** Update the `IPTIMAGE` in [rules.mk](./rules.mk).
 
-**For dnsmasq and dnsmasq-nanny:** Update the `BASEIMAGE` and `COMPILE_IMAGE`s in [images/dnsmasq/Makefile](./images/dnsmasq/Makefile)
+**For dnsmasq and dnsmasq-nanny:** Update the `BASEIMAGE` and both `COMPILE_IMAGE`s in [images/dnsmasq/Makefile](./images/dnsmasq/Makefile).
 
-**For other images:** Update the `BASEIMAGE` in [rules.mk](./rules.mk)
+**For other images:** Update the `BASEIMAGE` in [rules.mk](./rules.mk).
 
 ### Bumping Go dependencies
 
