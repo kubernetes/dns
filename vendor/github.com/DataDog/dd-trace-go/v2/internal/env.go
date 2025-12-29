@@ -7,33 +7,43 @@ package internal
 
 import (
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 )
 
 // BoolEnv returns the parsed boolean value of an environment variable, or
 // def otherwise.
 func BoolEnv(key string, def bool) bool {
-	vv, ok := os.LookupEnv(key)
+	vv, ok := BoolEnvNoDefault(key)
 	if !ok {
 		return def
 	}
+	return vv
+}
+
+// BoolEnvNoDefault returns the parsed boolean value of an environment variable. The second returned bool signals if
+// the value was set and was a correct boolean value.
+func BoolEnvNoDefault(key string) (bool, bool) {
+	vv, ok := env.Lookup(key)
+	if !ok {
+		return false, false
+	}
 	v, err := strconv.ParseBool(vv)
 	if err != nil {
-		log.Warn("Non-boolean value for env var %s, defaulting to %t. Parse failed with error: %v", key, def, err.Error())
-		return def
+		log.Warn("Non-boolean value for env var %s. Parse failed with error: %v", key, err.Error())
+		return false, false
 	}
-	return v
+	return v, true
 }
 
 // IntEnv returns the parsed int value of an environment variable, or
 // def otherwise.
 func IntEnv(key string, def int) int {
-	vv, ok := os.LookupEnv(key)
+	vv, ok := env.Lookup(key)
 	if !ok {
 		return def
 	}
@@ -48,7 +58,7 @@ func IntEnv(key string, def int) int {
 // DurationEnv returns the parsed duration value of an environment variable, or
 // def otherwise.
 func DurationEnv(key string, def time.Duration) time.Duration {
-	vv, ok := os.LookupEnv(key)
+	vv, ok := env.Lookup(key)
 	if !ok {
 		return def
 	}
@@ -60,9 +70,24 @@ func DurationEnv(key string, def time.Duration) time.Duration {
 	return v
 }
 
+// DurationEnvWithUnit returns the parsed duration value of an environment
+// variable with the specified unit, or def otherwise.
+func DurationEnvWithUnit(key string, unit string, def time.Duration) time.Duration {
+	vv, ok := env.Lookup(key)
+	if !ok {
+		return def
+	}
+	v, err := time.ParseDuration(vv + unit)
+	if err != nil {
+		log.Warn("Non-duration value for env var %s, defaulting to %d. Parse failed with error: %v", key, def, err.Error())
+		return def
+	}
+	return v
+}
+
 // IPEnv returns the valid IP value of an environment variable, or def otherwise.
 func IPEnv(key string, def net.IP) net.IP {
-	vv, ok := os.LookupEnv(key)
+	vv, ok := env.Lookup(key)
 	if !ok {
 		return def
 	}
@@ -113,7 +138,7 @@ func ParseTagString(str string) map[string]string {
 // FloatEnv returns the parsed float64 value of an environment variable,
 // or def otherwise.
 func FloatEnv(key string, def float64) float64 {
-	env, ok := os.LookupEnv(key)
+	env, ok := env.Lookup(key)
 	if !ok {
 		return def
 	}
@@ -136,5 +161,5 @@ func BoolVal(val string, def bool) bool {
 
 // ExternalEnvironment returns the value of the DD_EXTERNAL_ENV environment variable.
 func ExternalEnvironment() string {
-	return os.Getenv("DD_EXTERNAL_ENV")
+	return env.Get("DD_EXTERNAL_ENV")
 }

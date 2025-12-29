@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"strconv"
 	"sync"
 
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
@@ -116,6 +117,11 @@ func sampledByRate(n uint64, rate float64) bool {
 	return n*knuthFactor <= uint64(rate*math.MaxUint64)
 }
 
+// formatKnuthSamplingRate formats a sampling rate as a string with up to 6 decimal digits
+func formatKnuthSamplingRate(rate float64) string {
+	return strconv.FormatFloat(rate, 'g', 6, 64)
+}
+
 // prioritySampler holds a set of per-service sampling rates and applies
 // them to spans.
 type prioritySampler struct {
@@ -173,4 +179,6 @@ func (ps *prioritySampler) apply(spn *Span) {
 		spn.setSamplingPriority(ext.PriorityAutoReject, samplernames.AgentRate)
 	}
 	spn.SetTag(keySamplingPriorityRate, rate)
+	// Set the Knuth sampling rate tag when sampled by agent rate
+	spn.SetTag(keyKnuthSamplingRate, formatKnuthSamplingRate(rate))
 }

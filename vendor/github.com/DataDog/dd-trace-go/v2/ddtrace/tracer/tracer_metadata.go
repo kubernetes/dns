@@ -24,4 +24,8 @@ type Metadata struct {
 	ServiceEnvironment string `msg:"service_env"`
 	// Version of the service being instrumented.
 	ServiceVersion string `msg:"service_version"`
+	// ProcessTags describe the process
+	ProcessTags string `msg:"process_tags"`
+	// ContainerID identified by the process.
+	ContainerID string `msg:"container_id"`
 }

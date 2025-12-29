@@ -6,8 +6,7 @@
 package tracer
 
 import (
-	"os"
-
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/cihub/seelog"
 )
@@ -20,7 +19,7 @@ import (
 //
 // [1] github.com/DataDog/datadog-agent/pkg/util/log
 func init() {
-	if os.Getenv("DD_TRACE_DEBUG_SEELOG_WORKAROUND") == "false" {
+	if env.Get("DD_TRACE_DEBUG_SEELOG_WORKAROUND") == "false" {
 		return
 	}
 

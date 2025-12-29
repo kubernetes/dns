@@ -6,149 +6,156 @@
 package tracer
 
 import (
-	"bytes"
-	"encoding/binary"
 	"io"
-	"sync/atomic"
-
-	"github.com/tinylib/msgp/msgp"
+	"sync"
 )
 
-// payload is a wrapper on top of the msgpack encoder which allows constructing an
-// encoded array by pushing its entries sequentially, one at a time. It basically
-// allows us to encode as we would with a stream, except that the contents of the stream
-// can be read as a slice by the msgpack decoder at any time. It follows the guidelines
-// from the msgpack array spec:
-// https://github.com/msgpack/msgpack/blob/master/spec.md#array-format-family
-//
-// payload implements io.Reader and can be used with the decoder directly. To create
-// a new payload use the newPayload method.
-//
-// payload is not safe for concurrent use.
-//
-// payload is meant to be used only once and eventually dismissed with the
-// single exception of retrying failed flush attempts.
-//
-// ⚠️  Warning!
-//
-// The payload should not be reused for multiple sets of traces.  Resetting the
-// payload for re-use requires the transport to wait for the HTTP package to
-// Close the request body before attempting to re-use it again! This requires
-// additional logic to be in place. See:
-//
-// • https://github.com/golang/go/blob/go1.16/src/net/http/client.go#L136-L138
-// • https://github.com/DataDog/dd-trace-go/pull/475
-// • https://github.com/DataDog/dd-trace-go/pull/549
-// • https://github.com/DataDog/dd-trace-go/pull/976
-type payload struct {
-	// header specifies the first few bytes in the msgpack stream
-	// indicating the type of array (fixarray, array16 or array32)
-	// and the number of items contained in the stream.
-	header []byte
-
-	// off specifies the current read position on the header.
-	off int
-
-	// count specifies the number of items in the stream.
-	count uint32
-
-	// buf holds the sequence of msgpack-encoded items.
-	buf bytes.Buffer
-
-	// reader is used for reading the contents of buf.
-	reader *bytes.Reader
+// payloadStats contains the statistics of a payload.
+type payloadStats struct {
+	size      int // size in bytes
+	itemCount int // number of items (traces)
 }
 
-var _ io.Reader = (*payload)(nil)
+// payloadWriter defines the interface for writing data to a payload.
+type payloadWriter interface {
+	io.Writer
+
+	push(t spanList) (stats payloadStats, err error)
+	grow(n int)
+	reset()
+	clear()
+
+	// recordItem records that an item was added and updates the header
+	recordItem()
+}
+
+// payloadReader defines the interface for reading data from a payload.
+type payloadReader interface {
+	io.Reader
+	io.Closer
+
+	stats() payloadStats
+	size() int
+	itemCount() int
+	protocol() float64
+}
+
+// payload combines both reading and writing operations for a payload.
+type payload interface {
+	payloadWriter
+	payloadReader
+}
 
 // newPayload returns a ready to use payload.
-func newPayload() *payload {
-	p := &payload{
-		header: make([]byte, 8),
-		off:    8,
+func newPayload(protocol float64) payload {
+	if protocol == traceProtocolV1 {
+		return &safePayload{
+			p: newPayloadV1(),
+		}
 	}
-	return p
-}
-
-// push pushes a new item into the stream.
-func (p *payload) push(t spanList) error {
-	p.buf.Grow(t.Msgsize())
-	if err := msgp.Encode(&p.buf, t); err != nil {
-		return err
+	return &safePayload{
+		p: newPayloadV04(),
 	}
-	atomic.AddUint32(&p.count, 1)
-	p.updateHeader()
-	return nil
-}
-
-// itemCount returns the number of items available in the stream.
-func (p *payload) itemCount() int {
-	return int(atomic.LoadUint32(&p.count))
-}
-
-// size returns the payload size in bytes. After the first read the value becomes
-// inaccurate by up to 8 bytes.
-func (p *payload) size() int {
-	return p.buf.Len() + len(p.header) - p.off
-}
-
-// reset sets up the payload to be read a second time. It maintains the
-// underlying byte contents of the buffer. reset should not be used in order to
-// reuse the payload for another set of traces.
-func (p *payload) reset() {
-	p.updateHeader()
-	if p.reader != nil {
-		p.reader.Seek(0, 0)
-	}
-}
-
-// clear empties the payload buffers.
-func (p *payload) clear() {
-	p.buf = bytes.Buffer{}
-	p.reader = nil
 }
 
 // https://github.com/msgpack/msgpack/blob/master/spec.md#array-format-family
 const (
+	// arrays
 	msgpackArrayFix byte = 144  // up to 15 items
 	msgpackArray16  byte = 0xdc // up to 2^16-1 items, followed by size in 2 bytes
 	msgpackArray32  byte = 0xdd // up to 2^32-1 items, followed by size in 4 bytes
+
+	// maps
+	msgpackMapFix byte = 0x80 // up to 15 items
+	msgpackMap16  byte = 0xde // up to 2^16-1 items, followed by size in 2 bytes
+	msgpackMap32  byte = 0xdf // up to 2^32-1 items, followed by size in 4 bytes
 )
 
-// updateHeader updates the payload header based on the number of items currently
-// present in the stream.
-func (p *payload) updateHeader() {
-	n := uint64(atomic.LoadUint32(&p.count))
-	switch {
-	case n <= 15:
-		p.header[7] = msgpackArrayFix + byte(n)
-		p.off = 7
-	case n <= 1<<16-1:
-		binary.BigEndian.PutUint64(p.header, n) // writes 2 bytes
-		p.header[5] = msgpackArray16
-		p.off = 5
-	default: // n <= 1<<32-1
-		binary.BigEndian.PutUint64(p.header, n) // writes 4 bytes
-		p.header[3] = msgpackArray32
-		p.off = 3
-	}
+// safePayload provides a thread-safe wrapper around payload.
+type safePayload struct {
+	mu sync.RWMutex
+	p  payload
 }
 
-// Close implements io.Closer
-func (p *payload) Close() error {
-	return nil
+// push pushes a new item into the stream in a thread-safe manner.
+func (sp *safePayload) push(t spanList) (stats payloadStats, err error) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.p.push(t)
 }
 
-// Read implements io.Reader. It reads from the msgpack-encoded stream.
-func (p *payload) Read(b []byte) (n int, err error) {
-	if p.off < len(p.header) {
-		// reading header
-		n = copy(b, p.header[p.off:])
-		p.off += n
-		return n, nil
-	}
-	if p.reader == nil {
-		p.reader = bytes.NewReader(p.buf.Bytes())
-	}
-	return p.reader.Read(b)
+// itemCount returns the number of items available in the stream in a thread-safe manner.
+// This method is not thread-safe, but the underlying payload.itemCount() must be.
+func (sp *safePayload) itemCount() int {
+	return sp.p.itemCount()
+}
+
+// size returns the payload size in bytes in a thread-safe manner.
+func (sp *safePayload) size() int {
+	sp.mu.RLock()
+	defer sp.mu.RUnlock()
+	return sp.p.size()
+}
+
+// reset sets up the payload to be read a second time in a thread-safe manner.
+func (sp *safePayload) reset() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.p.reset()
+}
+
+// clear empties the payload buffers in a thread-safe manner.
+func (sp *safePayload) clear() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.p.clear()
+}
+
+// Read implements io.Reader in a thread-safe manner.
+func (sp *safePayload) Read(b []byte) (n int, err error) {
+	// Note: Read modifies internal state (off, reader), so we need full lock
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.p.Read(b)
+}
+
+// Close implements io.Closer in a thread-safe manner.
+func (sp *safePayload) Close() error {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.p.Close()
+}
+
+// Write implements io.Writer in a thread-safe manner.
+func (sp *safePayload) Write(data []byte) (n int, err error) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.p.Write(data)
+}
+
+// grow grows the buffer to ensure it can accommodate n more bytes in a thread-safe manner.
+func (sp *safePayload) grow(n int) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.p.grow(n)
+}
+
+// recordItem records that an item was added and updates the header in a thread-safe manner.
+func (sp *safePayload) recordItem() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.p.recordItem()
+}
+
+// stats returns the current stats of the payload in a thread-safe manner.
+func (sp *safePayload) stats() payloadStats {
+	sp.mu.RLock()
+	defer sp.mu.RUnlock()
+	return sp.p.stats()
+}
+
+// protocol returns the protocol version of the payload in a thread-safe manner.
+func (sp *safePayload) protocol() float64 {
+	// Protocol is immutable after creation - no lock needed
+	return sp.p.protocol()
 }

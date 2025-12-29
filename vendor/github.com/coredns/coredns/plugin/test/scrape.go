@@ -14,7 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package test will scrape a target and you can inspect the variables.
+// Package test contains helper functions for writing plugin tests.
+// For example to scrape a target and inspect the variables.
 // Basic usage:
 //
 //	result := Scrape("http://localhost:9153/metrics")

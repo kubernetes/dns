@@ -6,21 +6,7 @@
 package libddwaf
 
 import (
-	"errors"
-	"sync"
-
 	"github.com/DataDog/go-libddwaf/v4/internal/bindings"
-	"github.com/DataDog/go-libddwaf/v4/internal/support"
-)
-
-// Globally dlopen() libddwaf only once because several dlopens (eg. in tests)
-// aren't supported by macOS.
-var (
-	// libddwaf's dynamic library handle and entrypoints
-	wafLib *bindings.WAFLib
-	// libddwaf's dlopen error if any
-	wafLoadErr  error
-	openWafOnce sync.Once
 )
 
 // Load loads libddwaf's dynamic library. The dynamic library is opened only
@@ -36,29 +22,14 @@ var (
 // successful: in such cases the error is indicative that some non-critical
 // features are not available; but the WAF may still be used.
 func Load() (bool, error) {
-	if ok, err := Usable(); !ok {
-		return false, err
-	}
-
-	openWafOnce.Do(func() {
-		wafLib, wafLoadErr = bindings.NewWAFLib()
-		if wafLoadErr != nil {
-			return
-		}
-		wafVersion = wafLib.GetVersion()
-	})
-
-	return wafLib != nil, wafLoadErr
+	return bindings.Load()
 }
-
-var wafVersion string
 
 // Version returns the version returned by libddwaf.
 // It relies on the dynamic loading of the library, which can fail and return
 // an empty string or the previously loaded version, if any.
 func Version() string {
-	_, _ = Load()
-	return wafVersion
+	return bindings.Version()
 }
 
 // Usable returns true if the WAF is usable, false and an error otherwise.
@@ -73,8 +44,5 @@ func Version() string {
 //   - The WAF library is not in an unsupported OS/Arch
 //   - The WAF library is not in an unsupported Go version
 func Usable() (bool, error) {
-	wafSupportErrors := errors.Join(support.WafSupportErrors()...)
-	wafManuallyDisabledErr := support.WafManuallyDisabledError()
-
-	return (wafLib != nil || wafLoadErr == nil) && wafSupportErrors == nil && wafManuallyDisabledErr == nil, errors.Join(wafLoadErr, wafSupportErrors, wafManuallyDisabledErr)
+	return bindings.Usable()
 }

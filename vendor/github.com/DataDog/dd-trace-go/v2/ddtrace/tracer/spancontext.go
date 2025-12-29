@@ -20,7 +20,6 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/internal/tracerstats"
 	sharedinternal "github.com/DataDog/dd-trace-go/v2/internal"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
-	"github.com/DataDog/dd-trace-go/v2/internal/processtags"
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
@@ -275,6 +274,17 @@ func (c *SpanContext) setSamplingPriority(p int, sampler samplernames.SamplerNam
 	}
 }
 
+// forceSetSamplingPriority sets (and forces if the trace is locked) the sampling priority and decision maker (based on `sampler`).
+func (c *SpanContext) forceSetSamplingPriority(p int, sampler samplernames.SamplerName) {
+	if c.trace == nil {
+		c.trace = newTrace()
+	}
+	if c.trace.forceSetSamplingPriority(p, sampler) {
+		// the trace's sampling priority or sampler was updated: mark this as updated
+		c.updated = true
+	}
+}
+
 func (c *SpanContext) SamplingPriority() (p int, ok bool) {
 	if c == nil || c.trace == nil {
 		return 0, false
@@ -397,6 +407,14 @@ func (t *trace) setSamplingPriority(p int, sampler samplernames.SamplerName) boo
 	return t.setSamplingPriorityLocked(p, sampler)
 }
 
+// forceSetSamplingPriority forces the sampling priority and the decision maker
+// and returns true if it was modified.
+func (t *trace) forceSetSamplingPriority(p int, sampler samplernames.SamplerName) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.setSamplingPriorityLockedWithForce(p, sampler, true)
+}
+
 func (t *trace) keep() {
 	atomic.CompareAndSwapUint32((*uint32)(&t.samplingDecision), uint32(decisionNone), uint32(decisionKeep))
 }
@@ -422,8 +440,13 @@ func samplerToDM(sampler samplernames.SamplerName) string {
 	return "-" + strconv.Itoa(int(sampler))
 }
 
-func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerName) bool {
-	if t.locked {
+// setSamplingPriority sets the sampling priority and the decision maker
+// and returns true if it was modified.
+//
+// The force parameter is used to bypass the locked sampling decision check
+// when setting the sampling priority. This is used to apply a manual keep or drop decision.
+func (t *trace) setSamplingPriorityLockedWithForce(p int, sampler samplernames.SamplerName, force bool) bool {
+	if t.locked && !force {
 		return false
 	}
 
@@ -454,6 +477,10 @@ func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerNam
 	}
 
 	return updatedPriority
+}
+
+func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerName) bool {
+	return t.setSamplingPriorityLockedWithForce(p, sampler, false)
 }
 
 func (t *trace) isLocked() bool {
@@ -511,9 +538,6 @@ func (t *trace) setTraceTags(s *Span) {
 	if s.context != nil && s.context.traceID.HasUpper() {
 		s.setMeta(keyTraceID128, s.context.traceID.UpperHex())
 	}
-	if pTags := processtags.GlobalTags().String(); pTags != "" {
-		s.setMeta(keyProcessTags, pTags)
-	}
 }
 
 // finishedOne acknowledges that another span in the trace has finished, and checks
@@ -540,7 +564,7 @@ func (t *trace) finishedOne(s *Span) {
 		return
 	}
 	tc := tr.TracerConf()
-	setPeerService(s, tc.PeerServiceDefaults, tc.PeerServiceMappings)
+	setPeerService(s, tc)
 
 	// attach the _dd.base_service tag only when the globally configured service name is different from the
 	// span service name.
@@ -618,13 +642,24 @@ func (t *trace) finishChunk(tr *tracer, ch *chunk) {
 
 // setPeerService sets the peer.service, _dd.peer.service.source, and _dd.peer.service.remapped_from
 // tags as applicable for the given span.
-func setPeerService(s *Span, peerServiceDefaults bool, peerServiceMappings map[string]string) {
+func setPeerService(s *Span, tc TracerConf) {
+	spanKind := s.meta[ext.SpanKind]
+	isOutboundRequest := spanKind == ext.SpanKindClient || spanKind == ext.SpanKindProducer
+
 	if _, ok := s.meta[ext.PeerService]; ok { // peer.service already set on the span
 		s.setMeta(keyPeerServiceSource, ext.PeerService)
+	} else if isServerless(tc) {
+		// Set peerService only in outbound Lambda requests
+		if isOutboundRequest {
+			if ps := deriveAWSPeerService(s.meta); ps != "" {
+				s.setMeta(ext.PeerService, ps)
+				s.setMeta(keyPeerServiceSource, ext.PeerService)
+			} else {
+				log.Debug("Unable to set peer.service tag for serverless span %q", s.name)
+			}
+		}
 	} else { // no peer.service currently set
-		spanKind := s.meta[ext.SpanKind]
-		isOutboundRequest := spanKind == ext.SpanKindClient || spanKind == ext.SpanKindProducer
-		shouldSetDefaultPeerService := isOutboundRequest && peerServiceDefaults
+		shouldSetDefaultPeerService := isOutboundRequest && tc.PeerServiceDefaults
 		if !shouldSetDefaultPeerService {
 			return
 		}
@@ -637,10 +672,57 @@ func setPeerService(s *Span, peerServiceDefaults bool, peerServiceMappings map[s
 	}
 	// Overwrite existing peer.service value if remapped by the user
 	ps := s.meta[ext.PeerService]
-	if to, ok := peerServiceMappings[ps]; ok {
+	if to, ok := tc.PeerServiceMappings[ps]; ok {
 		s.setMeta(keyPeerServiceRemappedFrom, ps)
 		s.setMeta(ext.PeerService, to)
 	}
+}
+
+/*
+checks if we are in a serverless environment
+
+TODO add checks for Azure functions and other serverless environments
+*/
+func isServerless(tc TracerConf) bool {
+	return tc.isLambdaFunction
+}
+
+/*
+deriveAWSPeerService returns the host name of the
+outbound aws service call based on the span metadata,
+or an empty string if it cannot be determined.
+
+The mapping is as follows:
+  - eventbridge: events.<region>.amazonaws.com
+  - sqs:         sqs.<region>.amazonaws.com
+  - sns:         sns.<region>.amazonaws.com
+  - kinesis:     kinesis.<region>.amazonaws.com
+  - dynamodb:    dynamodb.<region>.amazonaws.com
+  - s3:          <bucket>.s3.<region>.amazonaws.com (if Bucket param present)
+    s3.<region>.amazonaws.com          (otherwise)
+*/
+func deriveAWSPeerService(sm map[string]string) string {
+	service, region := sm[ext.AWSService], sm[ext.AWSRegion]
+	if service == "" || region == "" {
+		return ""
+	}
+
+	s := strings.ToLower(service)
+	switch s {
+
+	case "s3":
+		if bucket := sm[ext.S3BucketName]; bucket != "" {
+			return bucket + ".s3." + region + ".amazonaws.com"
+		}
+		return "s3." + region + ".amazonaws.com"
+
+	case "eventbridge":
+		return "events." + region + ".amazonaws.com"
+
+	case "sqs", "sns", "dynamodb", "kinesis":
+		return s + "." + region + ".amazonaws.com"
+	}
+	return ""
 }
 
 // setPeerServiceFromSource sets peer.service from the sources determined

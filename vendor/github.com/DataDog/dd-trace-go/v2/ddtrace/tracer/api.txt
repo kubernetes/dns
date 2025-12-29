@@ -73,6 +73,10 @@ func WithGlobalTag(string, interface{}) (StartOption)
 func WithHTTPClient(*http.Client) (StartOption)
 func WithHeaderTags([]string) (StartOption)
 func WithHostname(string) (StartOption)
+func WithLLMObsAgentlessEnabled(bool) (StartOption)
+func WithLLMObsEnabled(bool) (StartOption)
+func WithLLMObsMLApp(string) (StartOption)
+func WithLLMObsProjectName(string) (StartOption)
 func WithLambdaMode(bool) (StartOption)
 func WithLogStartup(bool) (StartOption)
 func WithLogger(Logger) (StartOption)
@@ -366,8 +370,10 @@ type TracerConf struct {
 
 // Types
 type Metadata struct {
+	ContainerID string
 	Hostname string
 	Language string
+	ProcessTags string
 	RuntimeID string
 	SchemaVersion uint8
 	ServiceEnvironment string

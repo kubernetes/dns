@@ -3,52 +3,103 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2025 Datadog, Inc.
 
+// Package log provides secure telemetry logging with strict security controls.
+//
+// SECURITY MODEL:
+//
+// This package implements strict security controls for telemetry logging to prevent
+// PII and sensitive information from being sent to external telemetry services.
+//
+// REQUIREMENTS:
+//   - Messages MUST be constant templates only - no dynamic parameter replacement
+//   - Stack traces MUST be redacted to show only Datadog, runtime, and known 3rd party frames
+//   - Errors MUST use SafeError type with message redaction
+//   - slog.Any() only allowed with LogValuer implementations
+//
+// BENEFITS:
+//   - Constant messages enable deduplication to reduce redundant log transmission
+//
+// SECURE USAGE PATTERNS:
+//
+//	// ✅ Correct - constant message with structured data
+//	telemetrylog.Error("operation failed", slog.String("operation", "startup"))
+//	telemetrylog.Error("validation error", slog.Any("error", SafeError(err)))
+//	telemetrylog.Error("operation failed", slog.Any("error", SafeError(err)), WithStacktrace())
+//
+//	// ❌ Forbidden - dynamic messages
+//	telemetrylog.Error(err.Error()) // Raw error message
+//	telemetrylog.Error("failed: " + details) // String concatenation
+//	telemetrylog.Error(fmt.Sprintf("error: %s", err)) // Format strings
+//
+//	// ❌ Forbidden - raw error exposure
+//	telemetrylog.Error("failed", slog.Any("error", err)) // Raw error object
+//	telemetrylog.Error("failed", slog.String("err", err.Error())) // Raw error message
 package log
 
 import (
-	"fmt"
+	"log/slog"
+	"slices"
+	"sync/atomic"
 
-	internallog "github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
 
-func divideArgs(args []any) ([]telemetry.LogOption, []any) {
-	if len(args) == 0 {
-		return nil, nil
+type Logger struct {
+	opts []telemetry.LogOption
+}
+
+var (
+	// defaultLogger is the global logger instance with no pre-configured options
+	defaultLogger atomic.Pointer[Logger]
+	sendLog       func(r telemetry.Record, opts ...telemetry.LogOption) = telemetry.Log
+)
+
+func init() {
+	defaultLogger.Store(&Logger{})
+}
+
+func SetDefaultLogger(logger *Logger) {
+	defaultLogger.CompareAndSwap(defaultLogger.Load(), logger)
+}
+
+func With(opts ...telemetry.LogOption) *Logger {
+	return &Logger{
+		opts: opts,
 	}
+}
 
-	var options []telemetry.LogOption
-	var fmtArgs []any
-	for _, arg := range args {
-		if opt, ok := arg.(telemetry.LogOption); ok {
-			options = append(options, opt)
-		} else {
-			fmtArgs = append(fmtArgs, arg)
-		}
+func (l *Logger) With(opts ...telemetry.LogOption) *Logger {
+	return &Logger{
+		opts: slices.Concat(l.opts, opts),
 	}
-	return options, fmtArgs
 }
 
-// Debug sends a telemetry payload with a debug log message to the backend.
-func Debug(format string, args ...any) {
-	log(telemetry.LogDebug, format, args)
+func Debug(message string, attrs ...slog.Attr) {
+	defaultLogger.Load().Debug(message, attrs...)
 }
 
-// Warn sends a telemetry payload with a warning log message to the backend and the console as a debug log.
-func Warn(format string, args ...any) {
-	log(telemetry.LogWarn, format, args)
+func Warn(message string, attrs ...slog.Attr) {
+	defaultLogger.Load().Warn(message, attrs...)
 }
 
-// Error sends a telemetry payload with an error log message to the backend and the console as a debug log.
-func Error(format string, args ...any) {
-	log(telemetry.LogError, format, args)
+func Error(message string, attrs ...slog.Attr) {
+	defaultLogger.Load().Error(message, attrs...)
 }
 
-func log(lvl telemetry.LogLevel, format string, args []any) {
-	opts, fmtArgs := divideArgs(args)
-	telemetry.Log(lvl, fmt.Sprintf(format, fmtArgs...), opts...)
+func (l *Logger) Debug(message string, attrs ...slog.Attr) {
+	record := telemetry.NewRecord(telemetry.LogDebug, message)
+	record.AddAttrs(attrs...)
+	sendLog(record, l.opts...)
+}
 
-	if lvl != telemetry.LogDebug {
-		internallog.Debug(format, fmtArgs...) //nolint:gocritic // Telemetry log plumbing needs to pass through variable format strings
-	}
+func (l *Logger) Warn(message string, attrs ...slog.Attr) {
+	record := telemetry.NewRecord(telemetry.LogWarn, message)
+	record.AddAttrs(attrs...)
+	sendLog(record, l.opts...)
+}
+
+func (l *Logger) Error(message string, attrs ...slog.Attr) {
+	record := telemetry.NewRecord(telemetry.LogError, message)
+	record.AddAttrs(attrs...)
+	sendLog(record, l.opts...)
 }

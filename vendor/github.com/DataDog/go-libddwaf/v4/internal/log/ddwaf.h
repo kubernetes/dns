@@ -410,7 +410,7 @@ ddwaf_handle ddwaf_builder_build_instance(ddwaf_builder builder);
  *        provided regular expression is used unanchored so matches can be found
  *        at any point within the path, any necessary anchors must be explicitly
  *        added to the regex. (nullable).
- * @oaran filter_len The length of the filter string (or 0 otherwise).
+ * @param filter_len The length of the filter string (or 0 otherwise).
  *
  * @return The total number of configurations loaded or, if provided, the number
  *         of those matching the filter.
@@ -646,6 +646,25 @@ bool ddwaf_object_map_addl(ddwaf_object *map, const char *key, size_t length, dd
  * @return The success or failure of the operation.
  **/
 bool ddwaf_object_map_addl_nc(ddwaf_object *map, const char *key, size_t length, ddwaf_object *object);
+
+/**
+ * ddwaf_object_from_json
+ *
+ * Creates a ddwaf_object from a JSON string. The JSON will be parsed and converted
+ * into the appropriate ddwaf_object structure, supporting all JSON types including
+ * objects, arrays, strings, numbers, booleans, and null values.
+ *
+ * @param output Object to populate with the parsed JSON data. (nonnull)
+ * @param json_str The JSON string to parse. (nonnull)
+ * @param length Length of the JSON string.
+ *
+ * @return The success or failure of the operation.
+ *
+ * @note The output object must be freed by the caller using ddwaf_object_free.
+ * @note If parsing fails, the output object will be left in an undefined state.
+ * @note The provided JSON string is owned by the caller.
+ **/
+bool ddwaf_object_from_json(ddwaf_object *output, const char *json_str, uint32_t length);
 
 /**
  * ddwaf_object_type

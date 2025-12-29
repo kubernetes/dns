@@ -6,11 +6,12 @@
 package internal
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
-	xsync "github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // OtelTagsDelimeter is the separator between key-val pairs for OTEL env vars
@@ -148,5 +149,41 @@ func ToFloat64(value any) (f float64, ok bool) {
 		return float64(i), true
 	default:
 		return 0, false
+	}
+}
+
+// ToInt64 attempts to convert an any value into an int64.
+func ToInt64(val any) (int64, error) {
+	switch v := val.(type) {
+	case int:
+		return int64(v), nil
+	case int8:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("cannot convert %T to int64", val)
+	}
+}
+
+// ToUint64 attempts to convert an any value into an uint64.
+func ToUint64(val any) (uint64, error) {
+	switch v := val.(type) {
+	case uint:
+		return uint64(v), nil
+	case uint8:
+		return uint64(v), nil
+	case uint16:
+		return uint64(v), nil
+	case uint32:
+		return uint64(v), nil
+	case uint64:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("cannot convert %T to uint64", val)
 	}
 }

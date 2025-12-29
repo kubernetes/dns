@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var hashableEdgeTags = map[string]struct{}{"event_type": {}, "exchange": {}, "group": {}, "topic": {}, "type": {}, "direction": {}}
+var hashableEdgeTags = map[string]struct{}{"event_type": {}, "exchange": {}, "group": {}, "topic": {}, "type": {}, "direction": {}, "segment_name": {}}
 
 func isWellFormedEdgeTag(t string) bool {
 	if i := strings.IndexByte(t, ':'); i != -1 {

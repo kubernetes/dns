@@ -35,10 +35,32 @@ This is the repository for [Kubernetes DNS(kube-dns and nodelocaldns)](https://k
 
 ## Vulnerability patching
 
-Vulnerability patches are mainly for debian-base or debian-iptables images. They can be updated to the latest by modifying [rules.mk](https://github.com/kubernetes/dns/blob/master/rules.mk#L32-L33) and [dnsmasq Makefile](https://github.com/kubernetes/dns/blob/f44ede5f559a9a29fa23b438e6ce0cb70934d834/images/dnsmasq/Makefile#L30-L32).
-[Example PR](https://github.com/kubernetes/dns/pull/475).
+Follow the instructions below depending on the vulnerability, then send a PR
+([example PR](https://github.com/kubernetes/dns/pull/723)).
+Once the PR has merged, a new release tag should be cut by a maintainer.
+The rest of the release process is described further down.
 
-Once the PR has merged, a new release tag should be cut. The rest of the release process is described below.
+### Bumping Go compiler/standard library
+
+Update the `BUILD_IMAGE` in [Makefile](./Makefile).
+
+### Bumping base images
+
+Hints for finding up to date images are placed in relevant files next to the variables.
+
+**For node-cache:** Update the `IPTIMAGE` in [rules.mk](./rules.mk).
+
+**For dnsmasq and dnsmasq-nanny:** Update the `BASEIMAGE` and both `COMPILE_IMAGE`s in [images/dnsmasq/Makefile](./images/dnsmasq/Makefile).
+
+**For other images:** Update the `BASEIMAGE` in [rules.mk](./rules.mk).
+
+### Bumping Go dependencies
+
+```shell
+go get DEPENDENCY@VERSION
+go mod tidy
+go mod vendor
+```
 
 ## Release process
 Follow these steps to make changes and release a new binary.

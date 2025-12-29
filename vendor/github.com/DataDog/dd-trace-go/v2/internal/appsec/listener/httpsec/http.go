@@ -9,13 +9,11 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/DataDog/appsec-internal-go/apisec"
-	"github.com/DataDog/appsec-internal-go/appsec"
-
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/dyngo"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/emitter/httpsec"
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/appsec/emitter/waf/addresses"
+	"github.com/DataDog/dd-trace-go/v2/internal/appsec/apisec"
 	"github.com/DataDog/dd-trace-go/v2/internal/appsec/config"
 	"github.com/DataDog/dd-trace-go/v2/internal/appsec/listener"
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
@@ -23,7 +21,7 @@ import (
 )
 
 type Feature struct {
-	APISec                        appsec.APISecConfig
+	APISec                        config.APISecConfig
 	ForceKeepWhenGeneratingSchema bool
 }
 

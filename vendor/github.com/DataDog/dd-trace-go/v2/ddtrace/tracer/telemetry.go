@@ -7,9 +7,9 @@ package tracer
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
@@ -28,10 +28,10 @@ func reportTelemetryOnAppStarted(c telemetry.Configuration) {
 // event is sent with tracer config data.
 // Note that the tracer is not considered as a standalone product by telemetry so we cannot send
 // an app-product-change event for the tracer.
-func startTelemetry(c *config) {
+func startTelemetry(c *config) telemetry.Client {
 	if telemetry.Disabled() {
 		// Do not do extra work populating config data if instrumentation telemetry is disabled.
-		return
+		return nil
 	}
 
 	telemetry.ProductStarted(telemetry.NamespaceTracers)
@@ -111,12 +111,12 @@ func startTelemetry(c *config) {
 		AgentURL:   c.agentURL.String(),
 	}
 	if c.logToStdout || c.ciVisibilityAgentless {
-		cfg.APIKey = os.Getenv("DD_API_KEY")
+		cfg.APIKey = env.Get("DD_API_KEY")
 	}
 	client, err := telemetry.NewClient(c.serviceName, c.env, c.version, cfg)
 	if err != nil {
 		log.Debug("tracer: failed to create telemetry client: %s", err.Error())
-		return
+		return nil
 	}
 
 	if c.orchestrionCfg.Enabled {
@@ -126,4 +126,5 @@ func startTelemetry(c *config) {
 	}
 
 	telemetry.StartApp(client)
+	return client
 }

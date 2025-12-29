@@ -13,6 +13,7 @@ import (
 	_ "unsafe" // for go:linkname
 
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	logger "github.com/DataDog/dd-trace-go/v2/internal/log"
 )
 
@@ -101,7 +102,7 @@ func getEnvironmentalData() *fileEnvironmentalData {
 //
 //go:linkname getEnvDataFileName
 func getEnvDataFileName() string {
-	envDataFileName := strings.TrimSpace(os.Getenv(constants.CIVisibilityEnvironmentDataFilePath))
+	envDataFileName := strings.TrimSpace(env.Get(constants.CIVisibilityEnvironmentDataFilePath))
 	if envDataFileName != "" {
 		return envDataFileName
 	}
