@@ -22,7 +22,7 @@ ALL_ARCH := amd64 arm arm64 ppc64le s390x
 MANIFEST_IMAGE := $(REGISTRY)/$(CONTAINER_PREFIX)-dnsmasq
 IMAGE := $(CONTAINER_PREFIX)-dnsmasq-$(ARCH)
 # Find the correct tag at https://github.com/kubernetes/release/blob/master/images/build/cross/variants.yaml
-COMPILE_IMAGE := registry.k8s.io/build-image/kube-cross:v1.34.0-go1.24.9-bullseye.0
+COMPILE_IMAGE := registry.k8s.io/build-image/kube-cross:v1.35.0-go1.25.5-bullseye.0
 OUTPUT_DIR := _output/$(ARCH)
 
 # Ensure that the docker command line supports the manifest images
@@ -30,7 +30,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 
 # Multiarch image
 # Find the latest hash by opening in browser https://gcr.io/distroless/base-debian12:latest
-BASEIMAGE ?= gcr.io/distroless/base-debian12@sha256:9e9b50d2048db3741f86a48d939b4e4cc775f5889b3496439343301ff54cdba8
+BASEIMAGE ?= gcr.io/distroless/base-debian12@sha256:f5a3067027c2b322cd71b844f3d84ad3deada45ceb8a30f301260a602455070e
 ifeq ($(ARCH),amd64)
 	# Find the correct tag at https://github.com/kubernetes/release/blob/master/images/build/debian-base/variants.yaml
 	COMPILE_IMAGE := registry.k8s.io/build-image/debian-base-$(ARCH):bookworm-v1.0.6
