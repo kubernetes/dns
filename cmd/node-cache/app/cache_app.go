@@ -22,10 +22,10 @@ import (
 
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-
 	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
+
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilnet "k8s.io/utils/net"
 )
@@ -63,8 +63,8 @@ type iptablesRule struct {
 
 // CacheApp contains all the config required to run node-cache.
 type CacheApp struct {
-	iptables      utiliptables.Interface
-	iptablesRules []iptablesRule
+	iptables      [2]utiliptables.Interface // 0 - ipv4, 1 - ipv6
+	iptablesRules [2][]iptablesRule         // 0 - ipv4, 1 - ipv6
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
 	kubednsConfig *options.KubeDNSConfig
@@ -72,6 +72,11 @@ type CacheApp struct {
 	clusterDNSIP  net.IP
 	selfProcess   *os.Process
 }
+
+const (
+	ipv4 int = iota
+	ipv6
+)
 
 func isLockedErr(err error) bool {
 	return strings.Contains(err.Error(), "holding the xtables lock")
@@ -100,19 +105,18 @@ func (c *CacheApp) Init() {
 	c.params.SetupIptables = setupIptables
 }
 
-// isIPv6 return if the node-cache is working in IPv6 mode
-// LocalIPs are guaranteed to have the same family
-func (c *CacheApp) isIPv6() bool {
-	if len(c.params.LocalIPs) > 0 {
-		return utilnet.IsIPv6(c.params.LocalIPs[0])
+func isIPv6ToIndex(isIPv6 bool) int {
+	if isIPv6 {
+		return ipv6
 	}
-	return false
+	return ipv4
 }
 
 func (c *CacheApp) initIptables() {
 	// using the localIPStr param since we need ip strings here
 	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
-		c.iptablesRules = append(c.iptablesRules, []iptablesRule{
+		i := isIPv6ToIndex(utilnet.IsIPv6(net.ParseIP(localIP)))
+		rules := []iptablesRule{
 			// Match traffic destined for localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
 			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "tcp", "-d", localIP,
 				"--dport", c.params.LocalPort, "-j", "NOTRACK", "-m", "comment", "--comment", iptablesCommentSkipConntrack}},
@@ -144,17 +148,11 @@ func (c *CacheApp) initIptables() {
 				"--dport", c.params.HealthPort, "-j", "NOTRACK", "-m", "comment", "--comment", iptablesCommentSkipConntrack}},
 			{utiliptables.Table("raw"), utiliptables.ChainOutput, []string{"-p", "tcp", "-s", localIP,
 				"--sport", c.params.HealthPort, "-j", "NOTRACK", "-m", "comment", "--comment", iptablesCommentSkipConntrack}},
-		}...)
+		}
+		c.iptablesRules[i] = append(c.iptablesRules[i], rules...)
 	}
-	c.iptables = newIPTables(c.isIPv6())
-}
-
-func newIPTables(isIPv6 bool) utiliptables.Interface {
-	protocol := utiliptables.ProtocolIPv4
-	if isIPv6 {
-		protocol = utiliptables.ProtocolIPv6
-	}
-	return utiliptables.New(protocol)
+	c.iptables[ipv4] = utiliptables.New(utiliptables.ProtocolIPv4)
+	c.iptables[ipv6] = utiliptables.New(utiliptables.ProtocolIPv6)
 }
 
 func handleIPTablesError(err error) {
@@ -178,23 +176,25 @@ func (c *CacheApp) TeardownNetworking() error {
 	}
 	var err error
 	if c.params.SetupIptables {
-		for _, rule := range c.iptablesRules {
-			exists := true
-			for exists == true {
-				// check in a loop in case the same rule got added multiple times.
-				err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
-				if err != nil {
-					clog.Errorf("Failed deleting iptables rule %v, error - %v", rule, err)
-					handleIPTablesError(err)
+		for _, ipVersion := range []int{ipv4, ipv6} {
+			for _, rule := range c.iptablesRules[ipVersion] {
+				exists := true
+				for exists == true {
+					// check in a loop in case the same rule got added multiple times.
+					err = c.iptables[ipVersion].DeleteRule(rule.table, rule.chain, rule.args...)
+					if err != nil {
+						clog.Errorf("Failed deleting iptablesV4 rule %v, error - %v", rule, err)
+						handleIPTablesError(err)
+					}
+					exists, err = c.iptables[ipVersion].EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+					if err != nil {
+						clog.Errorf("Failed checking iptablesV4 rule after deletion, rule - %v, error - %v", rule, err)
+						handleIPTablesError(err)
+					}
 				}
-				exists, err = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-				if err != nil {
-					clog.Errorf("Failed checking iptables rule after deletion, rule - %v, error - %v", rule, err)
-					handleIPTablesError(err)
-				}
+				// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
+				err = c.iptables[ipVersion].DeleteRule(rule.table, rule.chain, rule.args...)
 			}
-			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
-			err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
 		}
 	}
 	if c.params.SetupInterface {
@@ -205,20 +205,22 @@ func (c *CacheApp) TeardownNetworking() error {
 
 func (c *CacheApp) setupNetworking() {
 	if c.params.SetupIptables {
-		for _, rule := range c.iptablesRules {
-			exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-			switch {
-			case exists:
-				// debug messages can be printed by including "debug" plugin in coreFile.
-				clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
-				continue
-			case err == nil:
-				clog.Infof("Added back nodelocaldns rule - %v", rule)
-				continue
-			default:
-				// iptables check/rule add failed with error since control reached here.
-				clog.Errorf("Error checking/adding iptables rule %v, error - %v", rule, err)
-				handleIPTablesError(err)
+		for _, ipVersion := range []int{ipv4, ipv6} {
+			for _, rule := range c.iptablesRules[ipVersion] {
+				exists, err := c.iptables[ipVersion].EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+				switch {
+				case exists:
+					// debug messages can be printed by including "debug" plugin in coreFile.
+					clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
+					continue
+				case err == nil:
+					clog.Infof("Added back nodelocaldns rule - %v", rule)
+					continue
+				default:
+					// iptables check/rule add failed with error since control reached here.
+					clog.Errorf("Error checking/adding iptables rule %v, error - %v", rule, err)
+					handleIPTablesError(err)
+				}
 			}
 		}
 	}
