@@ -23,7 +23,7 @@ require (
 	k8s.io/client-go v0.34.2
 	k8s.io/component-base v0.34.2
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubernetes v1.34.2
+	k8s.io/kubernetes v1.35.0
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 )
 
@@ -110,7 +110,7 @@ require (
 	github.com/quic-go/quic-go v0.57.0 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.9.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.8-0.20250809033336-ffcdc2b7662f // indirect
-	github.com/spf13/cobra v1.9.1 // indirect
+	github.com/spf13/cobra v1.10.0 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
