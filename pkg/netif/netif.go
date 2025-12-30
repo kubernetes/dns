@@ -2,8 +2,10 @@ package netif
 
 import (
 	"fmt"
-	"github.com/vishvananda/netlink"
+
 	"net"
+
+	"github.com/vishvananda/netlink"
 )
 
 type NetifManager struct {
@@ -56,7 +58,11 @@ func (m *NetifManager) AddDummyDevice(name string) error {
 			return err
 		}
 	}
-	return err
+	err = m.LinkSetUp(l)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // RemoveDummyDevice deletes the dummy device with the given name.
