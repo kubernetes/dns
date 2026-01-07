@@ -18,9 +18,9 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.26
 	go.etcd.io/etcd/client/v3 v3.6.7
 	golang.org/x/net v0.48.0
-	k8s.io/api v0.34.2
+	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
-	k8s.io/client-go v0.34.2
+	k8s.io/client-go v0.35.0
 	k8s.io/component-base v0.34.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubernetes v1.34.2
