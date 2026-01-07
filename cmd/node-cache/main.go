@@ -25,7 +25,6 @@ import (
 
 	corednsmain "github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-	utilnet "k8s.io/utils/net"
 
 	"github.com/coredns/caddy"
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
@@ -102,12 +101,6 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 		params.LocalIPs = append(params.LocalIPs, newIP)
 	}
 
-	// validate all the IPs have the same IP family
-	for _, ip := range params.LocalIPs {
-		if utilnet.IsIPv6(params.LocalIPs[0]) != utilnet.IsIPv6(ip) {
-			return params, fmt.Errorf("unexpected IP Family for localIP - %q, want IPv6=%v", ip, utilnet.IsIPv6(params.LocalIPs[0]))
-		}
-	}
 	// lookup specified dns port
 	f := flag.Lookup("dns.port")
 	if f == nil {
