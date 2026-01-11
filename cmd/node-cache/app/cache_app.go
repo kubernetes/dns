@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/coremain"
+	"github.com/coredns/coredns/core/dnsserver"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	"k8s.io/dns/cmd/kube-dns/app/options"
@@ -34,6 +35,33 @@ var (
 	iptablesCommentSkipConntrack = "NodeLocal DNS Cache: skip conntrack"
 	iptablesCommentAllowTraffic  = "NodeLocal DNS Cache: allow DNS traffic"
 )
+
+// List should match the included plugins in ../main.go,
+// and must also be in the correct order as per
+// https://github.com/coredns/coredns/blob/master/plugin.cfg
+// Source: https://coredns.io/2017/07/25/compile-time-enabling-or-disabling-plugins/#build-with-external-golang-source-code
+var directives = []string{
+	"timeouts",
+	"reload",
+	"bufsize",
+	"bind",
+	"debug",
+	"trace",
+	"health",
+	"pprof",
+	"prometheus",
+	"errors",
+	"log",
+	"dns64",
+	"loadbalance",
+	"cache",
+	"rewrite",
+	"template",
+	"hosts",
+	"loop",
+	"forward",
+	"whoami",
+}
 
 // ConfigParams lists the configuration options that can be provided to node-cache
 type ConfigParams struct {
@@ -269,6 +297,12 @@ func (c *CacheApp) runPeriodic() {
 // RunApp invokes the background checks and runs coreDNS as a cache
 func (c *CacheApp) RunApp() {
 	go c.runPeriodic()
+
+	// Specify plugin order. Required when adding additional/external
+	// plugins, as the list in plugin.cfg from coredns/coredns is used
+	// if dnsServer.Directives isn't provided.
+	dnsserver.Directives = directives
+
 	coremain.Run()
 	// Unlikely to reach here, if we did it is because coremain exited and the signal was not trapped.
 	clog.Errorf("Untrapped signal, tearing down")
