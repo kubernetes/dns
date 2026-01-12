@@ -13,6 +13,10 @@ import (
 	"github.com/miekg/dns"
 )
 
+// maxRegexpLen is a hard limit on the length of a regex pattern to prevent
+// OOM during regex compilation with malicious input.
+const maxRegexpLen = 10000
+
 func init() { plugin.Register("template", setupTemplate) }
 
 func setupTemplate(c *caddy.Controller) error {
@@ -67,6 +71,9 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 					return handler, c.ArgErr()
 				}
 				for _, regex := range args {
+					if len(regex) > maxRegexpLen {
+						return handler, c.Errf("regex pattern too long: %d > %d", len(regex), maxRegexpLen)
+					}
 					r, err := regexp.Compile(regex)
 					if err != nil {
 						return handler, c.Errf("could not parse regex: %s, %v", regex, err)
