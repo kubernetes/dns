@@ -74,7 +74,8 @@ The match type, e.g., `exact`, `substring`, etc., triggers rewrite:
 * **substring**: on a partial match of the name in the question section of a request
 * **prefix**: when the name begins with the matching string
 * **suffix**: when the name ends with the matching string
-* **regex**: when the name in the question section of a request matches a regular expression
+* **regex**: when the name in the question section of a request matches a regular expression.
+  Regex patterns must not exceed 10000 characters.
 
 If the match type is omitted, the `exact` match type is assumed. If OPTIONS are
 given, the type must be specified.

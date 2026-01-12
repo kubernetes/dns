@@ -144,6 +144,9 @@ func newCNAMERule(nextAction string, args ...string) (Rule, error) {
 		Upstream:        upstream.New(),
 	}
 	if rewriteType == RegexMatch {
+		if len(paramFromTarget) > maxRegexpLen {
+			return nil, fmt.Errorf("regex pattern too long in a cname rule: %d > %d", len(paramFromTarget), maxRegexpLen)
+		}
 		re, err := regexp.Compile(paramFromTarget)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cname rewrite regex pattern: %w", err)

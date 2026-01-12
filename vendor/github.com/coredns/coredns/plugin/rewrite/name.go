@@ -13,6 +13,10 @@ import (
 	"github.com/miekg/dns"
 )
 
+// maxRegexpLen is a hard limit on the length of a regex pattern to prevent
+// OOM during regex compilation with malicious input.
+const maxRegexpLen = 10000
+
 // stringRewriter rewrites a string
 type stringRewriter interface {
 	rewriteString(src string) string
@@ -438,6 +442,9 @@ func getSubExprUsage(s string) int {
 
 // isValidRegexPattern returns a regular expression for pattern matching or errors, if any.
 func isValidRegexPattern(rewriteFrom, rewriteTo string) (*regexp.Regexp, error) {
+	if len(rewriteFrom) > maxRegexpLen {
+		return nil, fmt.Errorf("regex pattern too long: %d > %d", len(rewriteFrom), maxRegexpLen)
+	}
 	rewriteFromPattern, err := regexp.Compile(rewriteFrom)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex matching pattern: %s", rewriteFrom)
