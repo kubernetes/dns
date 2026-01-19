@@ -6,6 +6,7 @@
 package json
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,10 @@ type jsonIterEncodable struct {
 }
 
 func newJSONIterEncodableFromData(data []byte, truncated bool) libddwaf.Encodable {
+	// Leading and trailing whitespace carries no semantic value in JSON, so we
+	// trim it in order to avoid having to worry about those when doing
+	// parsing completeness assertions.
+	data = bytes.TrimSpace(data)
 	return &jsonIterEncodable{
 		truncated: truncated,
 		data:      data,

@@ -99,6 +99,12 @@
     "DD_CIVISIBILITY_LOGS_ENABLED": [
       "A"
     ],
+    "DD_CIVISIBILITY_SUBTEST_FEATURES_ENABLED": [
+      "A"
+    ],
+    "DD_CIVISIBILITY_USE_NOOP_TRACER": [
+      "A"
+    ],
     "DD_CIVISIBILITY_TOTAL_FLAKY_RETRY_COUNT": [
       "A"
     ],
@@ -507,6 +513,9 @@
     "DD_TRACE_LOG_DIRECTORY": [
       "A"
     ],
+    "DD_TRACE_MCP_ANALYTICS_ENABLED": [
+      "A"
+    ],
     "DD_TRACE_MEMCACHE_ANALYTICS_ENABLED": [
       "A"
     ],
@@ -621,9 +630,6 @@
     "DD_TRACE_VAULT_ANALYTICS_ENABLED": [
       "A"
     ],
-    "DD_TRACE_V1_PAYLOAD_FORMAT_ENABLED": [
-      "A"
-    ],
     "DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH": [
       "A"
     ],
@@ -633,6 +639,30 @@
     "DD_VERSION": [
       "A"
     ],
+    "DD_METRICS_OTEL_ENABLED": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_ENDPOINT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_HEADERS": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_PROTOCOL": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": [
+      "A"
+    ],
     "OTEL_LOGS_EXPORTER": [
       "A"
     ],
@@ -640,6 +670,12 @@
       "A"
     ],
     "OTEL_METRICS_EXPORTER": [
+      "A"
+    ],
+    "OTEL_METRIC_EXPORT_INTERVAL": [
+      "A"
+    ],
+    "OTEL_METRIC_EXPORT_TIMEOUT": [
       "A"
     ],
     "OTEL_PROPAGATORS": [

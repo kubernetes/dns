@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Build when the target OS or architecture are not supported
-//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.26 || datadog.no_waf || (!cgo && !appsec)
+//go:build (!linux && !darwin) || (!amd64 && !arm64) || go1.27 || datadog.no_waf || (!cgo && !appsec)
 
 package bindings
 

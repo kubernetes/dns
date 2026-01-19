@@ -621,10 +621,18 @@ func (t *trace) finishedOne(s *Span) {
 	}
 	telemetry.Distribution(telemetry.NamespaceTracers, "trace_partial_flush.spans_closed", nil).Submit(float64(len(finishedSpans)))
 	telemetry.Distribution(telemetry.NamespaceTracers, "trace_partial_flush.spans_remaining", nil).Submit(float64(len(leftoverSpans)))
-	finishedSpans[0].setMetric(keySamplingPriority, *t.priority)
+	// #incident-46344 -- if we set metrics and tags on a different span than what was passed into this function,
+	// we need to lock this new span.
+	fSpan := finishedSpans[0]
+	currentSpanIsFirstInChunk := s == fSpan
+	if !currentSpanIsFirstInChunk {
+		fSpan.mu.Lock()
+		defer fSpan.mu.Unlock()
+	}
+	fSpan.setMetric(keySamplingPriority, *t.priority)
 	if s != t.spans[0] {
 		// Make sure the first span in the chunk has the trace-level tags
-		t.setTraceTags(finishedSpans[0])
+		t.setTraceTags(fSpan)
 	}
 	if tr, ok := tr.(*tracer); ok {
 		t.finishChunk(tr, &chunk{
