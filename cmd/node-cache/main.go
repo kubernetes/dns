@@ -14,6 +14,7 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
@@ -92,6 +93,13 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.StringVar(&params.HealthPort, "health-port", "8080", "port used by health plugin")
 	flag.BoolVar(&params.SkipTeardown, "skipteardown", false, "indicates whether iptables rules should be torn down on exit")
 	flag.BoolVar(&params.ReloadWithSignal, "reloadwithsignal", false, "use SIGUSR1 on self to reload CoreDNS")
+
+	flag.StringVar(&params.TlsConfig.CertFile, "tls-cert-file", "/etc/ssl/tls.crt", "Path to TLS certificate for HTTPS, defaults to '/etc/ssl/tls.crt'")
+	flag.StringVar(&params.TlsConfig.KeyFile, "tls-private-key-file", "/etc/ssl/tls.key", "Path to TLS private key for HTTPS, defaults to '/etc/ssl/tls.key'")
+	flag.StringVar(&params.TlsConfig.ClientAuthType, "client-auth-type", "NoClientCert", "TLS client authorization type, defaults to 'NoClientCert'")
+	flag.StringVar(&params.TlsConfig.ClientCAFile, "client-ca-file", "", "Path to TLS client CA file, defaults to ''")
+	flag.UintVar(&params.TlsConfig.MinVersion, "tls-min-version", tls.VersionTLS13, "TLS version, defaults to TLS13")
+	flag.BoolVar(&params.TlsConfig.Enabled, "tls-enabled", false, "Enable TLS, defaults to false")
 	flag.Parse()
 
 	for _, ipstr := range strings.Split(params.LocalIPStr, ",") {
