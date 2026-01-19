@@ -10,7 +10,6 @@ package stacktrace
 
 import (
 	"errors"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -179,28 +178,71 @@ func (q *queue[T]) Remove() T {
 	return item
 }
 
-var symbolRegex = regexp.MustCompile(`^(([^(]+/)?([^(/.]+)?)(\.\(([^/)]+)\))?\.([^/()]+)$`)
-
-// parseSymbol parses a symbol name into its package, receiver and function
-// ex: github.com/DataDog/dd-trace-go/v2/internal/stacktrace.(*Event).NewException
-// -> package: github.com/DataDog/dd-trace-go/v2/internal/stacktrace
-// -> receiver: *Event
-// -> function: NewException
+// parseSymbol parses a symbol name into its package, receiver and function using
+// zero-allocation string operations. This is a hot path called once per stack frame.
+//
+// Handles various Go symbol formats:
+//   - Simple function: pkg.Function
+//   - Method with receiver: pkg.(*Type).Method or pkg.(Type).Method
+//   - Lambda/closure: pkg.Function.func1 or pkg.(*Type).Method.func1
+//   - Generics: pkg.(*Type[...]).Method or pkg.Function[...]
+//
+// Examples:
+//
+//	github.com/DataDog/dd-trace-go/v2/internal/stacktrace.(*Event).NewException
+//	  -> package: github.com/DataDog/dd-trace-go/v2/internal/stacktrace
+//	  -> receiver: *Event
+//	  -> function: NewException
+//	github.com/DataDog/dd-trace-go/v2/internal/stacktrace.TestFunc.func1
+//	  -> package: github.com/DataDog/dd-trace-go/v2/internal/stacktrace
+//	  -> receiver: ""
+//	  -> function: TestFunc.func1
 func parseSymbol(name string) symbol {
-	matches := symbolRegex.FindStringSubmatch(name)
-	if len(matches) != 7 {
-		log.Error("Failed to parse symbol for stacktrace: %s", name)
-		return symbol{
-			Package:  "",
-			Receiver: "",
-			Function: "",
+	// Check for receiver first: pkg.(*Type) or pkg.(Type)
+	// Look for ".(" which marks the start of a receiver
+	if idx := strings.Index(name, ".("); idx != -1 {
+		// Find the closing paren of the receiver
+		receiverEnd := strings.IndexByte(name[idx+2:], ')')
+		if receiverEnd != -1 {
+			pkg := name[:idx]
+			receiver := name[idx+2 : idx+2+receiverEnd]
+			// Everything after ")." is the function (which may contain dots for lambdas)
+			fn := name[idx+2+receiverEnd+2:] // +2 for ")."
+			return symbol{
+				Package:  pkg,
+				Receiver: receiver,
+				Function: fn,
+			}
 		}
 	}
 
+	// No receiver case: need to find where package ends and function begins
+	// Package path ends at the last '/' followed by a segment before first '.'
+	// Examples:
+	//   "pkg.Function" -> pkg: "pkg", fn: "Function"
+	//   "pkg.Function.func1" -> pkg: "pkg", fn: "Function.func1"
+	//   "github.com/org/pkg.Function" -> pkg: "github.com/org/pkg", fn: "Function"
+
+	// Find the last slash to identify where the package name starts
+	lastSlash := strings.LastIndexByte(name, '/')
+
+	// Find the first dot after the last slash (or from the beginning if no slash)
+	searchStart := 0
+	if lastSlash != -1 {
+		searchStart = lastSlash + 1
+	}
+
+	firstDotAfterSlash := strings.IndexByte(name[searchStart:], '.')
+	if firstDotAfterSlash == -1 {
+		// No dots after last slash, the whole thing is the function name
+		return symbol{Function: name}
+	}
+
+	// Package ends at this dot, function starts after it
+	pkgEnd := searchStart + firstDotAfterSlash
 	return symbol{
-		Package:  matches[1],
-		Receiver: matches[5],
-		Function: matches[6],
+		Package:  name[:pkgEnd],
+		Function: name[pkgEnd+1:], // Everything after the dot, including nested dots for lambdas
 	}
 }
 
@@ -215,6 +257,20 @@ func SkipAndCapture(skip int) StackTrace {
 		skipInternalFrames:      true,
 		redactCustomerFrames:    false,
 		internalPackagePrefixes: internalSymbolPrefixes,
+	}).capture()
+}
+
+// SkipAndCaptureWithInternalFrames creates a new stack trace from the current call stack without filtering internal frames.
+// This is useful for tracer span error stacktraces where we want to capture all frames.
+func SkipAndCaptureWithInternalFrames(depth int, skip int) StackTrace {
+	// Use default depth if not specified
+	if depth == 0 {
+		depth = defaultMaxDepth
+	}
+	return iterator(skip, depth, frameOptions{
+		skipInternalFrames:      false,
+		redactCustomerFrames:    false,
+		internalPackagePrefixes: nil,
 	}).capture()
 }
 
@@ -273,18 +329,18 @@ func (r RawStackTrace) SymbolicateWithRedaction() StackTrace {
 
 // capture extracts frames from an iterator using the same algorithm as capture
 func (iter *framesIterator) capture() StackTrace {
-	stack := make([]StackFrame, iter.cacheSize)
+	stack := make([]StackFrame, iter.maxDepth)
 	nbStoredFrames := 0
-	topFramesQueue := newQueue[StackFrame](defaultTopFrameDepth)
+	topFramesQueue := newQueue[StackFrame](iter.topFrameDepth)
 
 	// We have to make sure we don't store more than maxDepth frames
 	// if there is more than maxDepth frames, we get X frames from the bottom of the stack and Y from the top
 	for frame, ok := iter.Next(); ok; frame, ok = iter.Next() {
 		// we reach the top frames: start to use the queue
-		if nbStoredFrames >= defaultMaxDepth-defaultTopFrameDepth {
+		if nbStoredFrames >= iter.maxDepth-iter.topFrameDepth {
 			topFramesQueue.Add(frame)
 			// queue is full, remove the oldest frame
-			if topFramesQueue.Length() > defaultTopFrameDepth {
+			if topFramesQueue.Length() > iter.topFrameDepth {
 				topFramesQueue.Remove()
 			}
 			continue
@@ -318,40 +374,54 @@ type frameOptions struct {
 // IMPORTANT: This iterator is NOT thread-safe and should only be used within a single goroutine.
 // Each call to Capture/SkipAndCapture/CaptureWithRedaction creates a new iterator instance.
 type framesIterator struct {
-	frames     *queue[runtime.Frame]
-	frameOpts  frameOptions
-	rawPCs     []uintptr
-	cache      []uintptr
-	cacheSize  int
-	cacheDepth int
-	currDepth  int
-	useRawPCs  bool
+	frames        *queue[runtime.Frame]
+	frameOpts     frameOptions
+	rawPCs        []uintptr
+	cache         []uintptr
+	cacheSize     int
+	cacheDepth    int
+	currDepth     int
+	useRawPCs     bool
+	maxDepth      int
+	topFrameDepth int
 }
 
-func iterator(skip, cacheSize int, opts frameOptions) *framesIterator {
+func iterator(skip, maxDepth int, opts frameOptions) *framesIterator {
+	topFrameDepth := maxDepth / 4
+	if topFrameDepth < 1 {
+		topFrameDepth = 1
+	}
 	return &framesIterator{
-		frameOpts:  opts,
-		frames:     newQueue[runtime.Frame](cacheSize + 4),
-		cache:      make([]uintptr, cacheSize),
-		cacheSize:  cacheSize,
-		cacheDepth: skip,
-		currDepth:  0,
+		frameOpts:     opts,
+		frames:        newQueue[runtime.Frame](maxDepth + 4),
+		cache:         make([]uintptr, maxDepth),
+		cacheSize:     maxDepth,
+		cacheDepth:    skip,
+		currDepth:     0,
+		maxDepth:      maxDepth,
+		topFrameDepth: topFrameDepth,
 	}
 }
 
 // iteratorFromRaw creates an iterator from pre-captured PCs for deferred symbolication
 func iteratorFromRaw(pcs []uintptr, opts frameOptions) *framesIterator {
-	cacheSize := min(len(pcs), defaultMaxDepth)
+	maxDepth := min(len(pcs), defaultMaxDepth)
+	topFrameDepth := maxDepth / 4
+	if topFrameDepth < 1 {
+		topFrameDepth = 1
+	}
 
 	return &framesIterator{
-		frameOpts:  opts,
-		frames:     newQueue[runtime.Frame](cacheSize + 4),
-		cache:      make([]uintptr, cacheSize),
-		cacheSize:  cacheSize,
-		cacheDepth: 0,
-		useRawPCs:  true,
-		rawPCs:     pcs,
-		currDepth:  0,
+		frameOpts:     opts,
+		frames:        newQueue[runtime.Frame](maxDepth + 4),
+		cache:         make([]uintptr, maxDepth),
+		cacheSize:     maxDepth,
+		cacheDepth:    0,
+		useRawPCs:     true,
+		rawPCs:        pcs,
+		currDepth:     0,
+		maxDepth:      maxDepth,
+		topFrameDepth: topFrameDepth,
 	}
 }
 

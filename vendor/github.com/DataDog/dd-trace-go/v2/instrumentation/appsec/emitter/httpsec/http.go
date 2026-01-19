@@ -12,6 +12,8 @@ package httpsec
 
 import (
 	"context"
+	"sync"
+
 	// Blank import needed to use embed for the default blocked response payloads
 	_ "embed"
 	"net/http"
@@ -26,6 +28,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 	telemetrylog "github.com/DataDog/dd-trace-go/v2/internal/telemetry/log"
+	"github.com/DataDog/go-libddwaf/v4"
 )
 
 // HandlerOperation type representing an HTTP operation. It must be created with
@@ -47,6 +50,17 @@ type (
 
 		// downstreamRequestBodyAnalysis is the number of times a call to a downstream request body monitoring function was made.
 		downstreamRequestBodyAnalysis atomic.Int32
+
+		// downstreamRequestOverrides holds behavioral overrides for future downstream requests, related
+		// to a redirect chain.
+		downstreamRequestOverrides   map[string]DownstreamRequestOverride
+		downstreamRequestOverridesMu sync.Mutex
+	}
+
+	DownstreamRequestOverride struct {
+		DownstreamURL       string
+		AnalyzeBody         bool
+		OriginalRequestBody libddwaf.Encodable
 	}
 
 	// HandlerOperationArgs is the HTTP handler operation arguments.
@@ -97,6 +111,16 @@ func StartOperation(ctx context.Context, args HandlerOperationArgs, span trace.T
 		action.Store(a)
 	})
 
+	dyngo.OnData(op, func(evt DownstreamRequestOverride) {
+		op.downstreamRequestOverridesMu.Lock()
+		defer op.downstreamRequestOverridesMu.Unlock()
+
+		if op.downstreamRequestOverrides == nil {
+			op.downstreamRequestOverrides = make(map[string]DownstreamRequestOverride, 1)
+		}
+		op.downstreamRequestOverrides[evt.DownstreamURL] = evt
+	})
+
 	return op, &action, dyngo.StartAndRegisterOperation(ctx, op, args)
 }
 
@@ -118,6 +142,25 @@ func (op *HandlerOperation) Route() string {
 // DownstreamRequestBodyAnalysis returns the number of times a call to a downstream request body monitoring function was made.
 func (op *HandlerOperation) DownstreamRequestBodyAnalysis() int {
 	return int(op.downstreamRequestBodyAnalysis.Load())
+}
+
+// HasDownstreamRequestOverride checks if a downstream request override exists for the given URL,
+// meaning it is part of a redirect chain.
+func (op *HandlerOperation) HasDownstreamRequestOverride(url string) bool {
+	op.downstreamRequestOverridesMu.Lock()
+	defer op.downstreamRequestOverridesMu.Unlock()
+	_, ok := op.downstreamRequestOverrides[url]
+	return ok
+}
+
+// ConsumeDownstreamRequestOverride consumes and removes a downstream request override for the given
+// URL, returning the override data.
+func (op *HandlerOperation) ConsumeDownstreamRequestOverride(url string) (DownstreamRequestOverride, bool) {
+	op.downstreamRequestOverridesMu.Lock()
+	defer op.downstreamRequestOverridesMu.Unlock()
+	override, ok := op.downstreamRequestOverrides[url]
+	delete(op.downstreamRequestOverrides, url)
+	return override, ok
 }
 
 // IncrementDownstreamRequestBodyAnalysis increments the number of times a call to a downstream request body monitoring function was made.

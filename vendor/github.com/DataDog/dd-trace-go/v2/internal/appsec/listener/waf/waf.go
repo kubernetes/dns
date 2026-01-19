@@ -143,6 +143,7 @@ func (waf *Feature) onFinish(op *waf.ContextOperation, _ waf.ContextRes) {
 	timerStats := ctx.Timer.Stats()
 	metrics := op.GetMetricsInstance()
 	AddWAFMonitoringTags(op, metrics, waf.rulesVersion, truncations, timerStats)
+	addDownwardRequestTag(op, int(metrics.SumDownstreamRequestsCalls.Load()))
 	metrics.Submit(truncations, timerStats)
 
 	if wafEvents := op.Events(); len(wafEvents) > 0 {

@@ -93,26 +93,29 @@ func (t *tracer) reportHealthMetricsAtInterval(interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			// if there are started spans, report the number of spans with their integration, then
-			// reset the count
-			// the Count() function reports the total number of event occurrences in one time interval. We reset
-			// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
-
-			for k, v := range t.spansStarted.GetAndReset() {
-				t.statsd.Count("datadog.tracer.spans_started", v, []string{"integration:" + k}, 1)
-			}
-
-			// if there are finished spans, report the number of spans with their integration, then
-			// reset the count
-			// the Count() function reports the total number of event occurrences in one time interval. We reset
-			// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
-			for k, v := range t.spansFinished.GetAndReset() {
-				t.statsd.Count("datadog.tracer.spans_finished", v, []string{"integration:" + k}, 1)
-			}
-
-			t.statsd.Count("datadog.tracer.traces_dropped", int64(tracerstats.Count(tracerstats.TracesDropped)), []string{"reason:trace_too_large"}, 1)
+			t.reportHealthMetrics()
 		case <-t.stop:
 			return
 		}
 	}
+}
+
+func (t *tracer) reportHealthMetrics() {
+	// if there are started spans, report the number of spans with their integration, then
+	// reset the count
+	// the Count() function reports the total number of event occurrences in one time interval. We reset
+	// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
+	for k, v := range t.spansStarted.GetAndReset() {
+		t.statsd.Count("datadog.tracer.spans_started", v, []string{"integration:" + k}, 1)
+	}
+
+	// if there are finished spans, report the number of spans with their integration, then
+	// reset the count
+	// the Count() function reports the total number of event occurrences in one time interval. We reset
+	// our count to 0 regardless of if Count succeeded to cleanup before the next interval.
+	for k, v := range t.spansFinished.GetAndReset() {
+		t.statsd.Count("datadog.tracer.spans_finished", v, []string{"integration:" + k}, 1)
+	}
+
+	t.statsd.Count("datadog.tracer.traces_dropped", int64(tracerstats.Count(tracerstats.TracesDropped)), []string{"reason:trace_too_large"}, 1)
 }

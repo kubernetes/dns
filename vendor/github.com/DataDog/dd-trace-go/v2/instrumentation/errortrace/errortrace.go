@@ -6,27 +6,22 @@
 package errortrace
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/stacktrace"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 )
 
 // TracerError is an error type that holds stackframes from when the error was thrown.
 // It can be used interchangeably with the built-in Go error type.
 type TracerError struct {
-	stackFrames *runtime.Frames
-	inner       error
-	stack       *bytes.Buffer
-}
+	rawStack stacktrace.RawStackTrace
 
-// defaultStackLength specifies the default maximum size of a stack trace.
-const defaultStackLength = 32
+	inner error
+}
 
 func (err *TracerError) Error() string {
 	return err.inner.Error()
@@ -39,22 +34,19 @@ func New(text string) *TracerError {
 
 // Wrap takes in an error and records the stack trace at the moment that it was thrown.
 func Wrap(err error) *TracerError {
-	return WrapN(err, 0, 1)
+	return WrapN(err, 1)
 }
 
 // WrapN takes in an error and records the stack trace at the moment that it was thrown.
-// It will capture a maximum of `n` entries, skipping the first `skip` entries.
-// If n is 0, it will capture up to 32 entries instead.
-func WrapN(err error, n uint, skip uint) *TracerError {
+// Note: The n parameter is ignored; internal/stacktrace uses its own default depth.
+// The skip parameter specifies how many stack frames to skip before capturing.
+func WrapN(err error, skip uint) *TracerError {
 	if err == nil {
 		return nil
 	}
 	var e *TracerError
 	if errors.As(err, &e) {
 		return e
-	}
-	if n <= 0 {
-		n = defaultStackLength
 	}
 
 	telemetry.Count(telemetry.NamespaceTracers, "errorstack.source", []string{"source:TracerError"}).Submit(1)
@@ -64,53 +56,24 @@ func WrapN(err error, n uint, skip uint) *TracerError {
 		telemetry.Distribution(telemetry.NamespaceTracers, "errorstack.duration", []string{"source:TracerError"}).Submit(dur)
 	}()
 
-	pcs := make([]uintptr, n)
-	var stackFrames *runtime.Frames
-	// +2 to exclude runtime.Callers and Wrap
-	numFrames := runtime.Callers(2+int(skip), pcs)
-	if numFrames == 0 {
-		stackFrames = nil
-	} else {
-		stackFrames = runtime.CallersFrames(pcs[:numFrames])
-	}
+	// Use SkipAndCaptureUnfiltered to capture all frames including internal DD frames.
+	// +4 to account for: runtime.Callers, iterator, SkipAndCaptureUnfiltered, and this WrapN function
+	stack := stacktrace.CaptureRaw(int(skip) + 2)
 
 	tracerErr := &TracerError{
-		stackFrames: stackFrames,
-		inner:       err,
+		rawStack: stack,
+		inner:    err,
 	}
 	return tracerErr
 }
 
 // Format returns a string representation of the stack trace.
+// Uses the centralized internal/stacktrace formatting.
 func (err *TracerError) Format() string {
-	if err == nil || err.stackFrames == nil {
+	if err == nil {
 		return ""
 	}
-	if err.stack != nil {
-		return err.stack.String()
-	}
-
-	out := bytes.Buffer{}
-	for i := 0; ; i++ {
-		frame, more := err.stackFrames.Next()
-		if i != 0 {
-			out.WriteByte('\n')
-		}
-		out.WriteString(frame.Function)
-		out.WriteByte('\n')
-		out.WriteByte('\t')
-		out.WriteString(frame.File)
-		out.WriteByte(':')
-		out.WriteString(strconv.Itoa(frame.Line))
-		if !more {
-			break
-		}
-	}
-	// CallersFrames returns an iterator that is consumed as we read it. In order to
-	// allow calling Format() multiple times, we save the result into err.stack, which can be
-	// returned in future calls
-	err.stack = &out
-	return out.String()
+	return stacktrace.Format(err.rawStack.Symbolicate())
 }
 
 // Errorf serves the same purpose as fmt.Errorf, but returns a TracerError

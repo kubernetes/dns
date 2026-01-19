@@ -70,6 +70,7 @@ func (d *dio) dial() error {
 
 	if d.proto == "tls" {
 		config := &tls.Config{
+			// #nosec G402 -- optional, user-configurable escape hatch for environments that cannot validate certs.
 			InsecureSkipVerify: d.skipVerify,
 		}
 		dialer := &net.Dialer{

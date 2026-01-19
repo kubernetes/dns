@@ -173,6 +173,9 @@ func (m *HandleMetrics) NewContextMetrics() *ContextMetrics {
 type ContextMetrics struct {
 	*HandleMetrics
 
+	// SumDownstreamRequestsCalls is the sum of all the downstream requests calls analyzed by the WAF.
+	SumDownstreamRequestsCalls atomic.Uint32
+
 	// SumRASPCalls is the sum of all the RASP calls made by the WAF whatever the rasp rule type it is.
 	SumRASPCalls atomic.Uint32
 	// SumWAFErrors is the sum of all the WAF errors that happened not in the RASP scope.
@@ -348,6 +351,8 @@ func (m *ContextMetrics) IncWafError(addrs libddwaf.RunAddressData, in error) {
 
 	if !errors.Is(in, waferrors.ErrTimeout) {
 		logger := m.logger.With(telemetry.WithTags(m.baseTags))
+		// This a known error origin all the ways to the tip of the error chain and since it impact WAF
+		// behavior we really want to log it so we can investigate it so we don't wrap it in a safe error
 		logger.Error("unexpected WAF error", slog.Any("error", telemetrylog.NewSafeError(in)))
 	}
 
