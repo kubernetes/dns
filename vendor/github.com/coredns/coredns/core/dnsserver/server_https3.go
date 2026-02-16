@@ -21,6 +21,11 @@ import (
 	"github.com/quic-go/quic-go/http3"
 )
 
+const (
+	// DefaultHTTPS3MaxStreams is the default maximum number of concurrent QUIC streams per connection.
+	DefaultHTTPS3MaxStreams = 256
+)
+
 // ServerHTTPS3 represents a DNS-over-HTTP/3 server.
 type ServerHTTPS3 struct {
 	*Server
@@ -29,6 +34,7 @@ type ServerHTTPS3 struct {
 	tlsConfig    *tls.Config
 	quicConfig   *quic.Config
 	validRequest func(*http.Request) bool
+	maxStreams   int
 }
 
 // NewServerHTTPS3 builds the HTTP/3 (DoH3) server.
@@ -63,10 +69,19 @@ func NewServerHTTPS3(addr string, group []*Config) (*ServerHTTPS3, error) {
 		validator = func(r *http.Request) bool { return r.URL.Path == doh.Path }
 	}
 
-	// QUIC transport config
+	maxStreams := DefaultHTTPS3MaxStreams
+	if len(group) > 0 && group[0] != nil && group[0].MaxHTTPS3Streams != nil {
+		maxStreams = *group[0].MaxHTTPS3Streams
+	}
+
+	// QUIC transport config with stream limits (0 means use QUIC default)
 	qconf := &quic.Config{
 		MaxIdleTimeout: s.IdleTimeout,
 		Allow0RTT:      true,
+	}
+	if maxStreams > 0 {
+		qconf.MaxIncomingStreams = int64(maxStreams)
+		qconf.MaxIncomingUniStreams = int64(maxStreams)
 	}
 
 	h3srv := &http3.Server{
@@ -83,6 +98,7 @@ func NewServerHTTPS3(addr string, group []*Config) (*ServerHTTPS3, error) {
 		httpsServer:  h3srv,
 		quicConfig:   qconf,
 		validRequest: validator,
+		maxStreams:   maxStreams,
 	}
 
 	h3srv.Handler = sh

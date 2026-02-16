@@ -219,7 +219,11 @@ func Start(opts ...StartOption) error {
 		t.Stop()
 		return nil
 	}
-	setGlobalTracer(t)
+	if t.config.ciVisibilityEnabled && t.config.ciVisibilityNoopTracer {
+		setGlobalTracer(wrapWithCiVisibilityNoopTracer(t))
+	} else {
+		setGlobalTracer(t)
+	}
 	if t.dataStreams != nil {
 		t.dataStreams.Start()
 	}
@@ -232,6 +236,16 @@ func Start(opts ...StartOption) error {
 
 		globalinternal.SetTracerInitialized(true)
 		return nil
+	}
+
+	if t.config.runtimeMetricsV2 {
+		l := slog.New(slogHandler{})
+		opts := &runtimemetrics.Options{Logger: l}
+		if t.runtimeMetrics, err = runtimemetrics.NewEmitter(t.statsd, opts); err == nil {
+			l.Debug("Runtime metrics v2 enabled.")
+		} else {
+			l.Error("Failed to enable runtime metrics v2", "err", err.Error())
+		}
 	}
 
 	// Start AppSec with remote configuration
@@ -267,15 +281,20 @@ func Start(opts ...StartOption) error {
 	// DD_INSTRUMENTATION_TELEMETRY_ENABLED env var
 	t.telemetry = startTelemetry(t.config)
 
-	// store the configuration in an in-memory file, allowing it to be read to
-	// determine if the process is instrumented with a tracer and to retrive
-	// relevant tracing information.
+	// store the configuration in an in-memory file and in a named anonymous mapping,
+	// allowing it to be read to determine if the process is instrumented with a tracer
+	// and to retrieve relevant tracing information.
 	storeConfig(t.config)
 
 	globalinternal.SetTracerInitialized(true)
 	return nil
 }
 
+// storeConfig stores the process level tracing context both in an in-memory file and
+// in a named anonymous mapping.
+// This allows an external process, such as the Datadog Agent or fullhost profiler,
+// to determine if the process is instrumented with a tracer and to retrieve the process
+// level tracing context.
 func storeConfig(c *config) {
 	uuid, _ := uuid.NewRandom()
 	name := fmt.Sprintf("datadog-tracer-info-%s", uuid.String()[0:8])
@@ -297,6 +316,23 @@ func storeConfig(c *config) {
 	_, err := globalinternal.CreateMemfd(name, data)
 	if err != nil {
 		log.Error("failed to store the configuration: %s", err.Error())
+	}
+
+	processContext := otelProcessContext{
+		DeploymentEnvironmentName: c.env,
+		HostName:                  c.hostname,
+		ServiceInstanceID:         globalconfig.RuntimeID(),
+		ServiceName:               c.serviceName,
+		ServiceVersion:            c.version,
+		TelemetrySDKLanguage:      "go",
+		TelemetrySDKVersion:       version.Tag,
+		TelemetrySdkName:          "dd-trace-go",
+	}
+
+	data, _ = processContext.MarshalMsg(nil)
+	err = globalinternal.CreateOtelProcessContextMapping(data)
+	if err != nil {
+		log.Error("failed to store the OTEL process context: %s", err.Error())
 	}
 }
 
@@ -453,15 +489,6 @@ func newTracer(opts ...StartOption) (*tracer, error) {
 			defer t.wg.Done()
 			t.reportRuntimeMetrics(defaultMetricsReportInterval)
 		}()
-	}
-	if c.runtimeMetricsV2 {
-		l := slog.New(slogHandler{})
-		opts := &runtimemetrics.Options{Logger: l}
-		if t.runtimeMetrics, err = runtimemetrics.NewEmitter(t.statsd, opts); err == nil {
-			l.Debug("Runtime metrics v2 enabled.")
-		} else {
-			l.Error("Failed to enable runtime metrics v2", "err", err.Error())
-		}
 	}
 	if c.debugAbandonedSpans {
 		log.Info("Abandoned spans logs enabled.")

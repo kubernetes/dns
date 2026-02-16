@@ -142,9 +142,9 @@ func execGit(commandType telemetry.CommandType, args ...string) (val []byte, err
 		defer func() {
 			durationInMs := time.Since(startTime).Milliseconds()
 			if err != nil {
-				log.Debug("civisibility.git.command [%s][%s][%dms]: git %s", commandType, err.Error(), durationInMs, strings.Join(args, " "))
+				log.Debug("civisibility.git.command [%s][%s][%dms]: git %s\n%s", commandType, err.Error(), durationInMs, strings.Join(args, " "), string(val))
 			} else {
-				log.Debug("civisibility.git.command [%s][%dms]: git %s", commandType, durationInMs, strings.Join(args, " "))
+				log.Debug("civisibility.git.command [%s][%dms]: git %s\n%s", commandType, durationInMs, strings.Join(args, " "), string(val))
 			}
 		}()
 	}
@@ -197,9 +197,9 @@ func execGitStringWithInput(commandType telemetry.CommandType, input string, arg
 		defer func() {
 			durationInMs := time.Since(startTime).Milliseconds()
 			if err != nil {
-				log.Debug("civisibility.git.command [%s][%s][%dms]: git %s", commandType, err.Error(), durationInMs, strings.Join(args, " "))
+				log.Debug("civisibility.git.command(input) [%s][%s][%dms]: git %s\n%s", commandType, err.Error(), durationInMs, strings.Join(args, " "), val)
 			} else {
-				log.Debug("civisibility.git.command [%s][%dms]: git %s", commandType, durationInMs, strings.Join(args, " "))
+				log.Debug("civisibility.git.command(input) [%s][%dms]: git %s\n%s", commandType, durationInMs, strings.Join(args, " "), val)
 			}
 		}()
 	}
@@ -260,6 +260,14 @@ func getLocalGitData() (localGitData, error) {
 			log.Debug("civisibility.git: setting permissions to git folder: %s", gitDir)
 			if out, err := execGitString(telemetry.GitAddPermissionCommandType, "config", "--global", "--add", "safe.directory", gitDir); err != nil {
 				log.Debug("civisibility.git: error while setting permissions to git folder: %s\n out: %s\n error: %s", gitDir, out, err.Error())
+			}
+			// if the git folder contains with a `/.git` then we also add permission to the parent.
+			if strings.HasSuffix(gitDir, "/.git") {
+				parentGitDir := strings.TrimSuffix(gitDir, "/.git")
+				log.Debug("civisibility.git: setting permissions to git folder: %s", parentGitDir)
+				if out, err := execGitString(telemetry.GitAddPermissionCommandType, "config", "--global", "--add", "safe.directory", parentGitDir); err != nil {
+					log.Debug("civisibility.git: error while setting permissions to git folder: %s\n out: %s\n error: %s", parentGitDir, out, err.Error())
+				}
 			}
 		} else {
 			log.Debug("civisibility.git: error getting the parent git folder.")
@@ -648,18 +656,38 @@ func CreatePackFiles(commitsToInclude []string, commitsToExclude []string) []str
 		objectsShasString += objectSha + "\n"
 	}
 
-	// get a temporary path to store the pack files
-	temporaryPath, err := os.MkdirTemp("", "pack-objects")
-	if err != nil {
-		log.Warn("civisibility: error creating temporary directory: %s", err.Error())
-		return nil
+	workingDirectory := func() string {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "."
+		}
+		return wd
 	}
 
-	// git pack-objects --compression=9 --max-pack-size={MaxPackFileSizeInMb}m "{temporaryPath}"
-	out, err := execGitStringWithInput(telemetry.PackObjectsCommandsType, objectsShasString,
-		"pack-objects", "--compression=9", "--max-pack-size="+strconv.Itoa(MaxPackFileSizeInMb)+"m", temporaryPath+"/")
+	var temporaryPath string
+	var out string
+	var err error
+
+	// Git can throw a cross device error if the temporal folder is in a different drive than the .git folder (eg. symbolic link)
+	// to handle this edge case, we first try with a temp folder and if we fail then we try in the working directory folder.
+	for _, folder := range []string{"", workingDirectory()} {
+		// get a temporary path to store the pack files
+		temporaryPath, err = os.MkdirTemp(folder, ".dd-pack-objects")
+		if err != nil {
+			log.Warn("civisibility: error creating temporary directory %s: %s", folder, err.Error())
+			continue
+		}
+
+		// git pack-objects --compression=9 --max-pack-size={MaxPackFileSizeInMb}m "{temporaryPath}"
+		out, err = execGitStringWithInput(telemetry.PackObjectsCommandsType, objectsShasString,
+			"pack-objects", "--compression=9", "--max-pack-size="+strconv.Itoa(MaxPackFileSizeInMb)+"m", temporaryPath+"/")
+		if err == nil {
+			break
+		}
+	}
+
 	if err != nil {
-		log.Warn("civisibility: error creating pack files: %s", err.Error())
+		log.Warn("civisibility: error creating pack files in %s: %s", temporaryPath, err.Error())
 		return nil
 	}
 

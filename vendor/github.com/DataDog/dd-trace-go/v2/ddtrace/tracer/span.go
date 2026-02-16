@@ -13,10 +13,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"runtime"
 	"runtime/pprof"
 	rt "runtime/trace"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +28,7 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/orchestrion"
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
+	"github.com/DataDog/dd-trace-go/v2/internal/stacktrace"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
 	"github.com/DataDog/dd-trace-go/v2/internal/traceprof"
 
@@ -485,46 +484,23 @@ func (s *Span) setTagError(value interface{}, cfg errorConfig) {
 	}
 }
 
-// defaultStackLength specifies the default maximum size of a stack trace.
-const defaultStackLength = 32
-
 // takeStacktrace takes a stack trace of maximum n entries, skipping the first skip entries.
-// If n is 0, up to 20 entries are retrieved.
-func takeStacktrace(n, skip uint) string {
+// If n is 0, the default depth from internal/stacktrace is used.
+// Uses the centralized internal/stacktrace implementation while preserving telemetry tracking.
+func takeStacktrace(depth uint, skip uint) string {
 	telemetry.Count(telemetry.NamespaceTracers, "errorstack.source", []string{"source:takeStacktrace"}).Submit(1)
 	now := time.Now()
 	defer func() {
 		dur := float64(time.Since(now))
 		telemetry.Distribution(telemetry.NamespaceTracers, "errorstack.duration", []string{"source:takeStacktrace"}).Submit(dur)
 	}()
-	if n == 0 {
-		n = defaultStackLength
-	}
-	var builder strings.Builder
-	pcs := make([]uintptr, n)
 
-	// +2 to exclude runtime.Callers and takeStacktrace
-	numFrames := runtime.Callers(2+int(skip), pcs)
-	if numFrames == 0 {
-		return ""
-	}
-	frames := runtime.CallersFrames(pcs[:numFrames])
-	for i := 0; ; i++ {
-		frame, more := frames.Next()
-		if i != 0 {
-			builder.WriteByte('\n')
-		}
-		builder.WriteString(frame.Function)
-		builder.WriteByte('\n')
-		builder.WriteByte('\t')
-		builder.WriteString(frame.File)
-		builder.WriteByte(':')
-		builder.WriteString(strconv.Itoa(frame.Line))
-		if !more {
-			break
-		}
-	}
-	return builder.String()
+	// This is necessary for span error stacktraces where we want complete visibility.
+	// Skip +4: The old implementation used runtime.Callers(2+skip, ...) which skipped runtime.Callers
+	// and takeStacktrace. The internal/stacktrace package auto-filters its own frames, but we still
+	// need to account for: runtime.Callers(1) + takeStacktrace(1) + setTagError(1) + additional frame(1)
+	stack := stacktrace.SkipAndCaptureWithInternalFrames(int(depth), int(skip)+4)
+	return stacktrace.Format(stack)
 }
 
 // setMeta sets a string tag. This method is not safe for concurrent use.
