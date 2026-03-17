@@ -4,7 +4,7 @@
 // Copyright 2016-present Datadog, Inc.
 
 // Unsupported Go versions (>=)
-//go:build go1.26
+//go:build go1.27
 
 package support
 

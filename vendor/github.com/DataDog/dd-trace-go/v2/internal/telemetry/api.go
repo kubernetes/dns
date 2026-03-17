@@ -61,6 +61,7 @@ const (
 	OriginRemoteConfig        Origin = transport.OriginRemoteConfig
 	OriginLocalStableConfig   Origin = transport.OriginLocalStableConfig
 	OriginManagedStableConfig Origin = transport.OriginManagedStableConfig
+	OriginCalculated          Origin = transport.OriginCalculated
 )
 
 // EmptyID represents the absence of a configuration ID.
@@ -109,6 +110,50 @@ type Configuration struct {
 	Origin Origin
 	// ID is the config ID of the configuration change.
 	ID string
+	// SeqID is the sequence ID of the configuration change.
+	SeqID uint64
+}
+
+type AppEndpointAuthentication = transport.AppEndpointAuthentication
+
+//goland:noinspection GoVarAndConstTypeMayBeOmitted Goland is having a hard time with the following const block, it keeps deleting the type
+const (
+	AppEndpointAuthenticationJWT     AppEndpointAuthentication = transport.AppEndpointAuthenticationJWT
+	AppEndpointAuthenticationBasic   AppEndpointAuthentication = transport.AppEndpointAuthenticationBasic
+	AppEndpointAuthenticationOAuth   AppEndpointAuthentication = transport.AppEndpointAuthenticationOAuth
+	AppEndpointAuthenticationOIDC    AppEndpointAuthentication = transport.AppEndpointAuthenticationOIDC
+	AppEndpointAuthenticationAPIKey  AppEndpointAuthentication = transport.AppEndpointAuthenticationAPIKey
+	AppEndpointAuthenticationSession AppEndpointAuthentication = transport.AppEndpointAuthenticationSession
+	AppEndpointAuthenticationMTLS    AppEndpointAuthentication = transport.AppEndpointAuthenticationMTLS
+	AppEndpointAuthenticationSAML    AppEndpointAuthentication = transport.AppEndpointAuthenticationSAML
+	AppEndpointAuthenticationLDAP    AppEndpointAuthentication = transport.AppEndpointAuthenticationLDAP
+	AppEndpointAuthenticationForm    AppEndpointAuthentication = transport.AppEndpointAuthenticationForm
+	AppEndpointAuthenticationOther   AppEndpointAuthentication = transport.AppEndpointAuthenticationOther
+)
+
+type AppEndpointAttributes struct {
+	// Kind is the type of the endpoint, typically "REST".
+	Kind string
+	// Method is the HTTP method of the endpoint ([net/http.MethodGet], etc...),
+	// or `"*"` is any/all method is allowed.
+	Method string
+	// Path is the path of the endpoint, which should match the `http.route` span
+	// tag sent on traces for this endpoint.
+	Path string
+	// RequestBodyType is the MIME types accepted by the endpoint for the request
+	// body, if known/any.
+	RequestBodyType []string
+	// ResponseBodyType is the MIME types returned by the endpoint for the
+	// response, if known/any.
+	ResponseBodyType []string
+	// ResponseCode is the HTTP status codes returned by the endpoint, if
+	// known/any.
+	ResponseCode []int
+	// Authentication is the authentication type used/accepted by the endpoint, if
+	// known/any.
+	Authentication []AppEndpointAuthentication
+	// Metadata is a map of additional metadata about the endpoint, if any.
+	Metadata map[string]any
 }
 
 // LogOption is a function that modifies the log message that is sent to the telemetry.
@@ -159,6 +204,14 @@ type Client interface {
 
 	// MarkIntegrationAsLoaded marks an integration as loaded in the telemetry
 	MarkIntegrationAsLoaded(integration Integration)
+
+	// RegisterAppEndpoint reports a new REST endpoint exposed by the application.
+	// This can be called multiple times (endpoints are accumulated additively by
+	// the backend), and is called independent of the endpoint receiving traffic.
+	//
+	// The `opName` must match the operation name set on spans for this endpoint,
+	// and `resName` must match the resource name set on spans for this endpoint.
+	RegisterAppEndpoint(opName string, resName string, attrs AppEndpointAttributes)
 
 	// Flush closes the client and flushes any remaining data.
 	Flush()

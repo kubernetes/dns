@@ -167,7 +167,6 @@ func (b *RunAddressDataBuilder) WithDownwardMethod(method string) *RunAddressDat
 		return b
 	}
 	b.Ephemeral[ServerIONetRequestMethodAddr] = method
-	b.TimerKey = RASPScope
 	return b
 }
 
@@ -176,7 +175,6 @@ func (b *RunAddressDataBuilder) WithDownwardRequestHeaders(headers map[string][]
 		return b
 	}
 	b.Ephemeral[ServerIONetRequestHeadersAddr] = headers
-	b.TimerKey = RASPScope
 	return b
 }
 
@@ -211,7 +209,6 @@ func (b *RunAddressDataBuilder) WithDownwardResponseHeaders(headers map[string][
 		return b
 	}
 	b.Ephemeral[ServerIONetResponseHeadersAddr] = headers
-	b.TimerKey = RASPScope
 	return b
 }
 
@@ -220,7 +217,6 @@ func (b *RunAddressDataBuilder) WithDownwardResponseBody(body any) *RunAddressDa
 		return b
 	}
 	b.Ephemeral[ServerIONetResponseBodyAddr] = body
-	b.TimerKey = RASPScope
 	return b
 }
 

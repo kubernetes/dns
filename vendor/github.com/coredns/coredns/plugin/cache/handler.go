@@ -34,7 +34,7 @@ func (c *Cache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	// in which upstream doesn't support DNSSEC, the two cache items will effectively be the same. Regardless, any
 	// DNSSEC RRs in the response are written to cache with the response.
 
-	i := c.getIgnoreTTL(now, state, server)
+	i := c.getIfNotStale(now, state, server)
 	if i == nil {
 		crr := &ResponseWriter{ResponseWriter: w, Cache: c, state: state, server: server, do: do, ad: ad, cd: cd,
 			nexcept: c.nexcept, pexcept: c.pexcept, wildcardFunc: wildcardFunc(ctx)}
@@ -121,38 +121,37 @@ func (c *Cache) shouldPrefetch(i *item, now time.Time) bool {
 // Name implements the Handler interface.
 func (c *Cache) Name() string { return "cache" }
 
-// getIgnoreTTL unconditionally returns an item if it exists in the cache.
-func (c *Cache) getIgnoreTTL(now time.Time, state request.Request, server string) *item {
+// getIfNotStale returns an item if it exists in the cache and has not expired.
+func (c *Cache) getIfNotStale(now time.Time, state request.Request, server string) *item {
 	k := hash(state.Name(), state.QType(), state.Do(), state.Req.CheckingDisabled)
 	cacheRequests.WithLabelValues(server, c.zonesMetricLabel, c.viewMetricLabel).Inc()
 
 	if i, ok := c.ncache.Get(k); ok {
-		itm := i.(*item)
-		ttl := itm.ttl(now)
-		if itm.matches(state) && (ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds()))) {
+		ttl := i.ttl(now)
+		if i.matches(state) && (ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds()))) {
 			cacheHits.WithLabelValues(server, Denial, c.zonesMetricLabel, c.viewMetricLabel).Inc()
-			return i.(*item)
+			return i
 		}
 	}
 	if i, ok := c.pcache.Get(k); ok {
-		itm := i.(*item)
-		ttl := itm.ttl(now)
-		if itm.matches(state) && (ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds()))) {
+		ttl := i.ttl(now)
+		if i.matches(state) && (ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds()))) {
 			cacheHits.WithLabelValues(server, Success, c.zonesMetricLabel, c.viewMetricLabel).Inc()
-			return i.(*item)
+			return i
 		}
 	}
 	cacheMisses.WithLabelValues(server, c.zonesMetricLabel, c.viewMetricLabel).Inc()
 	return nil
 }
 
+// exists unconditionally returns an item if it exists in the cache.
 func (c *Cache) exists(state request.Request) *item {
 	k := hash(state.Name(), state.QType(), state.Do(), state.Req.CheckingDisabled)
 	if i, ok := c.ncache.Get(k); ok {
-		return i.(*item)
+		return i
 	}
 	if i, ok := c.pcache.Get(k); ok {
-		return i.(*item)
+		return i
 	}
 	return nil
 }

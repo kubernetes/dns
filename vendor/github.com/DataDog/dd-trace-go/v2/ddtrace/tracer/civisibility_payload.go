@@ -81,7 +81,7 @@ func (p *ciVisibilityPayload) getBuffer(config *config) (*bytes.Buffer, error) {
 	}
 
 	// Create the visibility payload
-	visibilityPayload := p.writeEnvelope(config.env, payloadBuf.Bytes())
+	visibilityPayload := p.writeEnvelope(config.internalConfig.Env(), payloadBuf.Bytes())
 
 	// Create a new buffer to encode the visibility payload in MessagePack format
 	encodedBuf := new(bytes.Buffer)

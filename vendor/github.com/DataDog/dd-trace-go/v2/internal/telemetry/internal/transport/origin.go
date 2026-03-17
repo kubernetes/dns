@@ -16,4 +16,5 @@ const (
 	OriginRemoteConfig        Origin = "remote_config"
 	OriginLocalStableConfig   Origin = "local_stable_config"
 	OriginManagedStableConfig Origin = "fleet_stable_config"
+	OriginCalculated          Origin = "calculated"
 )

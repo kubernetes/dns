@@ -77,15 +77,15 @@ func detectLibDL() {
 		return
 	}
 
+	logger := telemetrylog.With(telemetry.WithTags([]string{"product:appsec"}))
 	for _, method := range detectLibDLMethods {
 		if ok, err := method.method(); ok {
-			logger := telemetrylog.With(telemetry.WithTags([]string{"method:" + method.name}))
 			logger.Debug("libdl detected using method", slog.String("method", method.name))
-			log.Debug("libdl detected using method: %s", method.name)
+			log.Debug("appsec: libdl detected using method: %s", method.name)
 			telemetry.RegisterAppConfig("libdl_present", true, telemetry.OriginCode)
 			return
 		} else if err != nil {
-			log.Debug("failed to detect libdl with method %s: %v", method.name, err.Error())
+			log.Debug("appsec: failed to detect libdl with method %s: %v", method.name, err.Error())
 		}
 	}
 

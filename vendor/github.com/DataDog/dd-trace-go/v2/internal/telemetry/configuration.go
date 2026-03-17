@@ -19,8 +19,15 @@ import (
 
 type configuration struct {
 	mu     sync.Mutex
-	config map[string]transport.ConfKeyValue
-	seqID  uint64
+	config map[configKey]transport.ConfKeyValue
+	// fallbackSeqID is used only for legacy configs that don't already have a seqID.
+	// New code should report configs with seqIDs via config/configProvider.
+	fallbackSeqID uint64
+}
+
+type configKey struct {
+	name   string
+	origin string
 }
 
 func idOrEmpty(id string) string {
@@ -35,16 +42,18 @@ func (c *configuration) Add(kv Configuration) {
 	defer c.mu.Unlock()
 
 	if c.config == nil {
-		c.config = make(map[string]transport.ConfKeyValue)
+		c.config = make(map[configKey]transport.ConfKeyValue)
 	}
 
 	ID := idOrEmpty(kv.ID)
 
-	c.config[kv.Name] = transport.ConfKeyValue{
+	key := configKey{name: kv.Name, origin: string(kv.Origin)}
+	c.config[key] = transport.ConfKeyValue{
 		Name:   kv.Name,
 		Value:  kv.Value,
 		Origin: kv.Origin,
 		ID:     ID,
+		SeqID:  kv.SeqID,
 	}
 }
 
@@ -57,16 +66,21 @@ func (c *configuration) Payload() transport.Payload {
 
 	configs := make([]transport.ConfKeyValue, len(c.config))
 	idx := 0
-	for _, conf := range c.config {
+	for key, conf := range c.config {
 		if conf.Origin == "" {
 			conf.Origin = transport.OriginDefault
 		}
 		conf.Value = SanitizeConfigValue(conf.Value)
-		conf.SeqID = c.seqID
+
+		// Fallback seqID for legacy code that doesn't report via config/configProvider
+		if conf.SeqID == 0 {
+			c.fallbackSeqID++
+			conf.SeqID = c.fallbackSeqID
+		}
+
 		configs[idx] = conf
 		idx++
-		c.seqID++
-		delete(c.config, conf.Name)
+		delete(c.config, key)
 	}
 
 	return transport.AppClientConfigurationChange{

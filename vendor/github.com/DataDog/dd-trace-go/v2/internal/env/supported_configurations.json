@@ -15,6 +15,12 @@
     "DD_API_SECURITY_ENABLED": [
       "A"
     ],
+    "DD_API_SECURITY_ENDPOINT_COLLECTION_ENABLED": [
+      "A"
+    ],
+    "DD_API_SECURITY_ENDPOINT_COLLECTION_MESSAGE_LIMIT": [
+      "A"
+    ],
     "DD_API_SECURITY_MAX_DOWNSTREAM_REQUEST_BODY_ANALYSIS": [
       "A"
     ],
@@ -99,7 +105,13 @@
     "DD_CIVISIBILITY_LOGS_ENABLED": [
       "A"
     ],
+    "DD_CIVISIBILITY_SUBTEST_FEATURES_ENABLED": [
+      "A"
+    ],
     "DD_CIVISIBILITY_TOTAL_FLAKY_RETRY_COUNT": [
+      "A"
+    ],
+    "DD_CIVISIBILITY_USE_NOOP_TRACER": [
       "A"
     ],
     "DD_CUSTOM_TRACE_ID": [
@@ -211,6 +223,9 @@
       "A"
     ],
     "DD_LOGGING_RATE": [
+      "A"
+    ],
+    "DD_METRICS_OTEL_ENABLED": [
       "A"
     ],
     "DD_PIPELINE_EXECUTION_ID": [
@@ -405,6 +420,9 @@
     "DD_TRACE_DEBUG_ABANDONED_SPANS": [
       "A"
     ],
+    "DD_TRACE_DEBUG_STACK": [
+      "A"
+    ],
     "DD_TRACE_DEBUG_SEELOG_WORKAROUND": [
       "A"
     ],
@@ -507,6 +525,9 @@
     "DD_TRACE_LOG_DIRECTORY": [
       "A"
     ],
+    "DD_TRACE_MCP_ANALYTICS_ENABLED": [
+      "A"
+    ],
     "DD_TRACE_MEMCACHE_ANALYTICS_ENABLED": [
       "A"
     ],
@@ -576,6 +597,9 @@
     "DD_TRACE_RESTFUL_ANALYTICS_ENABLED": [
       "A"
     ],
+    "DD_TRACE_RETRY_INTERVAL": [
+      "A"
+    ],
     "DD_TRACE_SAMPLE_RATE": [
       "A"
     ],
@@ -621,9 +645,6 @@
     "DD_TRACE_VAULT_ANALYTICS_ENABLED": [
       "A"
     ],
-    "DD_TRACE_V1_PAYLOAD_FORMAT_ENABLED": [
-      "A"
-    ],
     "DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH": [
       "A"
     ],
@@ -633,6 +654,27 @@
     "DD_VERSION": [
       "A"
     ],
+    "OTEL_EXPORTER_OTLP_ENDPOINT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_HEADERS": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT": [
+      "A"
+    ],
+    "OTEL_EXPORTER_OTLP_PROTOCOL": [
+      "A"
+    ],
     "OTEL_LOGS_EXPORTER": [
       "A"
     ],
@@ -640,6 +682,12 @@
       "A"
     ],
     "OTEL_METRICS_EXPORTER": [
+      "A"
+    ],
+    "OTEL_METRIC_EXPORT_INTERVAL": [
+      "A"
+    ],
+    "OTEL_METRIC_EXPORT_TIMEOUT": [
       "A"
     ],
     "OTEL_PROPAGATORS": [

@@ -19,6 +19,9 @@ import (
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
 	"github.com/DataDog/dd-trace-go/v2/ddtrace/internal/tracerstats"
 	sharedinternal "github.com/DataDog/dd-trace-go/v2/internal"
+	internalconfig "github.com/DataDog/dd-trace-go/v2/internal/config"
+	"github.com/DataDog/dd-trace-go/v2/internal/locking"
+	"github.com/DataDog/dd-trace-go/v2/internal/locking/assert"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/samplernames"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
@@ -107,7 +110,7 @@ type SpanContext struct {
 	traceID traceID
 	spanID  uint64
 
-	mu         sync.RWMutex // guards below fields
+	mu         locking.RWMutex // guards below fields
 	baggage    map[string]string
 	hasBaggage uint32 // atomic int for quick checking presence of baggage. 0 indicates no baggage, otherwise baggage exists.
 	origin     string // e.g. "synthetics"
@@ -116,11 +119,16 @@ type SpanContext struct {
 	baggageOnly bool       // when true, indicates this context only propagates baggage items and should not be used for distributed tracing fields
 }
 
+// Private interface for span contexts that can propagate sampling decisions.
+type spanContextWithSamplingDecision interface {
+	SamplingDecision() uint32
+	Priority() *float64
+}
+
 // Private interface for converting v1 span contexts to v2 ones.
 type spanContextV1Adapter interface {
-	SamplingDecision() uint32
+	spanContextWithSamplingDecision
 	Origin() string
-	Priority() *float64
 	PropagatingTags() map[string]string
 	Tags() map[string]string
 }
@@ -137,14 +145,35 @@ func FromGenericCtx(c ddtrace.SpanContext) *SpanContext {
 		sc.baggage[k] = v
 		return true
 	})
+
+	ctxSpl, ok := c.(spanContextWithSamplingDecision)
+	if !ok {
+		return &sc
+	}
+
+	// If the generic context has a sampling decision, set it on the trace
+	// along with the priority if it exists.
+	// After setting the sampling decision, lock the trace so the decision is
+	// respected and avoid re-sampling.
+	if sDecision := samplingDecision(ctxSpl.SamplingDecision()); sDecision != decisionNone {
+		sc.trace = newTrace()
+		sc.trace.samplingDecision = sDecision
+
+		if p := ctxSpl.Priority(); p != nil {
+			sc.setSamplingPriority(int(*p), samplernames.Unknown)
+			sc.trace.setLocked(true)
+		}
+	}
+
 	ctx, ok := c.(spanContextV1Adapter)
 	if !ok {
 		return &sc
 	}
+
 	sc.origin = ctx.Origin()
-	sc.trace = newTrace()
-	sc.trace.priority = ctx.Priority()
-	sc.trace.samplingDecision = samplingDecision(ctx.SamplingDecision())
+	if sc.trace == nil {
+		sc.trace = newTrace()
+	}
 	sc.trace.tags = ctx.Tags()
 	sc.trace.propagatingTags = ctx.PropagatingTags()
 	return &sc
@@ -246,6 +275,17 @@ func (c *SpanContext) SpanLinks() []SpanLink {
 	return cp
 }
 
+// foreachBaggageItemLocked iterates over baggage items.
+// c.mu must be held for reading.
+func (c *SpanContext) foreachBaggageItemLocked(handler func(k, v string) bool) {
+	assert.RWMutexRLocked(&c.mu)
+	for k, v := range c.baggage {
+		if !handler(k, v) {
+			break
+		}
+	}
+}
+
 // ForeachBaggageItem implements ddtrace.SpanContext.
 func (c *SpanContext) ForeachBaggageItem(handler func(k, v string) bool) {
 	if c == nil {
@@ -256,11 +296,7 @@ func (c *SpanContext) ForeachBaggageItem(handler func(k, v string) bool) {
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for k, v := range c.baggage {
-		if !handler(k, v) {
-			break
-		}
-	}
+	c.foreachBaggageItemLocked(handler)
 }
 
 // sets the sampling priority and decision maker (based on `sampler`).
@@ -292,14 +328,35 @@ func (c *SpanContext) SamplingPriority() (p int, ok bool) {
 	return c.trace.samplingPriority()
 }
 
-func (c *SpanContext) setBaggageItem(key, val string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// setBaggageItemLocked sets a baggage item.
+// c.mu must be held for writing.
+func (c *SpanContext) setBaggageItemLocked(key, val string) {
+	assert.RWMutexLocked(&c.mu)
 	if c.baggage == nil {
 		atomic.StoreUint32(&c.hasBaggage, 1)
 		c.baggage = make(map[string]string, 1)
 	}
 	c.baggage[key] = val
+}
+
+func (c *SpanContext) setBaggageItem(key, val string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setBaggageItemLocked(key, val)
+}
+
+// baggageItemLocked retrieves a baggage item.
+// c.mu must be held for reading.
+func (c *SpanContext) baggageItemLocked(key string) string {
+	assert.RWMutexRLocked(&c.mu)
+	return c.baggage[key]
+}
+
+// baggageCountLocked returns the number of baggage items.
+// c.mu must be held for reading.
+func (c *SpanContext) baggageCountLocked() int {
+	assert.RWMutexRLocked(&c.mu)
+	return len(c.baggage)
 }
 
 func (c *SpanContext) baggageItem(key string) string {
@@ -308,7 +365,7 @@ func (c *SpanContext) baggageItem(key string) string {
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.baggage[key]
+	return c.baggageItemLocked(key)
 }
 
 // finish marks this span as finished in the trace.
@@ -325,7 +382,7 @@ func (c *SpanContext) safeDebugString() string {
 	var baggageCount int
 	if hasBaggage {
 		c.mu.RLock()
-		baggageCount = len(c.baggage)
+		baggageCount = c.baggageCountLocked()
 		c.mu.RUnlock()
 	}
 
@@ -372,12 +429,7 @@ var (
 	// reasonable as span is actually way bigger, and avoids re-allocating
 	// over and over. Could be fine-tuned at runtime.
 	traceStartSize = 10
-	// traceMaxSize is the maximum number of spans we keep in memory for a
-	// single trace. This is to avoid memory leaks. If more spans than this
-	// are added to a trace, then the trace is dropped and the spans are
-	// discarded. Adding additional spans after a trace is dropped does
-	// nothing.
-	traceMaxSize = int(1e5)
+	traceMaxSize   = internalconfig.TraceMaxSize
 )
 
 // newTrace creates a new trace using the given callback which will be called
@@ -621,10 +673,18 @@ func (t *trace) finishedOne(s *Span) {
 	}
 	telemetry.Distribution(telemetry.NamespaceTracers, "trace_partial_flush.spans_closed", nil).Submit(float64(len(finishedSpans)))
 	telemetry.Distribution(telemetry.NamespaceTracers, "trace_partial_flush.spans_remaining", nil).Submit(float64(len(leftoverSpans)))
-	finishedSpans[0].setMetric(keySamplingPriority, *t.priority)
+	// #incident-46344 -- if we set metrics and tags on a different span than what was passed into this function,
+	// we need to lock this new span.
+	fSpan := finishedSpans[0]
+	currentSpanIsFirstInChunk := s == fSpan
+	if !currentSpanIsFirstInChunk {
+		fSpan.mu.Lock()
+		defer fSpan.mu.Unlock()
+	}
+	fSpan.setMetric(keySamplingPriority, *t.priority)
 	if s != t.spans[0] {
 		// Make sure the first span in the chunk has the trace-level tags
-		t.setTraceTags(finishedSpans[0])
+		t.setTraceTags(fSpan)
 	}
 	if tr, ok := tr.(*tracer); ok {
 		t.finishChunk(tr, &chunk{

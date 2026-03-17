@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,10 +25,12 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/remoteconfig/state"
 )
 
+// configData represents one config file received from Remote Config.
 type configData struct {
-	Action        string    `json:"action"`
-	ServiceTarget target    `json:"service_target"`
-	LibConfig     libConfig `json:"lib_config"`
+	Action        string      `json:"action"`
+	ServiceTarget target      `json:"service_target"`
+	K8sTargetV2   k8sTargetV2 `json:"k8s_target_v2"`
+	LibConfig     libConfig   `json:"lib_config"`
 }
 
 type target struct {
@@ -34,12 +38,89 @@ type target struct {
 	Env     string `json:"env"`
 }
 
+type k8sTargetV2 struct {
+	ClusterTargets []clusterTarget `json:"cluster_targets"`
+}
+
+type clusterTarget struct {
+	ClusterName       string   `json:"cluster_name"`
+	Enabled           bool     `json:"enabled"`
+	EnabledNamespaces []string `json:"enabled_namespaces"`
+}
+
+// priority returns the order in which this config should be applied, relative
+// to other configs. The more specific the config's targeting of the current
+// process is, the higher the priority; configs with higher priority override
+// configs with lower priority.
+func (c configData) priority() int {
+	isSingleEnvironment := c.ServiceTarget.Env != "" && c.ServiceTarget.Env != "*"
+	isSingleService := c.ServiceTarget.Service != "" && c.ServiceTarget.Service != "*"
+	isClusterTarget := len(c.K8sTargetV2.ClusterTargets) > 0
+
+	switch {
+	case isSingleEnvironment && isSingleService:
+		return 5
+	case isSingleService:
+		return 4
+	case isSingleEnvironment:
+		return 3
+	case isClusterTarget:
+		return 2
+	default:
+		return 1
+	}
+}
+
+// mergeConfigsByPriority sorts the configs by priority (i.e. targeting
+// specificity) and merges them into a single libConfig. For each field, the
+// value from the highest-priority config with a non-nil value for that field is
+// used.
+func mergeConfigsByPriority(configs []configData) libConfig {
+	if len(configs) == 0 {
+		return libConfig{}
+	}
+
+	sort.SliceStable(configs, func(i, j int) bool {
+		return configs[i].priority() < configs[j].priority()
+	})
+
+	merged := libConfig{}
+
+	for _, cfg := range configs {
+		if cfg.LibConfig.Enabled != nil {
+			merged.Enabled = cfg.LibConfig.Enabled
+		}
+		if cfg.LibConfig.SamplingRate != nil {
+			merged.SamplingRate = cfg.LibConfig.SamplingRate
+		}
+		if cfg.LibConfig.TraceSamplingRules != nil {
+			merged.TraceSamplingRules = cfg.LibConfig.TraceSamplingRules
+		}
+		if cfg.LibConfig.HeaderTags != nil {
+			merged.HeaderTags = cfg.LibConfig.HeaderTags
+		}
+		if cfg.LibConfig.Tags != nil {
+			merged.Tags = cfg.LibConfig.Tags
+		}
+		if cfg.LibConfig.LiveDebuggingEnabled != nil {
+			merged.LiveDebuggingEnabled = cfg.LibConfig.LiveDebuggingEnabled
+		}
+	}
+
+	return merged
+}
+
+// libConfig is the configuration for the tracer as received from Remote Config.
+//
+// ATTENTION: When adding new fields to this struct, make sure to update
+// mergeConfigsByPriority and TestMergeHandlesAllLibConfigFields.
 type libConfig struct {
-	Enabled            *bool             `json:"tracing_enabled,omitempty"`
-	SamplingRate       *float64          `json:"tracing_sampling_rate,omitempty"`
-	TraceSamplingRules *[]rcSamplingRule `json:"tracing_sampling_rules,omitempty"`
-	HeaderTags         *headerTags       `json:"tracing_header_tags,omitempty"`
-	Tags               *tags             `json:"tracing_tags,omitempty"`
+	Enabled              *bool             `json:"tracing_enabled,omitempty"`
+	SamplingRate         *float64          `json:"tracing_sampling_rate,omitempty"`
+	TraceSamplingRules   *[]rcSamplingRule `json:"tracing_sampling_rules,omitempty"`
+	HeaderTags           *headerTags       `json:"tracing_header_tags,omitempty"`
+	Tags                 *tags             `json:"tracing_tags,omitempty"`
+	LiveDebuggingEnabled *bool             `json:"dynamic_instrumentation_enabled,omitempty"`
 }
 
 type rcTag struct {
@@ -145,88 +226,57 @@ func (t *tags) toMap() *map[string]interface{} {
 // onRemoteConfigUpdate is a remote config callaback responsible for processing APM_TRACING RC-product updates.
 func (t *tracer) onRemoteConfigUpdate(u remoteconfig.ProductUpdate) map[string]state.ApplyStatus {
 	statuses := map[string]state.ApplyStatus{}
-	if len(u) == 0 {
-		return statuses
-	}
-	removed := func() bool {
-		// Returns true if all the values in the update are nil.
-		for _, raw := range u {
-			if raw != nil {
-				return false
-			}
-		}
-		return true
-	}
-	var telemConfigs []telemetry.Configuration
-	if removed() {
-		// The remote-config client is signaling that the configuration has been deleted for this product.
-		// We re-apply the startup configuration values.
-		for path := range u {
-			log.Debug("Nil payload from RC. Path: %s.", path)
-			statuses[path] = state.ApplyStatus{State: state.ApplyStateAcknowledged}
-		}
-		log.Debug("Resetting configurations")
-		updated := t.config.traceSampleRate.reset()
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.traceSampleRate.toTelemetry())
-		}
-		updated = t.config.traceSampleRules.reset()
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.traceSampleRules.toTelemetry())
-		}
-		updated = t.config.headerAsTags.reset()
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.headerAsTags.toTelemetry())
-		}
-		updated = t.config.globalTags.reset()
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.globalTags.toTelemetry())
-		}
-		if !t.config.enabled.current {
-			log.Debug("APM Tracing is disabled. Restart the service to enable it.")
-		}
-		if len(telemConfigs) > 0 {
-			log.Debug("Reporting %d configuration changes to telemetry", len(telemConfigs))
-			telemetry.RegisterAppConfigs(telemConfigs...)
-		}
-		return statuses
-	}
+
+	configs := make([]configData, 0, len(u))
 	for path, raw := range u {
 		if raw == nil {
+			log.Debug("Nil payload from RC. Path: %s", path)
+			statuses[path] = state.ApplyStatus{State: state.ApplyStateAcknowledged}
 			continue
 		}
 		log.Debug("Processing config from RC. Path: %s. Raw: %s", path, raw)
-		var c configData
-		if err := json.Unmarshal(raw, &c); err != nil {
+		var cfg configData
+		if err := json.Unmarshal(raw, &cfg); err != nil {
 			log.Debug("Error while unmarshalling payload for %q: %v. Configuration won't be applied.", path, err.Error())
 			statuses[path] = state.ApplyStatus{State: state.ApplyStateError, Error: err.Error()}
 			continue
 		}
 		statuses[path] = state.ApplyStatus{State: state.ApplyStateAcknowledged}
-		updated := t.config.traceSampleRate.handleRC(c.LibConfig.SamplingRate)
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.traceSampleRate.toTelemetry())
-		}
-		updated = t.config.traceSampleRules.handleRC(convertRemoteSamplingRules(c.LibConfig.TraceSamplingRules))
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.traceSampleRules.toTelemetry())
-		}
-		updated = t.config.headerAsTags.handleRC(c.LibConfig.HeaderTags.toSlice())
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.headerAsTags.toTelemetry())
-		}
-		updated = t.config.globalTags.handleRC(c.LibConfig.Tags.toMap())
-		if updated {
-			telemConfigs = append(telemConfigs, t.config.globalTags.toTelemetry())
-		}
-		if c.LibConfig.Enabled != nil {
-			if t.config.enabled.current && !*c.LibConfig.Enabled {
-				log.Debug("Disabled APM Tracing through RC. Restart the service to enable it.")
-				t.config.enabled.handleRC(c.LibConfig.Enabled)
-				telemConfigs = append(telemConfigs, t.config.enabled.toTelemetry())
-			} else if !t.config.enabled.current && *c.LibConfig.Enabled {
-				log.Debug("APM Tracing is disabled. Restart the service to enable it.")
-			}
+		configs = append(configs, cfg)
+	}
+
+	merged := mergeConfigsByPriority(configs)
+	var telemConfigs []telemetry.Configuration
+
+	// Apply the new configuration values.
+	updated := t.config.traceSampleRate.handleRC(merged.SamplingRate)
+	if updated {
+		telemConfigs = append(telemConfigs, t.config.traceSampleRate.toTelemetry())
+	}
+	updated = t.config.traceSampleRules.handleRC(convertRemoteSamplingRules(merged.TraceSamplingRules))
+	if updated {
+		telemConfigs = append(telemConfigs, t.config.traceSampleRules.toTelemetry())
+	}
+	updated = t.config.headerAsTags.handleRC(merged.HeaderTags.toSlice())
+	if updated {
+		telemConfigs = append(telemConfigs, t.config.headerAsTags.toTelemetry())
+	}
+	updated = t.config.globalTags.handleRC(merged.Tags.toMap())
+	if updated {
+		telemConfigs = append(telemConfigs, t.config.globalTags.toTelemetry())
+	}
+
+	if telem := t.handleDynamicInstrumentationEnabledRC(merged.LiveDebuggingEnabled); telem != nil {
+		telemConfigs = append(telemConfigs, *telem)
+	}
+
+	if merged.Enabled != nil {
+		if t.config.enabled.current && !*merged.Enabled {
+			log.Debug("Disabled APM Tracing through RC. Restart the service to enable it.")
+			t.config.enabled.handleRC(merged.Enabled)
+			telemConfigs = append(telemConfigs, t.config.enabled.toTelemetry())
+		} else if !t.config.enabled.current && *merged.Enabled {
+			log.Debug("APM Tracing is disabled. Restart the service to enable it.")
 		}
 	}
 	if len(telemConfigs) > 0 {
@@ -234,6 +284,50 @@ func (t *tracer) onRemoteConfigUpdate(u remoteconfig.ProductUpdate) map[string]s
 		telemetry.RegisterAppConfigs(telemConfigs...)
 	}
 	return statuses
+}
+
+// Handle enabling or disabling of Dynamic Instrumentation / Live Debugger.
+//
+// Returns a telemetry configuration if the value changed.
+func (t *tracer) handleDynamicInstrumentationEnabledRC(val *bool) *telemetry.Configuration {
+	// Do not overwrite a "false" value coming from the
+	// DD_DYNAMIC_INSTRUMENTATION_ENABLED env var, or from other local sources.
+	explicitOrigins := []telemetry.Origin{
+		telemetry.OriginCode,
+		telemetry.OriginDDConfig,
+		telemetry.OriginEnvVar,
+		telemetry.OriginLocalStableConfig,
+		telemetry.OriginManagedStableConfig,
+	}
+	if !t.config.dynamicInstrumentationEnabled.get() &&
+		slices.Contains(explicitOrigins, t.config.dynamicInstrumentationEnabled.cfgOrigin) {
+		return nil
+	}
+
+	if !t.config.dynamicInstrumentationEnabled.handleRC(val) {
+		return nil
+	}
+
+	// The value changed; subscribe or unsubscribe from the Live Debugging RC
+	// product.
+	if t.config.dynamicInstrumentationEnabled.get() {
+		log.Info("Dynamic Instrumentation starting through Remote Config update")
+		err := t.startDynamicInstrumentationRCSubscriptions()
+		if err != nil {
+			log.Error("failed to start Dynamic Instrumentation subscriptions: %s", err)
+			return nil
+		}
+	} else {
+		log.Info("Dynamic Instrumentation stopping through Remote Config update")
+		err := t.stopDynamicInstrumentationRCSubscriptions()
+		if err != nil {
+			log.Error("failed to stop Dynamic Instrumentation subscriptions: %s", err)
+			return nil
+		}
+	}
+
+	telem := t.config.dynamicInstrumentationEnabled.toTelemetry()
+	return &telem
 }
 
 type dynamicInstrumentationRCProbeConfig struct {
@@ -270,8 +364,13 @@ func (t *tracer) dynamicInstrumentationRCUpdate(u remoteconfig.ProductUpdate) ma
 	diRCState.Lock()
 	defer diRCState.Unlock()
 	for k, v := range u {
-		log.Debug("Received dynamic instrumentation RC configuration for %s\n", k)
-		if len(v) == 0 {
+		deleted := len(v) == 0
+		deletedMsg := ""
+		if deleted {
+			deletedMsg = " (deleted)"
+		}
+		log.Debug("Received dynamic instrumentation RC configuration for %s%s\n", k, deletedMsg)
+		if deleted {
 			delete(diRCState.state, k)
 			applyStatus[k] = state.ApplyStatus{State: state.ApplyStateAcknowledged}
 		} else {
@@ -384,28 +483,13 @@ func (t *tracer) startRemoteConfig(rcConfig remoteconfig.ClientConfig) error {
 
 	var dynamicInstrumentationError, apmTracingError error
 
-	if t.config.dynamicInstrumentationEnabled {
-		liveDebuggingError := remoteconfig.Subscribe(
-			"LIVE_DEBUGGING", t.dynamicInstrumentationRCUpdate,
-		)
-		liveDebuggingSymDBError := remoteconfig.Subscribe(
-			"LIVE_DEBUGGING_SYMBOL_DB", t.dynamicInstrumentationSymDBRCUpdate,
-		)
-		if liveDebuggingError != nil && liveDebuggingSymDBError != nil {
-			dynamicInstrumentationError = errors.Join(
-				liveDebuggingError,
-				liveDebuggingSymDBError,
-			)
-		} else if liveDebuggingError != nil {
-			dynamicInstrumentationError = liveDebuggingError
-		} else if liveDebuggingSymDBError != nil {
-			dynamicInstrumentationError = liveDebuggingSymDBError
-		}
+	if t.config.dynamicInstrumentationEnabled.get() {
+		dynamicInstrumentationError = t.startDynamicInstrumentationRCSubscriptions()
 	}
 
 	initalizeRC.Do(initalizeDynamicInstrumentationRemoteConfigState)
 
-	apmTracingError = remoteconfig.Subscribe(
+	_, apmTracingError = remoteconfig.Subscribe(
 		state.ProductAPMTracing,
 		t.onRemoteConfigUpdate,
 		remoteconfig.APMTracingSampleRate,
@@ -413,6 +497,8 @@ func (t *tracer) startRemoteConfig(rcConfig remoteconfig.ClientConfig) error {
 		remoteconfig.APMTracingCustomTags,
 		remoteconfig.APMTracingEnabled,
 		remoteconfig.APMTracingSampleRules,
+		remoteconfig.APMTracingMulticonfig,
+		remoteconfig.APMTracingEnableLiveDebugging,
 	)
 
 	if apmTracingError != nil || dynamicInstrumentationError != nil {
@@ -423,5 +509,55 @@ func (t *tracer) startRemoteConfig(rcConfig remoteconfig.ClientConfig) error {
 		)
 	}
 
+	return nil
+}
+
+func (t *tracer) startDynamicInstrumentationRCSubscriptions() error {
+	t.dynInstMu.Lock()
+	defer t.dynInstMu.Unlock()
+
+	if t.dynInstMu.ldSubscriptionToken != 0 || t.dynInstMu.symDBSubscriptionToken != 0 {
+		return errors.New("programming error: dynamic instrumentation RC subscriptions already started")
+	}
+
+	ldTok, liveDebuggingError := remoteconfig.Subscribe(
+		"LIVE_DEBUGGING", t.dynamicInstrumentationRCUpdate,
+	)
+	symDBTok, liveDebuggingSymDBError := remoteconfig.Subscribe(
+		"LIVE_DEBUGGING_SYMBOL_DB", t.dynamicInstrumentationSymDBRCUpdate,
+	)
+	t.dynInstMu.ldSubscriptionToken = ldTok
+	t.dynInstMu.symDBSubscriptionToken = symDBTok
+	var err error
+	if liveDebuggingError != nil && liveDebuggingSymDBError != nil {
+		err = errors.Join(
+			liveDebuggingError,
+			liveDebuggingSymDBError,
+		)
+	} else if liveDebuggingError != nil {
+		err = liveDebuggingError
+	} else if liveDebuggingSymDBError != nil {
+		err = liveDebuggingSymDBError
+	}
+	return err
+}
+
+func (t *tracer) stopDynamicInstrumentationRCSubscriptions() error {
+	t.dynInstMu.Lock()
+	defer t.dynInstMu.Unlock()
+	if t.dynInstMu.ldSubscriptionToken != 0 {
+		err := remoteconfig.Unsubscribe(t.dynInstMu.ldSubscriptionToken)
+		if err != nil {
+			return err
+		}
+		t.dynInstMu.ldSubscriptionToken = 0
+	}
+	if t.dynInstMu.symDBSubscriptionToken != 0 {
+		err := remoteconfig.Unsubscribe(t.dynInstMu.symDBSubscriptionToken)
+		if err != nil {
+			return err
+		}
+		t.dynInstMu.symDBSubscriptionToken = 0
+	}
 	return nil
 }

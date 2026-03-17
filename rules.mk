@@ -31,9 +31,9 @@ SRC_DIRS := cmd pkg
 ALL_ARCH := amd64 arm arm64 ppc64le s390x
 # Multiarch image
 # Find the latest hash by opening in browser https://gcr.io/distroless/static-debian12:latest
-BASEIMAGE ?= gcr.io/distroless/static-debian12@sha256:4b2a093ef4649bccd586625090a3c668b254cfe180dee54f4c94f3e9bd7e381e
+BASEIMAGE ?= gcr.io/distroless/static-debian12@sha256:20bc6c0bc4d625a22a8fde3e55f6515709b32055ef8fb9cfbddaa06d1760f838
 # Find the correct tag at https://github.com/kubernetes/release/blob/master/images/build/distroless-iptables/variants.yaml
-IPTIMAGE ?= registry.k8s.io/build-image/distroless-iptables:v0.8.6@sha256:4e0a77d0973618ce2a76e65fa2dc97694eb690ac8baf69cefe6e20f17957d9dd
+IPTIMAGE ?= registry.k8s.io/build-image/distroless-iptables:v0.8.8@sha256:cb9c6a556c5ba13fd1442e27a73ba5b43a35bec87f05962c2285b865cd7f5bee
 
 # These rules MUST be expanded at reference time (hence '=') as BINARY
 # is dynamically scoped.

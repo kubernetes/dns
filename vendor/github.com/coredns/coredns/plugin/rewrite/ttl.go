@@ -140,6 +140,9 @@ func newTTLRule(nextAction string, args ...string) (Rule, error) {
 				plugin.Name(args[1]).Normalize(),
 			}, nil
 		case RegexMatch:
+			if len(args[1]) > maxRegexpLen {
+				return nil, fmt.Errorf("regex pattern too long in a ttl rule: %d > %d", len(args[1]), maxRegexpLen)
+			}
 			regexPattern, err := regexp.Compile(args[1])
 			if err != nil {
 				return nil, fmt.Errorf("invalid regex pattern in a ttl rule: %s", args[1])
@@ -199,7 +202,7 @@ func isValidTTL(v string) (uint32, uint32, bool) {
 			// reject invalid range
 			return 0, 0, false
 		}
-		return uint32(min), uint32(max), true
+		return uint32(min), uint32(max), true // #nosec G115 -- min/max parsed with 32-bit limit
 	}
 	return 0, 0, false
 }

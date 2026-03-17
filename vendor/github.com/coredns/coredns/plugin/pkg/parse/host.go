@@ -30,7 +30,7 @@ func stripZone(host string) string {
 // and in case of filename a resolv.conf like file is (assumed) and parsed and
 // the nameservers found are returned.
 func HostPortOrFile(s ...string) ([]string, error) {
-	var servers []string //nolint:prealloc // impossible to know the final length upfront
+	var servers []string
 	for _, h := range s {
 		trans, host := Transport(h)
 		if len(host) == 0 {
@@ -46,6 +46,7 @@ func HostPortOrFile(s ...string) ([]string, error) {
 
 		if err != nil {
 			// Parse didn't work, it is not a addr:port combo
+			host = strings.Trim(host, "[]")
 			hostNoZone := stripZone(host)
 			if net.ParseIP(hostNoZone) == nil {
 				ss, err := tryFile(host)

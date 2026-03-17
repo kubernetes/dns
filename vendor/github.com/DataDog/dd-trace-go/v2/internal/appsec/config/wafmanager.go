@@ -24,8 +24,8 @@ type (
 		builder      *libddwaf.Builder
 		staticRules  []byte // nullable
 		rulesVersion string
-		closed       bool
 		mu           sync.RWMutex
+		cleanup      runtime.Cleanup
 	}
 )
 
@@ -52,10 +52,13 @@ func NewWAFManagerWithStaticRules(obfuscator ObfuscatorConfig, staticRules []byt
 		return nil, err
 	}
 
-	// Attach a finalizer to close the builder when it is garbage collected, in case
-	// [WAFManager.Close] is not called explicitly by the user. The call to [libddwaf.Builder.Close]
-	// is safe to make multiple times.
-	runtime.SetFinalizer(mgr, func(m *WAFManager) { m.doClose(true) })
+	// Attach a [runtime.Cleanup] to close the builder when the [WAFManager] is
+	// garbage collected, in case [WAFManager.Close] was not called explicitly by
+	// the user.
+	mgr.cleanup = runtime.AddCleanup(mgr, func(b *libddwaf.Builder) {
+		telemetryLog.Warn("WAFManager was leaked and is being closed by GC. Remember to call WAFManager.Close() explicitly!")
+		b.Close()
+	}, builder)
 
 	return mgr, nil
 }
@@ -90,23 +93,18 @@ func (m *WAFManager) NewHandle() (*libddwaf.Handle, string) {
 
 // Close releases all resources associated with this [WAFManager].
 func (m *WAFManager) Close() {
-	m.doClose(false)
-}
-
-func (m *WAFManager) doClose(leaked bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.closed {
-		return
-	}
-	if leaked {
-		telemetryLog.Warn("WAFManager was leaked and is being closed by GC. Remember to call WAFManager.Close() explicitly!")
-	}
-
+	// Note: The call to [libddwaf.Builder.Close] is safe to make multiple times.
 	m.builder.Close()
 	m.rulesVersion = ""
-	m.closed = true
+
+	// Cancel the Cleanup function to avoid wasting resources & emitting a log
+	// message when the [WAFManager] was correctly closed manually. This is safe
+	// to call multiple times, granted these cannot be concurrent as we hold the
+	// mutex when reaching this point.
+	m.cleanup.Stop()
 }
 
 // RemoveConfig removes a configuration from the receiving [WAFManager].

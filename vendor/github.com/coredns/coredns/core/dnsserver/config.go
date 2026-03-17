@@ -10,6 +10,8 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
+
+	"github.com/pires/go-proxyproto"
 )
 
 // Config configuration for a single server.
@@ -65,6 +67,27 @@ type Config struct {
 	// MaxQUICWorkerPoolSize defines the size of the worker pool for processing QUIC streams.
 	// This is nil if not specified, allowing for a default to be used.
 	MaxQUICWorkerPoolSize *int
+
+	// ProxyProtoConnPolicy is the function that will be used to
+	// configure the PROXY protocol settings on listeners.
+	// If nil, PROXY protocol is disabled.
+	ProxyProtoConnPolicy proxyproto.ConnPolicyFunc
+
+	// MaxGRPCStreams defines the maximum number of concurrent streams per gRPC connection.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCStreams *int
+
+	// MaxGRPCConnections defines the maximum number of concurrent gRPC connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxGRPCConnections *int
+
+	// MaxHTTPSConnections defines the maximum number of concurrent HTTPS connections.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPSConnections *int
+
+	// MaxHTTPS3Streams defines the maximum number of concurrent QUIC streams for HTTPS3.
+	// This is nil if not specified, allowing for a default to be used.
+	MaxHTTPS3Streams *int
 
 	// Timeouts for TCP, TLS and HTTPS servers.
 	ReadTimeout  time.Duration
