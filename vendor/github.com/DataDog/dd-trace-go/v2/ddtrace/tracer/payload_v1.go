@@ -160,6 +160,7 @@ func (p *payloadV1) push(t spanList) (stats payloadStats, err error) {
 
 	p.chunks = append(p.chunks, tc)
 	p.recordItem()
+	p.update()
 	return p.stats(), err
 }
 
@@ -268,9 +269,9 @@ func (p *payloadV1) Write(b []byte) (int, error) {
 
 // Read implements io.Reader. It reads from the msgpack-encoded stream.
 func (p *payloadV1) Read(b []byte) (n int, err error) {
+	// Ensure header and buffer are initialized (handles empty payload case)
 	if len(p.header) == 0 {
-		p.header = make([]byte, 8)
-		p.updateHeader()
+		p.update()
 	}
 	if p.readOff < len(p.header) {
 		// reading header
@@ -278,13 +279,20 @@ func (p *payloadV1) Read(b []byte) (n int, err error) {
 		p.readOff += n
 		return n, nil
 	}
-	if len(p.buf) == 0 {
-		p.encode()
-	}
 	if p.reader == nil {
 		p.reader = bytes.NewReader(p.buf)
 	}
 	return p.reader.Read(b)
+}
+
+func (p *payloadV1) update() {
+	if len(p.header) == 0 {
+		p.header = make([]byte, 8)
+	}
+	p.updateHeader()
+	// Reset the buffer length to 0 before re-encoding
+	p.buf = p.buf[:0]
+	p.encode()
 }
 
 // encode writes existing payload fields into the buffer in msgp format.

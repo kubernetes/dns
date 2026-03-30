@@ -113,6 +113,9 @@ type llmobsContext struct {
 	outputMessages  []LLMMessage
 	outputText      string
 
+	// tool specific
+	intent string
+
 	// experiment specific
 	experimentInput          any
 	experimentExpectedOutput any
@@ -513,6 +516,14 @@ func (l *LLMObs) llmobsSpanEvent(span *Span) *transport.LLMObsSpanEvent {
 		meta["tool_definitions"] = toolDefinitions
 	}
 
+	if intent := span.llmCtx.intent; intent != "" {
+		if spanKind != SpanKindTool {
+			log.Warn("llmobs: dropping intent on non-tool span kind, annotating intent is only supported for tool span kinds")
+		} else {
+			meta["intent"] = intent
+		}
+	}
+
 	spanStatus := "ok"
 	var errMsg *transport.ErrorMessage
 	if span.error != nil {
@@ -534,6 +545,8 @@ func (l *LLMObs) llmobsSpanEvent(span *Span) *transport.LLMObsSpanEvent {
 	parentID := defaultParentID
 	if span.parent != nil {
 		parentID = span.parent.apm.SpanID()
+	} else if span.propagated != nil {
+		parentID = span.propagated.SpanID
 	}
 	if span.llmTraceID == "" {
 		log.Warn("llmobs: span has no trace ID")
@@ -578,6 +591,15 @@ func (l *LLMObs) llmobsSpanEvent(span *Span) *transport.LLMObsSpanEvent {
 		tagsSlice = append(tagsSlice, fmt.Sprintf("%s:%s", k, v))
 	}
 
+	ddAttrs := transport.DDAttributes{
+		SpanID:     spanID,
+		TraceID:    span.llmTraceID,
+		APMTraceID: span.apm.TraceID(),
+	}
+	if span.scope != "" {
+		ddAttrs.Scope = span.scope
+	}
+
 	ev := &transport.LLMObsSpanEvent{
 		SpanID:           spanID,
 		TraceID:          span.llmTraceID,
@@ -593,7 +615,7 @@ func (l *LLMObs) llmobsSpanEvent(span *Span) *transport.LLMObsSpanEvent {
 		Metrics:          span.llmCtx.metrics,
 		CollectionErrors: nil,
 		SpanLinks:        span.spanLinks,
-		Scope:            span.scope,
+		DDAttributes:     ddAttrs,
 	}
 	if b, err := json.Marshal(ev); err == nil {
 		rawSize := len(b)
@@ -688,6 +710,7 @@ func (l *LLMObs) StartSpan(ctx context.Context, kind SpanKind, name string, cfg 
 	span.mlApp = cfg.MLApp
 	span.spanKind = kind
 	span.sessionID = cfg.SessionID
+	span.integration = cfg.Integration
 
 	span.llmCtx = llmobsContext{
 		modelName:     cfg.ModelName,

@@ -30,6 +30,8 @@ type StartSpanConfig struct {
 	MLApp string
 	// StartTime sets a custom start time for the span. If zero, uses current time.
 	StartTime time.Time
+	// Name of the tracing integration.
+	Integration string
 }
 
 // FinishSpanConfig contains configuration options for finishing an LLMObs span.
@@ -188,6 +190,9 @@ type SpanAnnotations struct {
 	Prompt *Prompt
 	// ToolDefinitions are the tool definitions for LLM spans.
 	ToolDefinitions []ToolDefinition
+
+	// Intent is a description of a reason for calling an MCP tool on tool spans
+	Intent string
 
 	// AgentManifest is the agent manifest for agent spans.
 	AgentManifest string
@@ -363,6 +368,14 @@ func (s *Span) Annotate(a SpanAnnotations) {
 			log.Warn("llmobs: agent manifest can only be annotated on agent spans, ignoring")
 		} else {
 			s.llmCtx.agentManifest = a.AgentManifest
+		}
+	}
+
+	if a.Intent != "" {
+		if s.spanKind != SpanKindTool {
+			log.Warn("llmobs: intent can only be annotated on tool spans, ignoring")
+		} else {
+			s.llmCtx.intent = a.Intent
 		}
 	}
 

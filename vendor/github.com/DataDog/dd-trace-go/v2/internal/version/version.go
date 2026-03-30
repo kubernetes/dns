@@ -11,13 +11,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Masterminds/semver/v3"
+	"golang.org/x/mod/semver"
 )
 
 // Tag specifies the current release tag. It needs to be manually
 // updated. A test checks that the value of Tag never points to a
 // git tag that is older than HEAD.
-var Tag = "v2.4.0"
+var Tag = "v2.5.0"
 
 type v1version struct {
 	Transitional bool
@@ -94,24 +94,42 @@ type version struct {
 }
 
 func parseVersion(value string) version {
-	var (
-		parsedVersion = semver.MustParse(value)
-		v             = version{
-			Major: int(parsedVersion.Major()),
-			Minor: int(parsedVersion.Minor()),
-			Patch: int(parsedVersion.Patch()),
-		}
-	)
+	var v version
 
-	pr := parsedVersion.Prerelease()
-	if pr == "" || pr == "dev" {
+	if !semver.IsValid(value) {
+		// This shouldn't happen, but it must be handled.
+		// `golang.org/x/mod/semver` doesn't expose the parsed parts of the version.
 		return v
 	}
 
-	split := strings.Split(pr, ".")
-	if len(split) > 1 {
-		v.RC, _ = strconv.Atoi(split[1])
+	i := strings.Index(value, ".")
+	v.Major, _ = strconv.Atoi(value[1:i])
+
+	value = value[i+1:]
+	i = strings.Index(value, ".")
+	v.Minor, _ = strconv.Atoi(value[:i])
+
+	value = value[i+1:]
+	i = strings.Index(value, "-")
+	if i == -1 {
+		v.Patch, _ = strconv.Atoi(value)
+		return v
 	}
+
+	v.Patch, _ = strconv.Atoi(value[:i])
+
+	value = value[i+1:]
+	i = strings.Index(value, ".")
+	if i == -1 {
+		// Prerelease doesn't have a specific number.
+		return v
+	}
+
+	value = value[i+1:]
+	if len(value) == 0 {
+		return v
+	}
+	v.RC, _ = strconv.Atoi(value)
 
 	return v
 }
