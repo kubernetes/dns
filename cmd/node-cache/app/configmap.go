@@ -50,6 +50,8 @@ const (
 	LocalListenIPsVar       = "__PILLAR__LOCAL__DNS__"
 	LocalDNSServerVar       = "__PILLAR__DNS__SERVER__"
 	DefaultKubednsCMPath    = "/etc/kube-dns"
+
+	PrometheusEndpointVar = "__PILLAR__PROMETHEUS__ENDPOINT__"
 )
 
 // stubDomainInfo contains all the parameters needed to compute
@@ -121,6 +123,11 @@ func (c *CacheApp) updateCorefile(dnsConfig *config.Config) {
 	// variables are left unsubstituted.
 	if bytes.Contains(baseConfig, []byte(LocalDNSServerVar)) {
 		baseConfig = bytes.Replace(baseConfig, []byte(LocalDNSServerVar), []byte(""), -1)
+	}
+
+	// If the template Corefile has the Prometheus plugin, replace the bind address with the one specified in the parameters. Otherwise, do nothing since there is no Prometheus plugin to update.
+	if bytes.Contains(baseConfig, []byte(PrometheusEndpointVar)) {
+		baseConfig = bytes.Replace(baseConfig, []byte(PrometheusEndpointVar), []byte(c.params.PrometheusListenAddress), -1)
 	}
 
 	newConfig := bytes.Buffer{}

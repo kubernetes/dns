@@ -37,22 +37,23 @@ var (
 
 // ConfigParams lists the configuration options that can be provided to node-cache
 type ConfigParams struct {
-	LocalIPStr           string        // comma separated listen ips for the local cache agent
-	LocalIPs             []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
-	LocalPort            string        // port to listen for dns requests
-	MetricsListenAddress string        // address to serve metrics on
-	SetupInterface       bool          // Indicates whether to setup network interface
-	InterfaceName        string        // Name of the interface to be created
-	Interval             time.Duration // specifies how often to run iptables rules check
-	Pidfile              string        // Path to the coredns server pidfile
-	BaseCoreFile         string        // Path to the template config file for node-cache
-	CoreFile             string        // Path to config file used by node-cache
-	KubednsCMPath        string        // Directory where kube-dns configmap will be mounted
-	UpstreamSvcName      string        // Name of the service whose clusterIP is the upstream for node-cache for cluster domain
-	HealthPort           string        // port for the healthcheck
-	SetupIptables        bool
-	SkipTeardown         bool // Indicates whether the iptables rules and interface should be torn down
-	ReloadWithSignal     bool // Indicates config reload should be triggered with SIGUSR1, rather than expecting CoreDNS's reload plugin
+	LocalIPStr              string        // comma separated listen ips for the local cache agent
+	LocalIPs                []net.IP      // parsed ip addresses for the local cache agent to listen for dns requests
+	LocalPort               string        // port to listen for dns requests
+	MetricsListenAddress    string        // address to serve metrics on
+	PrometheusListenAddress string        // address to serve Prometheus metrics on
+	SetupInterface          bool          // Indicates whether to setup network interface
+	InterfaceName           string        // Name of the interface to be created
+	Interval                time.Duration // specifies how often to run iptables rules check
+	Pidfile                 string        // Path to the coredns server pidfile
+	BaseCoreFile            string        // Path to the template config file for node-cache
+	CoreFile                string        // Path to config file used by node-cache
+	KubednsCMPath           string        // Directory where kube-dns configmap will be mounted
+	UpstreamSvcName         string        // Name of the service whose clusterIP is the upstream for node-cache for cluster domain
+	HealthPort              string        // port for the healthcheck
+	SetupIptables           bool
+	SkipTeardown            bool // Indicates whether the iptables rules and interface should be torn down
+	ReloadWithSignal        bool // Indicates config reload should be triggered with SIGUSR1, rather than expecting CoreDNS's reload plugin
 }
 
 type iptablesRule struct {
