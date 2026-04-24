@@ -74,6 +74,14 @@ Any arguments given after "--" will be passed directly to dnsmasq itself.
 		opts.LogInterval,
 		"interval to send SIGUSR1 to dnsmasq which triggers statistics logging (if zero, SIGUSR1 is not sent)")
 	klog.InitFlags(nil)
+
+	// Opt into the new klog behavior so that -stderrthreshold is honored even
+	// when -logtostderr=true (the default). Default the threshold to WARNING
+	// so that users can still adjust it via the -stderrthreshold flag.
+	// Ref: kubernetes/klog#212, kubernetes/klog#432
+	flag.Set("legacy_stderr_threshold_behavior", "false") //nolint:errcheck
+	flag.Set("stderrthreshold", "WARNING")                //nolint:errcheck
+
 	flag.Parse()
 }
 
