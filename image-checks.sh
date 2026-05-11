@@ -5,10 +5,6 @@
 # Kill with Ctrl + C once sidecar starts up successfully.
 TAG=$1
 REGISTRY=${2:-registry.k8s.io/dns}
-echo "Verifying that iptables exists in node-cache image"
-docker run --rm -it --entrypoint=iptables ${REGISTRY}/k8s-dns-node-cache:${TAG}
-echo "Verifying that node-cache binary exists in node-cache image"
-docker run --rm -it --entrypoint=/node-cache ${REGISTRY}/k8s-dns-node-cache:${TAG}
 echo "Verifying dnsmasq-nanny startup"
 docker run --rm -it --entrypoint=/dnsmasq-nanny ${REGISTRY}/k8s-dns-dnsmasq-nanny:${TAG}
 echo "Verifying kube-dns startup"

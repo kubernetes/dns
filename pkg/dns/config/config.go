@@ -133,20 +133,6 @@ func (config *Config) validateUpstreamNameserver() error {
 	return nil
 }
 
-// ValidateNodeLocalCacheConfig returns nil if the config can be compiled
-// to a valid Corefile.
-func (config *Config) ValidateNodeLocalCacheConfig() error {
-	for domain, nameservers := range config.StubDomains {
-		if err := validateForwardProxy(nameservers...); err != nil {
-			return fmt.Errorf("invalid nameservers %s for the stub domain %s: %v", nameservers, domain, err)
-		}
-	}
-	if err := validateForwardProxy(config.UpstreamNameservers...); err != nil {
-		return fmt.Errorf("invalid upstream nameservers %s: %v", config.UpstreamNameservers, err)
-	}
-	return nil
-}
-
 // validateForwardProxy returns nil if the nameservers are valid proxy addresses
 // for the CoreDNS plugin forward.
 // The function is ported from coredns/plugin/forward:parseStanza

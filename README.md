@@ -4,14 +4,16 @@
 [![Coverage Status](https://coveralls.io/repos/github/kubernetes/dns/badge.svg?branch=master)](https://coveralls.io/github/kubernetes/dns?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes/dns)](https://goreportcard.com/report/github.com/kubernetes/dns)
 
-This is the repository for [Kubernetes DNS(kube-dns and nodelocaldns)](https://kubernetes.io/docs/tasks/access-application-cluster/configure-dns-cluster/).
+This is the repository for [Kubernetes DNS](https://kubernetes.io/docs/tasks/access-application-cluster/configure-dns-cluster/).
+
+Node-local DNS Cache, which used to be a part of this repository, is
+now at https://github.com/kubernetes-sigs/node-local-dns.
 
 ## Images
 
 * [kube-dns](https://kubernetes.io/docs/tasks/access-application-cluster/configure-dns-cluster/)
 * [sidecar](docs/sidecar/README.md)
 * [dnsmasq](images/dnsmasq)
-* [node-cache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/)
 
 ## Building
 
@@ -48,8 +50,6 @@ Update the `BUILD_IMAGE` in [Makefile](./Makefile).
 
 Hints for finding up to date images are placed in relevant files next to the variables.
 
-**For node-cache:** Update the `IPTIMAGE` in [rules.mk](./rules.mk).
-
 **For dnsmasq and dnsmasq-nanny:** Update the `BASEIMAGE` and both `COMPILE_IMAGE`s in [images/dnsmasq/Makefile](./images/dnsmasq/Makefile).
 
 **For other images:** Update the `BASEIMAGE` in [rules.mk](./rules.mk).
@@ -67,7 +67,7 @@ Follow these steps to make changes and release a new binary.
 
 1. Make the necessary code changes and create a PR.
 2. Build and test locally (`make images-clean`; `make build`; `make containers`; `make test`). 
-3. To build just the node-cache container, use `make containers CONTAINER_BINARIES=node-cache`.
+3. To build just the kube-dns container, use `make containers CONTAINER_BINARIES=kube-dns`.
 4. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
 5. Merge the PR.
 6. Cut a new release tag. We use [semantic versioning](http://semver.org) to
@@ -86,8 +86,8 @@ Follow these steps to make changes and release a new binary.
    in [this](https://github.com/kubernetes/k8s.io/tree/main/k8s.gcr.io#image-promoter) link.
    The image SHAs should be added to [`images/k8s-staging-dns/images.yaml`](https://github.com/kubernetes/k8s.io/blob/main/registry.k8s.io/images/k8s-staging-dns/images.yaml).
    The SHAs can be obtained by running the command `python parse-image-sha.py <TAG>`
-   This will return the SHAs for kube-dns as well as node-cache images. Node-cache images are always promoted, kube-dns images are promoted if there is a change to kubedns/vulnerability fix.
-6. Images will be available in the repo registry.k8s.io/dns/. The node-cache image with tag 1.15.14 can be found at registry.k8s.io/dns/k8s-dns-node-cache:1.15.14. Older versions are at registry.k8s.io/k8s-dns-node-cache:<TAG>
+   kube-dns images are promoted if there is a change to kubedns/vulnerability fix.
+6. Images will be available in the repo registry.k8s.io/dns/.
 7. Prepare a PR for the kubernetes/kubernetes repository to switch to the new
    version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189.
    Trigger the optional [presubmit](https://github.com/kubernetes/test-infra/pull/33962) `pull-kubernetes-e2e-gci-gce-kube-dns-nodecache` and correct your PR if needed before merging.

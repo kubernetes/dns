@@ -22,7 +22,7 @@ import json
 import subprocess
 
 REGISTRY = "gcr.io/k8s-staging-dns"
-MANIFESTS = ["k8s-dns-dnsmasq-nanny", "k8s-dns-kube-dns", "k8s-dns-sidecar", "k8s-dns-node-cache"]
+MANIFESTS = ["k8s-dns-dnsmasq-nanny", "k8s-dns-kube-dns", "k8s-dns-sidecar"]
 TAG_NAME = "1.21.1"
 
 
@@ -41,7 +41,7 @@ def main():
         maincmd = ["docker", "inspect", "--format='{{index .RepoDigests 0}}'", mname]
         out, err = subprocess.Popen(maincmd, stdout=subprocess.PIPE).communicate()
         # output will be of the form -
-        # `gcr.io/k8s-staging-dns/k8s-dns-node-cache@sha256:e33f64f09345874878c4698578ffdf7ac82a7868723d10aa3825c0102333afe6`
+        # `gcr.io/k8s-staging-dns/k8s-dns-kube-dns@sha256:e33f64f09345874878c4698578ffdf7ac82a7868723d10aa3825c0102333afe6`
         values = out.decode('UTF-8').split("@")
         sha = values[1].strip().rstrip("'")
         name = values[0].split('/')[-1]
